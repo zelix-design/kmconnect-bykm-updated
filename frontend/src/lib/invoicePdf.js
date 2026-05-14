@@ -70,12 +70,20 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   if (client?.phone)   { doc.text(client.phone, margin, y); y += 12; }
 
   // Campus Visit meta block (if any present)
-  const meta = [
-    ["Campus Visit No.", invoice.campus_visit_no],
-    ["Student Name", invoice.student_name],
-    ["Course", invoice.course],
-    ["Visited Colleges", invoice.visited_colleges],
-  ].filter(([, v]) => v && String(v).trim().length > 0);
+  const isService = invoice.invoice_type === "service_charge";
+  const meta = isService
+    ? [
+        ["Student Name", invoice.student_name],
+        ["Course", invoice.course],
+        ["College", invoice.college],
+        ["Academic Year", invoice.academic_year],
+      ].filter(([, v]) => v && String(v).trim().length > 0)
+    : [
+        ["Campus Visit No.", invoice.campus_visit_no],
+        ["Student Name", invoice.student_name],
+        ["Course", invoice.course],
+        ["Visited Colleges", invoice.visited_colleges],
+      ].filter(([, v]) => v && String(v).trim().length > 0);
 
   if (meta.length) {
     y += 12;
@@ -86,7 +94,7 @@ export function downloadInvoicePDF({ invoice, client, user }) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(120, 113, 108);
-    doc.text("VISIT DETAILS", margin, y);
+    doc.text(isService ? "SERVICE CHARGE TOWARDS" : "VISIT DETAILS", margin, y);
     y += 14;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
@@ -136,7 +144,7 @@ export function downloadInvoicePDF({ invoice, client, user }) {
 
   doc.setFontSize(10);
   doc.setTextColor(120, 113, 108);
-  doc.text("Total Expense", labelX, endY);
+  doc.text(isService ? "Total Amount" : "Total Expense", labelX, endY);
   doc.setTextColor(28, 25, 23);
   doc.text(formatMoney(subtotal, currency), rightX, endY, { align: "right" });
 
@@ -151,9 +159,9 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   if (credit > 0) {
     endY += 16;
     doc.setTextColor(120, 113, 108);
-    doc.text("Credit toward expense", labelX, endY);
+    doc.text(isService ? "Expense Credit of Campus Visit" : "Credit toward expense", labelX, endY);
     doc.setTextColor(190, 18, 60);
-    doc.text(`− ${formatMoney(credit, currency)}`, rightX, endY, { align: "right" });
+    doc.text(`- ${formatMoney(credit, currency)}`, rightX, endY, { align: "right" });
   }
 
   endY += 10;

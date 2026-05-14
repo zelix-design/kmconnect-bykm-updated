@@ -209,6 +209,10 @@ class InvoiceIn(BaseModel):
     # Auto-log: when True, recreate matching expense transactions on save
     auto_log_expenses: bool = True
     expense_account_id: Optional[str] = None
+    # Invoice variant + service-charge meta
+    invoice_type: Literal["campus_visit", "service_charge"] = "campus_visit"
+    college: Optional[str] = None
+    academic_year: Optional[str] = None
 
 
 class Invoice(InvoiceIn):

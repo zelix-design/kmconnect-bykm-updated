@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, PencilSimple, Trash, DownloadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadInvoicePDF } from "@/lib/invoicePdf";
-import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular } from "@/components/InvoiceForm";
+import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular, serviceParticular } from "@/components/InvoiceForm";
 
 const STATUS_STYLES = {
   draft: "bg-stone-100 text-stone-700",
@@ -34,6 +34,9 @@ const blankForm = () => ({
   credit_amount: 0,
   auto_log_expenses: true,
   expense_account_id: "",
+  invoice_type: "campus_visit",
+  college: "",
+  academic_year: "",
 });
 
 function nextInvoiceNumber(list) {
@@ -106,12 +109,16 @@ export default function Invoices() {
 
   const openEdit = (inv) => {
     setEditing(inv);
+    const invType = inv.invoice_type || "campus_visit";
+    const isService = invType === "service_charge";
     setForm({
       client_id: inv.client_id,
       invoice_number: inv.invoice_number,
       issue_date: inv.issue_date,
       due_date: inv.due_date,
-      particulars: itemsToParticulars(inv.items),
+      particulars: isService
+        ? [{ kind: "Service Charge", specify: "", amount: String((inv.items?.[0]?.unit_price ?? 0) * (inv.items?.[0]?.quantity ?? 1)) }]
+        : itemsToParticulars(inv.items),
       tax_rate: inv.tax_rate || 0,
       notes: inv.notes || "",
       status: inv.status,
@@ -120,8 +127,11 @@ export default function Invoices() {
       course: inv.course || "",
       visited_colleges: inv.visited_colleges || "",
       credit_amount: inv.credit_amount || 0,
-      auto_log_expenses: inv.auto_log_expenses !== false,
+      auto_log_expenses: isService ? false : (inv.auto_log_expenses !== false),
       expense_account_id: inv.expense_account_id || accounts[0]?.id || "",
+      invoice_type: invType,
+      college: inv.college || "",
+      academic_year: inv.academic_year || "",
     });
     setOpen(true);
   };
@@ -129,8 +139,16 @@ export default function Invoices() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.client_id) { toast.error("Select a client"); return; }
-    const items = particularsToItems(form.particulars);
-    if (items.length === 0) { toast.error("Add at least one particular with amount"); return; }
+    const isService = form.invoice_type === "service_charge";
+    let items;
+    if (isService) {
+      const amt = parseFloat(form.particulars[0]?.amount) || 0;
+      if (amt <= 0) { toast.error("Enter the service charge amount"); return; }
+      items = [{ description: "Service Charge", quantity: 1, unit_price: amt }];
+    } else {
+      items = particularsToItems(form.particulars);
+      if (items.length === 0) { toast.error("Add at least one particular with amount"); return; }
+    }
     const payload = {
       client_id: form.client_id,
       invoice_number: form.invoice_number,
@@ -141,12 +159,15 @@ export default function Invoices() {
       credit_amount: parseFloat(form.credit_amount) || 0,
       notes: form.notes,
       status: form.status,
-      campus_visit_no: form.campus_visit_no || null,
+      campus_visit_no: isService ? null : (form.campus_visit_no || null),
       student_name: form.student_name || null,
       course: form.course || null,
-      visited_colleges: form.visited_colleges || null,
-      auto_log_expenses: !!form.auto_log_expenses,
+      visited_colleges: isService ? null : (form.visited_colleges || null),
+      auto_log_expenses: !isService && !!form.auto_log_expenses,
       expense_account_id: form.expense_account_id || null,
+      invoice_type: form.invoice_type,
+      college: isService ? (form.college || null) : null,
+      academic_year: isService ? (form.academic_year || null) : null,
     };
     try {
       if (editing) await api.patch(`/invoices/${editing.id}`, payload);
@@ -230,14 +251,18 @@ export default function Invoices() {
                   <tr key={inv.id} className="hover:bg-stone-50" data-testid={`inv-row-${inv.id}`}>
                     <td className="px-6 py-3.5">
                       <p className="font-medium">{inv.invoice_number}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${inv.invoice_type === "service_charge" ? "bg-indigo-50 text-indigo-700" : "bg-stone-100 text-stone-700"}`}>
+                          {inv.invoice_type === "service_charge" ? "Service" : "Campus visit"}
+                        </span>
                         {inv.campus_visit_no && <p className="text-xs text-stone-500">Visit #{inv.campus_visit_no}</p>}
                         {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Auto-logged</span>}
                       </div>
                     </td>
                     <td className="px-6 py-3.5">
                       <p>{clientMap[inv.client_id]?.name || "—"}</p>
-                      {inv.student_name && <p className="text-xs text-stone-500">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}</p>}
+                      {inv.student_name && <p className="text-xs text-stone-500">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}{inv.college ? ` · ${inv.college}` : ""}</p>}
+                      {inv.academic_year && <p className="text-xs text-stone-400">AY {inv.academic_year}</p>}
                     </td>
                     <td className="px-6 py-3.5 text-stone-600">{formatDate(inv.issue_date)}</td>
                     <td className="px-6 py-3.5">

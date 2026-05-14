@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 5 testing complete. Backend: 7/7 pytest tests passed for the new Service Charge invoice variant (create with credit -> $17,700 total, default invoice_type=campus_visit, PATCH switches type & recomputes totals, service-charge w/ auto_log=false creates 0 linked tx on POST and PATCH, campus_visit invoices have null college/academic_year, seeded INV-2026-CV-0001 still has 6 linked txs, seeded INV-2026-SC-0001 matches $25k-$7.3k credit=$17,700). Frontend: full lifecycle verified end-to-end — type toggle defaults to campus, switching to service hides inv-visit-no/inv-colleges/auto-log-block and shows inv-college/inv-academic-year/inv-service-label/inv-service-amount with labels renamed to 'Expense Credit of Campus Visit' and 'Total Amount'; created new SC invoice (amount 5000, credit 1500) -> inv-total=$3,500.00, saved row shows SERVICE badge; edit reopened with service prefill, switched campus->service->campus toggling works and resets particulars correctly. PDFs verified: SC PDF contains 'SERVICE CHARGE TOWARDS', Student/Course/College/Academic Year, 'Total Amount' and 'Expense Credit of Campus Visit'; CV PDF still contains 'VISIT DETAILS' and 'Total Expense' (no regression).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration5.py",
+    "/app/test_reports/pytest/iteration5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "InvoiceForm: line 198 — when isService is true, auto-log-block is correctly hidden, but the form still POSTs auto_log_expenses based on form.auto_log_expenses; safe because Invoices.jsx submit() forces `!isService && !!form.auto_log_expenses`. Good defensive layering.",
+    "Backend InvoiceIn: invoice_type uses Literal validator — sending any unknown value will return 422. Confirmed campus_visit default works for legacy docs missing the field (Pydantic applies default during PATCH validation).",
+    "Invoices.jsx openEdit(): isService defaults `auto_log_expenses=false` even if a legacy service-typed doc happened to have it true — acceptable as service-charge should never auto-log.",
+    "server.py still 833 lines (carryover from it4). Consider splitting routers when next refactor lands.",
+    "PDF generator branches on invoice_type and falls back to campus_visit for legacy invoices (verified via PDF text extraction on INV-2026-CV-0001)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration5.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "admin@finflow.com / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All test invoices (TEST-INV-IT5-*) are created and deleted within their respective tests. Seeded INV-2026-SC-0001 and INV-2026-CV-0001 remain intact and verified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 5 backend pytest at /app/backend/tests/test_iteration5.py runs in ~1.6s and is idempotent. Reuse session/ctx fixtures pattern for new features. Seeded invoices: INV-2026-CV-0001 (campus_visit, $7,300 total, 6 linked expense txs) and INV-2026-SC-0001 (service_charge, IIT Delhi, AY 2026-27, $17,700 total, 0 linked txs). InvoiceForm component is at /app/frontend/src/components/InvoiceForm.jsx; invoice_type branching uses data-testids: invoice-type-toggle/type-campus/type-service/inv-college/inv-academic-year/inv-service-label/inv-service-amount/service-meta/auto-log-block.",
+  "rca of the issue": "No issues encountered. One minor test fix made during run: assertion on legacy seed invoice replaced direct dict access with .get() since older docs predate the invoice_type field."
+}
