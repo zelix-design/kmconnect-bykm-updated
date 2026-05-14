@@ -2,11 +2,12 @@ import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import {
-  ChartLineUp, House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut,
+  ChartLineUp, House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
 } from "@phosphor-icons/react";
 
 const navItems = [
   { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview" },
+  { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry" },
   { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions" },
   { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts" },
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices" },

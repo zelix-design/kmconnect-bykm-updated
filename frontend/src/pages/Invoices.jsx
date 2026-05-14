@@ -9,8 +9,9 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, PencilSimple, Trash, X } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, X, DownloadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { downloadInvoicePDF } from "@/lib/invoicePdf";
 
 const STATUS_STYLES = {
   draft: "bg-stone-100 text-stone-700",
@@ -245,6 +246,7 @@ export default function Invoices() {
                     </td>
                     <td className="px-6 py-3.5 text-right tabular-nums font-medium">{formatMoney(inv.total, currency)}</td>
                     <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                      <button onClick={() => downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user })} data-testid={`pdf-inv-${inv.id}`} className="text-stone-500 hover:text-stone-900 p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
                       <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={16} /></button>
                       <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={16} /></button>
                     </td>

@@ -216,12 +216,18 @@ DEFAULT_CATEGORIES = [
     {"name": "Services", "type": "income", "color": "#10b981", "icon": "Briefcase"},
     {"name": "Other Income", "type": "income", "color": "#34d399", "icon": "Coins"},
     {"name": "Rent", "type": "expense", "color": "#be123c", "icon": "House"},
-    {"name": "Utilities", "type": "expense", "color": "#dc2626", "icon": "Lightning"},
-    {"name": "Salaries", "type": "expense", "color": "#9f1239", "icon": "Users"},
-    {"name": "Office Supplies", "type": "expense", "color": "#a16207", "icon": "Package"},
+    {"name": "Fuel Exp", "type": "expense", "color": "#b91c1c", "icon": "GasPump"},
+    {"name": "Toll", "type": "expense", "color": "#c2410c", "icon": "Road"},
+    {"name": "Cab Exp", "type": "expense", "color": "#a16207", "icon": "Car"},
+    {"name": "Train/Bus Booking", "type": "expense", "color": "#7c2d12", "icon": "Train"},
+    {"name": "Food", "type": "expense", "color": "#dc2626", "icon": "ForkKnife"},
+    {"name": "Utilities", "type": "expense", "color": "#9f1239", "icon": "Lightning"},
+    {"name": "Salaries", "type": "expense", "color": "#525252", "icon": "Users"},
+    {"name": "Office Supplies", "type": "expense", "color": "#92400e", "icon": "Package"},
     {"name": "Marketing", "type": "expense", "color": "#7c2d12", "icon": "Megaphone"},
-    {"name": "Travel", "type": "expense", "color": "#92400e", "icon": "Airplane"},
-    {"name": "Software", "type": "expense", "color": "#525252", "icon": "Cpu"},
+    {"name": "Travel", "type": "expense", "color": "#0e7490", "icon": "Airplane"},
+    {"name": "Software", "type": "expense", "color": "#4338ca", "icon": "Cpu"},
+    {"name": "Other", "type": "expense", "color": "#78716c", "icon": "DotsThree"},
 ]
 
 
@@ -540,10 +546,15 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
 
 # ---------- Dashboard ----------
 @api.get("/dashboard/summary")
-async def dashboard_summary(user: dict = Depends(get_current_user)):
+async def dashboard_summary(
+    user: dict = Depends(get_current_user),
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
     user_id = user["id"]
     now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date().isoformat()
+    period_start = start or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date().isoformat()
+    period_end = end  # inclusive ISO date
     # Totals
     accounts = await db.accounts.find({"user_id": user_id}, {"_id": 0}).to_list(500)
     total_opening = sum(a.get("opening_balance", 0) for a in accounts)
@@ -556,8 +567,11 @@ async def dashboard_summary(user: dict = Depends(get_current_user)):
     all_expense = sum(x["total"] for x in agg_all if x["_id"] == "expense")
     total_balance = round(total_opening + all_income - all_expense, 2)
 
+    period_match = {"$gte": period_start}
+    if period_end:
+        period_match["$lte"] = period_end
     agg_month = await db.transactions.aggregate([
-        {"$match": {"user_id": user_id, "date": {"$gte": month_start}}},
+        {"$match": {"user_id": user_id, "date": period_match}},
         {"$group": {"_id": "$type", "total": {"$sum": "$amount"}}},
     ]).to_list(10)
     month_income = round(sum(x["total"] for x in agg_month if x["_id"] == "income"), 2)
@@ -577,6 +591,8 @@ async def dashboard_summary(user: dict = Depends(get_current_user)):
         "month_cashflow": round(month_income - month_expense, 2),
         "outstanding_invoices": outstanding,
         "currency": user.get("currency", "USD"),
+        "period_start": period_start,
+        "period_end": period_end,
     }
 
 
@@ -615,12 +631,19 @@ async def dashboard_cashflow(user: dict = Depends(get_current_user), months: int
 
 
 @api.get("/dashboard/expense-by-category")
-async def expense_by_category(user: dict = Depends(get_current_user)):
+async def expense_by_category(
+    user: dict = Depends(get_current_user),
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
     user_id = user["id"]
     now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1).date().isoformat()
+    period_start = start or now.replace(day=1).date().isoformat()
+    date_match = {"$gte": period_start}
+    if end:
+        date_match["$lte"] = end
     pipeline = [
-        {"$match": {"user_id": user_id, "type": "expense", "date": {"$gte": month_start}}},
+        {"$match": {"user_id": user_id, "type": "expense", "date": date_match}},
         {"$group": {"_id": "$category_id", "total": {"$sum": "$amount"}}},
     ]
     agg = await db.transactions.aggregate(pipeline).to_list(100)
@@ -677,6 +700,20 @@ async def startup():
             {"email": admin_email},
             {"$set": {"password_hash": hash_password(admin_password)}},
         )
+
+    # Backfill missing default categories for existing users (idempotent)
+    async for u in db.users.find({}, {"id": 1, "_id": 0}):
+        existing_cats = await db.categories.find(
+            {"user_id": u["id"]}, {"_id": 0, "name": 1, "type": 1}
+        ).to_list(1000)
+        existing_keys = {(c["name"].lower(), c["type"]) for c in existing_cats}
+        missing = [
+            {"id": gen_id(), "user_id": u["id"], "created_at": now_iso(), **c}
+            for c in DEFAULT_CATEGORIES
+            if (c["name"].lower(), c["type"]) not in existing_keys
+        ]
+        if missing:
+            await db.categories.insert_many(missing)
 
 
 app.include_router(api)

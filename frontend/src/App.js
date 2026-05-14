@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import AuthPage from "@/pages/AuthPage";
 import AppShell from "@/pages/AppShell";
 import Dashboard from "@/pages/Dashboard";
+import QuickEntry from "@/pages/QuickEntry";
 import Transactions from "@/pages/Transactions";
 import Accounts from "@/pages/Accounts";
 import Invoices from "@/pages/Invoices";
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
           <Route element={<Protected><AppShell /></Protected>}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/quick-entry" element={<QuickEntry />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/invoices" element={<Invoices />} />

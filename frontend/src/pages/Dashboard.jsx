@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from "recharts";
-import { TrendUp, TrendDown, Receipt, FileText, ArrowUpRight, ArrowDownRight } from "@phosphor-icons/react";
+import { TrendUp, TrendDown, Receipt, FileText, ArrowUpRight, ArrowDownRight, CalendarBlank } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
 function StatCard({ eyebrow, value, hint, accent, icon: Icon, testId }) {
@@ -32,9 +34,43 @@ function StatCard({ eyebrow, value, hint, accent, icon: Icon, testId }) {
   );
 }
 
+function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+function rangeFor(preset) {
+  const now = new Date();
+  if (preset === "this_month") {
+    const s = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { start: isoDate(s), end: isoDate(now), label: "This month" };
+  }
+  if (preset === "last_30") {
+    const s = new Date(now); s.setDate(now.getDate() - 29);
+    return { start: isoDate(s), end: isoDate(now), label: "Last 30 days" };
+  }
+  if (preset === "last_90") {
+    const s = new Date(now); s.setDate(now.getDate() - 89);
+    return { start: isoDate(s), end: isoDate(now), label: "Last 90 days" };
+  }
+  if (preset === "ytd") {
+    const s = new Date(now.getFullYear(), 0, 1);
+    return { start: isoDate(s), end: isoDate(now), label: "Year to date" };
+  }
+  return null; // custom
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const currency = user?.currency || "USD";
+  const [preset, setPreset] = useState("this_month");
+  const [custom, setCustom] = useState({ start: "", end: "" });
+
+  const range = useMemo(() => {
+    if (preset === "custom") {
+      if (custom.start && custom.end) return { start: custom.start, end: custom.end, label: "Custom" };
+      return rangeFor("this_month");
+    }
+    return rangeFor(preset);
+  }, [preset, custom]);
+
   const [summary, setSummary] = useState(null);
   const [cashflow, setCashflow] = useState([]);
   const [byCat, setByCat] = useState([]);
@@ -42,10 +78,11 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
+      const params = { start: range.start, end: range.end };
       const [s, c, b, t] = await Promise.all([
-        api.get("/dashboard/summary"),
+        api.get("/dashboard/summary", { params }),
         api.get("/dashboard/cashflow", { params: { months: 6 } }),
-        api.get("/dashboard/expense-by-category"),
+        api.get("/dashboard/expense-by-category", { params }),
         api.get("/transactions", { params: { limit: 6 } }),
       ]);
       setSummary(s.data);
@@ -53,7 +90,7 @@ export default function Dashboard() {
       setByCat(b.data);
       setRecent(t.data);
     })().catch(() => {});
-  }, []);
+  }, [range]);
 
   return (
     <div className="space-y-8 animate-fade-in" data-testid="dashboard-page">
@@ -64,9 +101,9 @@ export default function Dashboard() {
             Hi {user?.name?.split(" ")[0] || "there"}, here's your money today.
           </h1>
         </div>
-        <div className="flex gap-2">
-          <Link to="/transactions" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-stone-900 text-stone-50 text-sm hover:bg-stone-800 lift">
-            <Receipt size={16} /> Log transaction
+        <div className="flex flex-wrap gap-2">
+          <Link to="/quick-entry" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-stone-900 text-stone-50 text-sm hover:bg-stone-800 lift">
+            <Receipt size={16} /> Quick entry
           </Link>
           <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-stone-300 bg-white text-sm hover:bg-stone-100 lift">
             <FileText size={16} /> New invoice
@@ -74,10 +111,40 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Date range filter */}
+      <div className="flex flex-wrap items-center gap-3" data-testid="date-range-filter">
+        <div className="flex items-center gap-2 text-stone-600">
+          <CalendarBlank size={16} />
+          <span className="label-eyebrow">Period</span>
+        </div>
+        <Select value={preset} onValueChange={setPreset}>
+          <SelectTrigger className="w-44 h-9 bg-white" data-testid="range-preset"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="this_month">This month</SelectItem>
+            <SelectItem value="last_30">Last 30 days</SelectItem>
+            <SelectItem value="last_90">Last 90 days</SelectItem>
+            <SelectItem value="ytd">Year to date</SelectItem>
+            <SelectItem value="custom">Custom range</SelectItem>
+          </SelectContent>
+        </Select>
+        {preset === "custom" && (
+          <>
+            <Input type="date" value={custom.start} onChange={(e) => setCustom({ ...custom, start: e.target.value })} className="h-9 w-44 bg-white" data-testid="range-start" />
+            <span className="text-stone-400 text-sm">→</span>
+            <Input type="date" value={custom.end} onChange={(e) => setCustom({ ...custom, end: e.target.value })} className="h-9 w-44 bg-white" data-testid="range-end" />
+          </>
+        )}
+        {range && (
+          <span className="text-xs text-stone-500" data-testid="range-label">
+            {range.label} · {range.start} → {range.end}
+          </span>
+        )}
+      </div>
+
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="stat-balance" eyebrow="Total balance" value={formatMoney(summary?.total_balance ?? 0, currency)} hint="Across all accounts" accent="default" icon={ArrowUpRight} />
-        <StatCard testId="stat-income" eyebrow="Income this month" value={formatMoney(summary?.month_income ?? 0, currency)} accent="success" icon={TrendUp} />
-        <StatCard testId="stat-expense" eyebrow="Expenses this month" value={formatMoney(summary?.month_expense ?? 0, currency)} accent="danger" icon={TrendDown} />
+        <StatCard testId="stat-balance" eyebrow="Total balance" value={formatMoney(summary?.total_balance ?? 0, currency)} hint="All time, all accounts" accent="default" icon={ArrowUpRight} />
+        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} accent="success" icon={TrendUp} />
+        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} accent="danger" icon={TrendDown} />
         <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} hint="Sent + overdue" accent="warn" icon={FileText} />
       </section>
 
@@ -93,7 +160,7 @@ export default function Dashboard() {
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-700 inline-block" />Expense</span>
             </div>
           </div>
-          <div className="h-72 -ml-2" data-testid="cashflow-chart">
+          <div className="h-72 -ml-2" data-testid="cashflow-chart" style={{ minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashflow}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
@@ -115,11 +182,11 @@ export default function Dashboard() {
           <h3 className="font-display text-xl mt-1 mb-4">Expenses by category</h3>
           {byCat.length === 0 ? (
             <div className="h-60 flex items-center justify-center text-sm text-stone-500" data-testid="empty-categories">
-              No expenses yet this month.
+              No expenses in this period.
             </div>
           ) : (
             <>
-              <div className="h-44" data-testid="category-pie">
+              <div className="h-44" data-testid="category-pie" style={{ minHeight: 170 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
