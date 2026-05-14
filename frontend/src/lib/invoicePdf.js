@@ -39,7 +39,7 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   doc.setTextColor(41, 37, 36);
   doc.setFontSize(8);
   doc.setFont("helvetica", "bold");
-  doc.text(invoice.status.toUpperCase(), pageWidth - margin - 35, 108, { align: "center" });
+  doc.text((invoice.status || "draft").toUpperCase(), pageWidth - margin - 35, 108, { align: "center" });
 
   // Bill to / dates
   let y = 150;
@@ -47,8 +47,10 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   doc.setFontSize(9);
   doc.setTextColor(120, 113, 108);
   doc.text("BILL TO", margin, y);
-  doc.text("ISSUE DATE", pageWidth / 2, y);
-  doc.text("DUE DATE", pageWidth / 2 + 120, y);
+  doc.text("DATE", pageWidth / 2, y);
+  if (invoice.due_date && invoice.due_date !== invoice.issue_date) {
+    doc.text("DUE DATE", pageWidth / 2 + 120, y);
+  }
 
   y += 14;
   doc.setFont("helvetica", "normal");
@@ -56,7 +58,9 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   doc.setTextColor(28, 25, 23);
   doc.text(client?.name || "Client", margin, y);
   doc.text(formatDate(invoice.issue_date), pageWidth / 2, y);
-  doc.text(formatDate(invoice.due_date), pageWidth / 2 + 120, y);
+  if (invoice.due_date && invoice.due_date !== invoice.issue_date) {
+    doc.text(formatDate(invoice.due_date), pageWidth / 2 + 120, y);
+  }
 
   y += 14;
   doc.setFontSize(9);
@@ -64,22 +68,47 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   if (client?.company) { doc.text(client.company, margin, y); y += 12; }
   if (client?.email)   { doc.text(client.email, margin, y); y += 12; }
   if (client?.phone)   { doc.text(client.phone, margin, y); y += 12; }
-  if (client?.address) {
-    const lines = doc.splitTextToSize(client.address, 200);
-    doc.text(lines, margin, y); y += 12 * lines.length;
+
+  // Campus Visit meta block (if any present)
+  const meta = [
+    ["Campus Visit No.", invoice.campus_visit_no],
+    ["Student Name", invoice.student_name],
+    ["Course", invoice.course],
+    ["Visited Colleges", invoice.visited_colleges],
+  ].filter(([, v]) => v && String(v).trim().length > 0);
+
+  if (meta.length) {
+    y += 12;
+    doc.setDrawColor(231, 229, 228);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 14;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 113, 108);
+    doc.text("VISIT DETAILS", margin, y);
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    for (const [label, value] of meta) {
+      doc.setTextColor(120, 113, 108);
+      doc.text(label, margin, y);
+      doc.setTextColor(28, 25, 23);
+      const lines = doc.splitTextToSize(String(value), pageWidth - margin * 2 - 140);
+      doc.text(lines, margin + 140, y);
+      y += 14 * Math.max(1, lines.length);
+    }
   }
 
-  const tableStart = Math.max(y + 16, 240);
+  const tableStart = Math.max(y + 18, 250);
 
-  // Items table
+  // Particulars table — two columns
   autoTable(doc, {
     startY: tableStart,
-    head: [["Description", "Qty", "Unit price", "Amount"]],
-    body: invoice.items.map((it) => [
+    head: [["Particulars", "Amount"]],
+    body: (invoice.items || []).map((it) => [
       it.description || "—",
-      String(it.quantity),
-      formatMoney(it.unit_price, currency),
-      formatMoney(it.quantity * it.unit_price, currency),
+      formatMoney((it.quantity || 1) * (it.unit_price || 0), currency),
     ]),
     theme: "plain",
     styles: { fontSize: 10, textColor: [28, 25, 23], cellPadding: 8 },
@@ -91,44 +120,56 @@ export function downloadInvoicePDF({ invoice, client, user }) {
     },
     columnStyles: {
       0: { cellWidth: "auto" },
-      1: { halign: "right", cellWidth: 50 },
-      2: { halign: "right", cellWidth: 90 },
-      3: { halign: "right", cellWidth: 90 },
+      1: { halign: "right", cellWidth: 120 },
     },
     margin: { left: margin, right: margin },
   });
 
   let endY = doc.lastAutoTable.finalY + 20;
 
-  // Totals (right aligned)
+  // Totals
   const rightX = pageWidth - margin;
-  const labelX = rightX - 160;
+  const labelX = rightX - 200;
+  const subtotal = invoice.subtotal || 0;
+  const tax = invoice.tax_amount || 0;
+  const credit = invoice.credit_amount || 0;
+
   doc.setFontSize(10);
   doc.setTextColor(120, 113, 108);
-  doc.text("Subtotal", labelX, endY);
+  doc.text("Total Expense", labelX, endY);
   doc.setTextColor(28, 25, 23);
-  doc.text(formatMoney(invoice.subtotal, currency), rightX, endY, { align: "right" });
+  doc.text(formatMoney(subtotal, currency), rightX, endY, { align: "right" });
 
-  endY += 16;
-  doc.setTextColor(120, 113, 108);
-  doc.text(`Tax (${invoice.tax_rate || 0}%)`, labelX, endY);
-  doc.setTextColor(28, 25, 23);
-  doc.text(formatMoney(invoice.tax_amount, currency), rightX, endY, { align: "right" });
+  if (tax > 0) {
+    endY += 16;
+    doc.setTextColor(120, 113, 108);
+    doc.text(`Tax (${invoice.tax_rate || 0}%)`, labelX, endY);
+    doc.setTextColor(28, 25, 23);
+    doc.text(formatMoney(tax, currency), rightX, endY, { align: "right" });
+  }
 
-  endY += 8;
+  if (credit > 0) {
+    endY += 16;
+    doc.setTextColor(120, 113, 108);
+    doc.text("Credit toward expense", labelX, endY);
+    doc.setTextColor(190, 18, 60);
+    doc.text(`− ${formatMoney(credit, currency)}`, rightX, endY, { align: "right" });
+  }
+
+  endY += 10;
   doc.setDrawColor(231, 229, 228);
   doc.line(labelX, endY, rightX, endY);
-  endY += 16;
+  endY += 18;
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.setTextColor(28, 25, 23);
   doc.text("Total", labelX, endY);
   doc.text(formatMoney(invoice.total, currency), rightX, endY, { align: "right" });
 
   // Notes
   if (invoice.notes) {
-    endY += 36;
+    endY += 40;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(120, 113, 108);

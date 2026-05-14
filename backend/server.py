@@ -199,6 +199,12 @@ class InvoiceIn(BaseModel):
     tax_rate: float = 0.0
     notes: Optional[str] = ""
     status: Literal["draft", "sent", "paid", "overdue"] = "draft"
+    # Campus visit meta (all optional, used by specialized invoice format)
+    campus_visit_no: Optional[str] = None
+    student_name: Optional[str] = None
+    course: Optional[str] = None
+    visited_colleges: Optional[str] = None
+    credit_amount: float = 0.0
 
 
 class Invoice(InvoiceIn):
@@ -487,10 +493,10 @@ async def delete_transaction(tx_id: str, user: dict = Depends(get_current_user))
 
 
 # ---------- Invoices ----------
-def _compute_invoice_totals(items: List[dict], tax_rate: float) -> dict:
+def _compute_invoice_totals(items: List[dict], tax_rate: float, credit_amount: float = 0.0) -> dict:
     subtotal = sum(it["quantity"] * it["unit_price"] for it in items)
     tax_amount = round(subtotal * (tax_rate / 100.0), 2)
-    total = round(subtotal + tax_amount, 2)
+    total = round(subtotal + tax_amount - (credit_amount or 0.0), 2)
     return {"subtotal": round(subtotal, 2), "tax_amount": tax_amount, "total": total}
 
 
@@ -502,7 +508,7 @@ async def list_invoices(user: dict = Depends(get_current_user)):
 @api.post("/invoices")
 async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_user)):
     items = [i.model_dump() for i in payload.items]
-    totals = _compute_invoice_totals(items, payload.tax_rate)
+    totals = _compute_invoice_totals(items, payload.tax_rate, payload.credit_amount)
     doc = {
         "id": gen_id(),
         "user_id": user["id"],
@@ -518,7 +524,7 @@ async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_us
 @api.patch("/invoices/{invoice_id}")
 async def update_invoice(invoice_id: str, payload: InvoiceIn, user: dict = Depends(get_current_user)):
     items = [i.model_dump() for i in payload.items]
-    totals = _compute_invoice_totals(items, payload.tax_rate)
+    totals = _compute_invoice_totals(items, payload.tax_rate, payload.credit_amount)
     update = {**payload.model_dump(), **totals}
     res = await db.invoices.update_one(
         {"id": invoice_id, "user_id": user["id"]},
