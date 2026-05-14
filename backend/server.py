@@ -175,6 +175,7 @@ class TransactionIn(BaseModel):
     date: str  # ISO date
     description: Optional[str] = ""
     client_id: Optional[str] = None
+    linked_invoice_id: Optional[str] = None
 
 
 class Transaction(TransactionIn):
@@ -205,6 +206,9 @@ class InvoiceIn(BaseModel):
     course: Optional[str] = None
     visited_colleges: Optional[str] = None
     credit_amount: float = 0.0
+    # Auto-log: when True, recreate matching expense transactions on save
+    auto_log_expenses: bool = True
+    expense_account_id: Optional[str] = None
 
 
 class Invoice(InvoiceIn):
@@ -500,6 +504,80 @@ def _compute_invoice_totals(items: List[dict], tax_rate: float, credit_amount: f
     return {"subtotal": round(subtotal, 2), "tax_amount": tax_amount, "total": total}
 
 
+# Map particular descriptions to category names (case-insensitive)
+PARTICULAR_TO_CATEGORY = {
+    "car rent": "Cab Exp",
+    "fuel expense": "Fuel Exp",
+    "cab expense": "Cab Exp",
+    "toll": "Toll",
+    "food": "Food",
+    "driver salary": "Salaries",
+}
+
+
+async def _sync_invoice_expense_transactions(user_id: str, invoice: dict) -> None:
+    """Delete any existing expense transactions linked to this invoice, then
+    optionally recreate them based on current items + auto_log_expenses flag."""
+    invoice_id = invoice["id"]
+    await db.transactions.delete_many({"user_id": user_id, "linked_invoice_id": invoice_id})
+
+    if not invoice.get("auto_log_expenses", True):
+        return
+    items = invoice.get("items") or []
+    if not items:
+        return
+
+    # Resolve account: explicit -> first available
+    account_id = invoice.get("expense_account_id")
+    if not account_id:
+        first_account = await db.accounts.find_one({"user_id": user_id}, {"_id": 0})
+        if not first_account:
+            return  # nothing to do without an account
+        account_id = first_account["id"]
+
+    # Build category name -> id map for this user
+    cats = await db.categories.find(
+        {"user_id": user_id, "type": "expense"}, {"_id": 0}
+    ).to_list(500)
+    by_name = {c["name"].lower(): c["id"] for c in cats}
+
+    def resolve_category(description: str) -> Optional[str]:
+        d = (description or "").strip().lower()
+        # "Other: foo" -> Other
+        if d.startswith("other:") or d == "other":
+            return by_name.get("other")
+        # exact match
+        if d in by_name:
+            return by_name[d]
+        # mapping table
+        mapped = PARTICULAR_TO_CATEGORY.get(d)
+        if mapped:
+            return by_name.get(mapped.lower())
+        return None
+
+    docs = []
+    for it in items:
+        amount = (it.get("quantity") or 1) * (it.get("unit_price") or 0)
+        if amount <= 0:
+            continue
+        desc = it.get("description") or "Expense"
+        docs.append({
+            "id": gen_id(),
+            "user_id": user_id,
+            "created_at": now_iso(),
+            "type": "expense",
+            "amount": round(amount, 2),
+            "account_id": account_id,
+            "category_id": resolve_category(desc),
+            "date": invoice.get("issue_date"),
+            "description": f"{desc} · Invoice {invoice.get('invoice_number')}",
+            "client_id": invoice.get("client_id"),
+            "linked_invoice_id": invoice_id,
+        })
+    if docs:
+        await db.transactions.insert_many(docs)
+
+
 @api.get("/invoices")
 async def list_invoices(user: dict = Depends(get_current_user)):
     return await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
@@ -518,6 +596,7 @@ async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_us
     }
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
+    await _sync_invoice_expense_transactions(user["id"], doc)
     return doc
 
 
@@ -532,7 +611,9 @@ async def update_invoice(invoice_id: str, payload: InvoiceIn, user: dict = Depen
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Invoice not found")
-    return await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    fresh = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    await _sync_invoice_expense_transactions(user["id"], fresh)
+    return fresh
 
 
 @api.patch("/invoices/{invoice_id}/status")
@@ -554,6 +635,8 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
     res = await db.invoices.delete_one({"id": invoice_id, "user_id": user["id"]})
     if res.deleted_count == 0:
         raise HTTPException(404, "Invoice not found")
+    # Cascade-delete linked expense transactions
+    await db.transactions.delete_many({"user_id": user["id"], "linked_invoice_id": invoice_id})
     return {"ok": True}
 
 

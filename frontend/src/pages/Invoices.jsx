@@ -3,15 +3,13 @@ import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate, todayISO } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, PencilSimple, Trash, X, DownloadSimple } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, DownloadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadInvoicePDF } from "@/lib/invoicePdf";
+import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular } from "@/components/InvoiceForm";
 
 const STATUS_STYLES = {
   draft: "bg-stone-100 text-stone-700",
@@ -20,25 +18,12 @@ const STATUS_STYLES = {
   overdue: "bg-rose-50 text-rose-700",
 };
 
-// Preset particulars for campus-visit invoices
-const PARTICULAR_PRESETS = [
-  "Car Rent",
-  "Fuel Expense",
-  "Cab Expense",
-  "Toll",
-  "Food",
-  "Driver Salary",
-  "Other",
-];
-
-const emptyItem = () => ({ kind: "Car Rent", specify: "", amount: "" });
-
-const empty = {
+const blankForm = () => ({
   client_id: "",
   invoice_number: "",
   issue_date: todayISO(),
   due_date: todayISO(),
-  particulars: [emptyItem()],
+  particulars: [emptyParticular()],
   tax_rate: 0,
   notes: "",
   status: "draft",
@@ -47,7 +32,9 @@ const empty = {
   course: "",
   visited_colleges: "",
   credit_amount: 0,
-};
+  auto_log_expenses: true,
+  expense_account_id: "",
+});
 
 function nextInvoiceNumber(list) {
   const year = new Date().getFullYear();
@@ -60,16 +47,13 @@ function nextInvoiceNumber(list) {
   return `INV-${year}-${String(max + 1).padStart(4, "0")}`;
 }
 
-// Convert items (from API) back to particulars for editing
 function itemsToParticulars(items) {
-  if (!items?.length) return [emptyItem()];
+  if (!items?.length) return [emptyParticular()];
   return items.map((it) => {
     const d = (it.description || "").trim();
-    // Try to extract "Other: spec" form
     const m = d.match(/^Other:\s*(.+)$/i);
     if (m) return { kind: "Other", specify: m[1], amount: String(it.unit_price * (it.quantity || 1)) };
     if (PARTICULAR_PRESETS.includes(d)) return { kind: d, specify: "", amount: String(it.unit_price * (it.quantity || 1)) };
-    // Legacy / freeform — treat as Other with specify
     return { kind: "Other", specify: d, amount: String(it.unit_price * (it.quantity || 1)) };
   });
 }
@@ -92,13 +76,18 @@ export default function Invoices() {
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(blankForm());
   const [editing, setEditing] = useState(null);
 
   const load = async () => {
-    const [i, c] = await Promise.all([api.get("/invoices"), api.get("/clients")]);
-    setList(i.data); setClients(c.data);
+    const [i, c, a] = await Promise.all([
+      api.get("/invoices"),
+      api.get("/clients"),
+      api.get("/accounts"),
+    ]);
+    setList(i.data); setClients(c.data); setAccounts(a.data);
   };
   useEffect(() => { load(); }, []);
 
@@ -106,7 +95,12 @@ export default function Invoices() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...empty, invoice_number: nextInvoiceNumber(list), client_id: clients[0]?.id || "" });
+    setForm({
+      ...blankForm(),
+      invoice_number: nextInvoiceNumber(list),
+      client_id: clients[0]?.id || "",
+      expense_account_id: accounts[0]?.id || "",
+    });
     setOpen(true);
   };
 
@@ -126,6 +120,8 @@ export default function Invoices() {
       course: inv.course || "",
       visited_colleges: inv.visited_colleges || "",
       credit_amount: inv.credit_amount || 0,
+      auto_log_expenses: inv.auto_log_expenses !== false,
+      expense_account_id: inv.expense_account_id || accounts[0]?.id || "",
     });
     setOpen(true);
   };
@@ -149,6 +145,8 @@ export default function Invoices() {
       student_name: form.student_name || null,
       course: form.course || null,
       visited_colleges: form.visited_colleges || null,
+      auto_log_expenses: !!form.auto_log_expenses,
+      expense_account_id: form.expense_account_id || null,
     };
     try {
       if (editing) await api.patch(`/invoices/${editing.id}`, payload);
@@ -161,7 +159,7 @@ export default function Invoices() {
   };
 
   const remove = async (id) => {
-    if (!confirm("Delete invoice?")) return;
+    if (!confirm("Delete invoice? Linked expense transactions will also be removed.")) return;
     await api.delete(`/invoices/${id}`);
     toast.success("Deleted"); load();
   };
@@ -170,19 +168,6 @@ export default function Invoices() {
     await api.patch(`/invoices/${id}/status`, { status });
     load();
   };
-
-  const updatePart = (idx, k, v) => {
-    const items = form.particulars.slice();
-    items[idx] = { ...items[idx], [k]: v };
-    setForm({ ...form, particulars: items });
-  };
-  const addPart = () => setForm({ ...form, particulars: [...form.particulars, emptyItem()] });
-  const removePart = (idx) => setForm({ ...form, particulars: form.particulars.filter((_, i) => i !== idx) });
-
-  const totalExpense = form.particulars.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-  const taxAmount = totalExpense * ((parseFloat(form.tax_rate) || 0) / 100);
-  const credit = parseFloat(form.credit_amount) || 0;
-  const grandTotal = totalExpense + taxAmount - credit;
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="invoices-page">
@@ -198,122 +183,22 @@ export default function Invoices() {
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-white max-w-3xl max-h-[92vh] overflow-y-auto">
-            <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "New"} invoice</DialogTitle></DialogHeader>
-            <form onSubmit={submit} className="space-y-5">
-              {/* Top meta */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label>Generate invoice to (Client)</Label>
-                  <Select value={form.client_id} onValueChange={(v) => setForm({ ...form, client_id: v })}>
-                    <SelectTrigger data-testid="inv-client"><SelectValue placeholder="Select client" /></SelectTrigger>
-                    <SelectContent>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div><Label>Invoice #</Label><Input required value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} data-testid="inv-number" /></div>
-                <div><Label>Date</Label><Input type="date" required value={form.issue_date} onChange={(e) => setForm({ ...form, issue_date: e.target.value, due_date: e.target.value })} data-testid="inv-issue" /></div>
-                <div><Label>Campus Visit No.</Label><Input value={form.campus_visit_no} onChange={(e) => setForm({ ...form, campus_visit_no: e.target.value })} placeholder="CV-2026-001" data-testid="inv-visit-no" /></div>
-                <div><Label>Student Name</Label><Input value={form.student_name} onChange={(e) => setForm({ ...form, student_name: e.target.value })} placeholder="Full name" data-testid="inv-student" /></div>
-                <div><Label>Course</Label><Input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="e.g. B.Tech CSE" data-testid="inv-course" /></div>
-                <div className="sm:col-span-2">
-                  <Label>Visited Colleges</Label>
-                  <Textarea rows={2} value={form.visited_colleges} onChange={(e) => setForm({ ...form, visited_colleges: e.target.value })} placeholder="Comma-separated list of colleges visited" data-testid="inv-colleges" />
-                </div>
-              </div>
-
-              {/* Particulars */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <Label>Particulars</Label>
-                  <Button type="button" size="sm" variant="outline" onClick={addPart} data-testid="inv-add-part"><Plus size={14} className="mr-1" /> Add row</Button>
-                </div>
-                <div className="space-y-2">
-                  {form.particulars.map((p, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                      <div className="col-span-5">
-                        <Select value={p.kind} onValueChange={(v) => updatePart(idx, "kind", v)}>
-                          <SelectTrigger data-testid={`inv-part-kind-${idx}`}><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {PARTICULAR_PRESETS.map(k => <SelectItem key={k} value={k}>{k}{k === "Other" ? " (Specify)" : ""}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                        {p.kind === "Other" && (
-                          <Input
-                            className="mt-2"
-                            value={p.specify}
-                            onChange={(e) => updatePart(idx, "specify", e.target.value)}
-                            placeholder="Specify…"
-                            data-testid={`inv-part-spec-${idx}`}
-                          />
-                        )}
-                      </div>
-                      <Input
-                        className="col-span-6"
-                        type="number"
-                        step="0.01"
-                        placeholder="Amount"
-                        value={p.amount}
-                        onChange={(e) => updatePart(idx, "amount", e.target.value)}
-                        data-testid={`inv-part-amt-${idx}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removePart(idx)}
-                        disabled={form.particulars.length === 1}
-                        className="col-span-1 text-stone-400 hover:text-rose-700 disabled:opacity-30 h-10 flex items-center justify-center"
-                        data-testid={`inv-part-remove-${idx}`}
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Totals controls */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <Label>Credit toward expense</Label>
-                  <Input type="number" step="0.01" value={form.credit_amount} onChange={(e) => setForm({ ...form, credit_amount: e.target.value })} data-testid="inv-credit" />
-                </div>
-                <div>
-                  <Label>Tax rate %</Label>
-                  <Input type="number" step="0.01" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} data-testid="inv-tax" />
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                    <SelectTrigger data-testid="inv-status"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="sent">Sent</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                      <SelectItem value="overdue">Overdue</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div><Label>Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, thank you note…" /></div>
-
-              {/* Live totals */}
-              <div className="border-t border-stone-200 pt-4 space-y-1.5 text-sm bg-stone-50 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
-                <div className="flex justify-between"><span className="text-stone-600">Total Expense</span><span className="tabular-nums font-medium" data-testid="inv-subtotal">{formatMoney(totalExpense, currency)}</span></div>
-                {parseFloat(form.tax_rate) > 0 && (
-                  <div className="flex justify-between"><span className="text-stone-600">Tax</span><span className="tabular-nums">{formatMoney(taxAmount, currency)}</span></div>
-                )}
-                {credit > 0 && (
-                  <div className="flex justify-between"><span className="text-stone-600">Credit toward expense</span><span className="tabular-nums text-rose-700">− {formatMoney(credit, currency)}</span></div>
-                )}
-                <div className="flex justify-between border-t border-stone-200 mt-2 pt-2 text-base font-semibold"><span>Total</span><span className="tabular-nums" data-testid="inv-total">{formatMoney(grandTotal, currency)}</span></div>
-              </div>
-
-              <DialogFooter className="pt-2">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="inv-save">{editing ? "Save" : "Create"}</Button>
-              </DialogFooter>
-            </form>
+            <DialogHeader>
+              <DialogTitle className="font-display">{editing ? "Edit" : "New"} invoice</DialogTitle>
+              <DialogDescription className="text-xs text-stone-500">
+                Fill in client, visit details, particulars and totals. Particulars can optionally auto-log as expense transactions.
+              </DialogDescription>
+            </DialogHeader>
+            <InvoiceForm
+              form={form}
+              setForm={setForm}
+              clients={clients}
+              accounts={accounts}
+              currency={currency}
+              editing={!!editing}
+              onSubmit={submit}
+              onCancel={() => setOpen(false)}
+            />
           </DialogContent>
         </Dialog>
       </header>
@@ -345,7 +230,10 @@ export default function Invoices() {
                   <tr key={inv.id} className="hover:bg-stone-50" data-testid={`inv-row-${inv.id}`}>
                     <td className="px-6 py-3.5">
                       <p className="font-medium">{inv.invoice_number}</p>
-                      {inv.campus_visit_no && <p className="text-xs text-stone-500">Visit #{inv.campus_visit_no}</p>}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {inv.campus_visit_no && <p className="text-xs text-stone-500">Visit #{inv.campus_visit_no}</p>}
+                        {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Auto-logged</span>}
+                      </div>
                     </td>
                     <td className="px-6 py-3.5">
                       <p>{clientMap[inv.client_id]?.name || "—"}</p>
