@@ -35,6 +35,13 @@
 - [x] Recharts bar (cash flow) + pie (expense breakdown)
 - [x] 100% backend (17/17 pytest) + 100% frontend (Playwright E2E) — see /app/test_reports/iteration_1.json
 
+## Implementation status — 2026-02-14 (iteration 2)
+- [x] Invoice PDF export per-row (client-side jsPDF + autotable)
+- [x] Dashboard date-range filter (This month / Last 30d / Last 90d / YTD / Custom)
+- [x] Quick Entry page (`/quick-entry`): debit/credit mode toggle, keypad, category chips, "Other (Specify)" input
+- [x] New default expense categories seeded + backfilled for existing users: Rent, Fuel Exp, Toll, Cab Exp, Train/Bus Booking, Food, Other
+- [x] 100% (24/24 backend + Playwright E2E) — see /app/test_reports/iteration_2.json
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
