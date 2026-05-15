@@ -42,6 +42,12 @@
 - [x] New default expense categories seeded + backfilled for existing users: Rent, Fuel Exp, Toll, Cab Exp, Train/Bus Booking, Food, Other
 - [x] 100% (24/24 backend + Playwright E2E) — see /app/test_reports/iteration_2.json
 
+## Implementation status — 2026-02-15 (iteration 9: Exports)
+- [x] Per-student PDF export (jsPDF + autotable): profile, summary tiles, schedules, payments, adjustments
+- [x] Consolidated XLSX export (SheetJS): 4 sheets — Summary (+totals row), Schedules, Payments, Adjustments
+- [x] Currency-aware number formatting in XLSX (USD/INR)
+- [x] Verified: 27 KB XLSX with 4 sheets, individual student PDF generated for sample student
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

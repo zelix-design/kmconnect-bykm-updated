@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, PencilSimple, Trash, Bank, Wallet, UsersThree, CaretDown, CaretUp, Briefcase, IdentificationBadge, X } from "@phosphor-icons/react";
+import { ArrowLeft, Plus, PencilSimple, Trash, Bank, Wallet, UsersThree, CaretDown, CaretUp, Briefcase, IdentificationBadge, X, FilePdf } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { downloadStudentPdf } from "@/lib/studentExports";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -241,6 +242,21 @@ export default function StudentDetail() {
               {s.notes && <p className="mt-3 text-sm text-stone-600">{s.notes}</p>}
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  try {
+                    downloadStudentPdf({ student: s, user });
+                    toast.success("PDF generated");
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Export failed");
+                  }
+                }}
+                data-testid="export-student-pdf"
+              >
+                <FilePdf size={14} className="mr-1.5" /> PDF
+              </Button>
               <Button variant="outline" onClick={() => setEditHeader(true)} data-testid="edit-header"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>
               <Button variant="outline" className="text-rose-700 hover:text-rose-800" onClick={removeStudent} data-testid="delete-student"><Trash size={14} className="mr-1.5" /> Delete</Button>
             </div>

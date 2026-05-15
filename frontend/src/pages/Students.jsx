@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { downloadStudentsXlsx } from "@/lib/studentExports";
 
 const STATUS_STYLES = {
   inquiry: "bg-stone-100 text-stone-700",
@@ -52,11 +53,31 @@ export default function Students() {
           <p className="text-sm text-stone-600 mt-1">Track fees collection, schedules, and payment routes per student.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="add-student-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
-              <Plus size={16} className="mr-1.5" /> Add student
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!list.length) { toast.error("No students to export"); return; }
+                try {
+                  downloadStudentsXlsx({ students: list, currency });
+                  toast.success("Exported XLSX");
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Export failed");
+                }
+              }}
+              className="h-10"
+              data-testid="export-students-xlsx-btn"
+            >
+              <FileXls size={16} className="mr-1.5" /> Export XLSX
             </Button>
-          </DialogTrigger>
+            <DialogTrigger asChild>
+              <Button data-testid="add-student-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+                <Plus size={16} className="mr-1.5" /> Add student
+              </Button>
+            </DialogTrigger>
+          </div>
           <DialogContent className="bg-white max-w-xl">
             <DialogHeader>
               <DialogTitle className="font-display">New student</DialogTitle>
