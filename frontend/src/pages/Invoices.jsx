@@ -37,6 +37,7 @@ const blankForm = () => ({
   invoice_type: "campus_visit",
   college: "",
   academic_year: "",
+  linked_visit_invoice_id: null,
 });
 
 function nextInvoiceNumber(list) {
@@ -132,6 +133,7 @@ export default function Invoices() {
       invoice_type: invType,
       college: inv.college || "",
       academic_year: inv.academic_year || "",
+      linked_visit_invoice_id: inv.linked_visit_invoice_id || null,
     });
     setOpen(true);
   };
@@ -168,6 +170,7 @@ export default function Invoices() {
       invoice_type: form.invoice_type,
       college: isService ? (form.college || null) : null,
       academic_year: isService ? (form.academic_year || null) : null,
+      linked_visit_invoice_id: isService ? (form.linked_visit_invoice_id || null) : null,
     };
     try {
       if (editing) await api.patch(`/invoices/${editing.id}`, payload);

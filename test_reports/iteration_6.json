@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 6 testing complete. BACKEND (54/54 passed): regression suite (44/44 from iterations 1-5) + 10 new iteration6 tests all green. Verified: (a) server.py split — file is now 72 lines and /app/backend/routers/{auth,accounts,clients,categories,transactions,invoices,dashboard}.py all exist; every API contract unchanged. (b) GET /api/invoices/open-credits returns campus_visit invoices (including legacy without invoice_type field) with id/invoice_number/total/used_credit/remaining_credit; service_charge invoices correctly excluded; client_id filter works. (c) Seeded INV-2026-CV-0001 ($7,300) shows used_credit=$3,000 (from main-agent's SC-0002 linking 3000 credit) and remaining_credit=$4,300, matching frontend dropdown display. (d) Lifecycle: creating a service_charge invoice with linked_visit_invoice_id + credit_amount=3000 drops remaining by 3000; PATCH credit to 1000 raises remaining by 2000; DELETE fully restores remaining. (e) Atomic sync fallback: backend logs 'Transaction unsupported, syncing non-atomically' (31 occurrences in /var/log/supervisor/backend.err.log) on standalone Mongo AND the 6 linked txs on INV-2026-CV-0001 ($3500/$2200/$650/$1200/$1500/$250 = $9,300) persist correctly after a PATCH. (f) One-shot startup migration backfilled invoice_type='campus_visit' on legacy docs. FRONTEND: full UI flow verified via Playwright on the live preview URL. Created New Invoice, toggled to service_charge, selected TEST_PlayClient — 'inv-linked-visit' Select rendered with options including 'INV-2026-CV-0001 · remaining $4,300.00'. Picking it auto-filled inv-credit to 4300; 'linked-visit-hint' showed 'INV-2026-CV-0001 · May 14, 2026 · pending $4,300.00 of $7,300.00'. Choosing 'None — no linked visit' cleared the linked_visit_invoice_id and hid the hint while preserving credit_amount=4300. Switching invoice type back to campus_visit hid the linked-visit dropdown entirely. No regressions; all seeded data (INV-2026-CV-0001, INV-2026-SC-0001 $17,700, INV-2026-SC-0002 $15,000 with 3000 credit linked to CV-0001) intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration6.py",
+    "/app/backend/tests/test_finflow_api.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/test_reports/pytest/iteration6.xml",
+    "/app/test_reports/pytest/iteration6_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now 72 lines and cleanly delegates to routers. Health endpoint kept inline (acceptable). All routers prefixed with /api correctly.",
+    "routers/invoices.py _sync_invoice_expense_transactions: try/except on OperationFailure is the correct pattern for graceful degradation on standalone Mongo. The new_docs list is built BEFORE the session opens, which keeps the transaction window minimal — good.",
+    "open-credits endpoint uses a $or { invoice_type: 'campus_visit' OR invoice_type missing } query which correctly covers legacy docs even after the startup migration runs (defensive). Good.",
+    "Startup migration in server.py: update_many runs on every startup — idempotent because once a doc has invoice_type set, the {$exists: False} filter excludes it. Acceptable but consider gating on a one-shot marker if collection grows large.",
+    "InvoiceForm.jsx: openCredits is fetched on every client change (good) and 'None' option uses the sentinel '_none' instead of empty string to avoid shadcn Select's empty-value restriction. Solid.",
+    "InvoiceForm.jsx: when picking a linked visit, credit_amount is auto-filled to remaining_credit. The spec says 'Choosing None clears linked_visit_invoice_id (does not clear credit_amount user has already set)' — verified preserved on the live UI (4300 stayed after None).",
+    "Atomic fallback warning is logged at WARNING level on backend.err.log — visible to operators but does not spam stdout. Appropriate severity."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration6.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@finflow.com / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All test invoices (TEST-INV-IT6-*) are created and deleted within their tests. Seeded INV-2026-CV-0001, INV-2026-SC-0001 ($17,700), and INV-2026-SC-0002 ($15,000 with credit 3000 linked to CV-0001) remained intact and verified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 6 pytest at /app/backend/tests/test_iteration6.py runs in ~1.8s. Full regression (54 tests across iterations 1-6) runs in ~15s with REACT_APP_BACKEND_URL exported. Standalone MongoDB rejects multi-document transactions — backend.err.log will accumulate 'Transaction unsupported, syncing non-atomically' WARNINGs on every invoice POST/PATCH that triggers tx sync; this is the expected fallback path. Open-credits endpoint URL: GET /api/invoices/open-credits[?client_id=X]. Frontend data-testids of interest: inv-linked-visit, linked-visit-hint, no-open-credits, type-campus, type-service, inv-credit, inv-client.",
+  "rca of the issue": "No issues encountered. All 54 backend tests passing; frontend linked-visit flow works end-to-end."
+}

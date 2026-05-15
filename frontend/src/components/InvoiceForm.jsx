@@ -1,12 +1,13 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, X, Car, Receipt } from "@phosphor-icons/react";
-import { formatMoney } from "@/lib/format";
+import { Plus, X, Car, Receipt, Link as LinkIcon } from "@phosphor-icons/react";
+import { formatMoney, formatDate } from "@/lib/format";
 
 export const PARTICULAR_PRESETS = [
   "Car Rent",
@@ -23,6 +24,20 @@ export const serviceParticular = () => ({ kind: "Service Charge", specify: "", a
 
 export default function InvoiceForm({ form, setForm, clients, accounts, currency, editing, onSubmit, onCancel }) {
   const isService = form.invoice_type === "service_charge";
+  const [openCredits, setOpenCredits] = useState([]);
+
+  // Fetch open campus-visit credits for the selected client when in service mode.
+  useEffect(() => {
+    if (!isService) { setOpenCredits([]); return; }
+    if (!form.client_id) { setOpenCredits([]); return; }
+    let cancelled = false;
+    api.get("/invoices/open-credits", { params: { client_id: form.client_id } })
+      .then(({ data }) => { if (!cancelled) setOpenCredits(data); })
+      .catch(() => { if (!cancelled) setOpenCredits([]); });
+    return () => { cancelled = true; };
+  }, [isService, form.client_id]);
+
+  const linkedVisit = openCredits.find(v => v.id === form.linked_visit_invoice_id);
 
   const updatePart = (idx, k, v) => {
     const items = form.particulars.slice();
@@ -109,6 +124,52 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
             <div><Label>Course</Label><Input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="e.g. B.Tech CSE" data-testid="inv-course" /></div>
             <div><Label>College</Label><Input value={form.college} onChange={(e) => setForm({ ...form, college: e.target.value })} placeholder="e.g. IIT Delhi" data-testid="inv-college" /></div>
             <div><Label>Academic Year</Label><Input value={form.academic_year} onChange={(e) => setForm({ ...form, academic_year: e.target.value })} placeholder="e.g. 2026-27" data-testid="inv-academic-year" /></div>
+          </div>
+
+          {/* Link to a prior campus visit (auto-fills credit) */}
+          <div className="border-t border-stone-200 pt-3 mt-2">
+            <Label className="flex items-center gap-1.5"><LinkIcon size={14} /> Link to a campus visit (optional)</Label>
+            {openCredits.length === 0 ? (
+              <p className="text-xs text-stone-500 mt-1.5" data-testid="no-open-credits">
+                {form.client_id ? "No campus-visit invoices with open balance for this client." : "Pick a client to see their open campus visits."}
+              </p>
+            ) : (
+              <>
+                <Select
+                  value={form.linked_visit_invoice_id || "_none"}
+                  onValueChange={(v) => {
+                    if (v === "_none") {
+                      setForm({ ...form, linked_visit_invoice_id: null });
+                    } else {
+                      const picked = openCredits.find(c => c.id === v);
+                      setForm({
+                        ...form,
+                        linked_visit_invoice_id: v,
+                        // Auto-fill credit with remaining balance.
+                        credit_amount: picked ? picked.remaining_credit : form.credit_amount,
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger data-testid="inv-linked-visit"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">None — no linked visit</SelectItem>
+                    {openCredits.map(v => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.invoice_number}
+                        {v.student_name ? ` · ${v.student_name}` : ""}
+                        {" · "}remaining {formatMoney(v.remaining_credit, currency)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {linkedVisit && (
+                  <p className="text-xs text-stone-500 mt-1.5" data-testid="linked-visit-hint">
+                    {linkedVisit.invoice_number} · {formatDate(linkedVisit.issue_date)} · pending {formatMoney(linkedVisit.remaining_credit, currency)} of {formatMoney(linkedVisit.total, currency)}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
       ) : (
