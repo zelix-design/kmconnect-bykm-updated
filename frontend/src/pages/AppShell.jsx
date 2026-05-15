@@ -13,6 +13,7 @@ const navItems = [
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices" },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students" },
+  { to: "/agents", label: "Sub-agents", icon: UsersThree, tid: "nav-agents" },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories" },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings" },
 ];
@@ -92,7 +93,7 @@ export default function AppShell() {
         </div>
         {/* Mobile bottom nav */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-stone-200 grid grid-cols-6">
-          {[navItems[0], navItems[1], navItems[2], navItems[4], navItems[6], navItems[8]].map((item) => (
+          {[navItems[0], navItems[1], navItems[2], navItems[4], navItems[6], navItems[9]].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

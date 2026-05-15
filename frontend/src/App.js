@@ -16,6 +16,7 @@ import Categories from "@/pages/Categories";
 import Settings from "@/pages/Settings";
 import Students from "@/pages/Students";
 import StudentDetail from "@/pages/StudentDetail";
+import Agents from "@/pages/Agents";
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/clients" element={<Clients />} />
             <Route path="/students" element={<Students />} />
             <Route path="/students/:id" element={<StudentDetail />} />
+            <Route path="/agents" element={<Agents />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<Settings />} />
           </Route>

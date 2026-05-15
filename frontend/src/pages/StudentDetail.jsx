@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, PencilSimple, Trash, Bank, Wallet, UsersThree } from "@phosphor-icons/react";
+import { ArrowLeft, Plus, PencilSimple, Trash, Bank, Wallet, UsersThree, CaretDown, CaretUp, Briefcase, IdentificationBadge, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const STATUS_OPTIONS = [
@@ -19,13 +20,35 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "Completed" },
 ];
 
-const ROUTE_LABELS = {
-  college: { label: "Paid to college", icon: Bank, color: "bg-sky-50 text-sky-700" },
+const RECEIVED_IN = {
+  college: { label: "College Acc.", icon: Bank, color: "bg-sky-50 text-sky-700" },
   cash: { label: "Cash", icon: Wallet, color: "bg-amber-50 text-amber-700" },
-  sub_agent: { label: "Via Sub-agent", icon: UsersThree, color: "bg-violet-50 text-violet-700" },
+  bank: { label: "Bank Acc.", icon: Bank, color: "bg-stone-100 text-stone-700" },
+  sub_agent: { label: "Sub Agent Acc.", icon: UsersThree, color: "bg-violet-50 text-violet-700" },
+  associate: { label: "Associate Acc.", icon: Briefcase, color: "bg-amber-50 text-amber-700" },
+  km: { label: "KM Acc.", icon: IdentificationBadge, color: "bg-emerald-50 text-emerald-700" },
 };
 
-const SUB_AGENT_LABEL = { sub_agent: "Sub Agent", associate: "Associate", km: "KM" };
+const FEE_TYPE_LABELS = {
+  booking_admission: "Booking / Admission Fees",
+  tution: "Tution Fees",
+  other: "Other Fees",
+};
+
+const PAYMENT_MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "upi", label: "UPI" },
+  { value: "cheque", label: "Cheque" },
+  { value: "card", label: "Card" },
+  { value: "other", label: "Other" },
+];
+
+const SUB_AGENT_TYPES = [
+  { value: "sub_agent", label: "Sub Agent" },
+  { value: "associate", label: "Associate" },
+  { value: "km", label: "KM" },
+];
 
 const PRESET_SCHEDULE_LABELS = ["1st Payment", "2nd Payment", "3rd Payment", "4th Payment", "5th Payment"];
 
@@ -40,6 +63,7 @@ export default function StudentDetail() {
   const [header, setHeader] = useState({});
   const [schDlg, setSchDlg] = useState({ open: false, editing: null, form: { label: "1st Payment", amount: "", remarks: "", due_date: "" } });
   const [payDlg, setPayDlg] = useState({ open: false, editing: null, form: emptyPayment() });
+  const [expanded, setExpanded] = useState({});
 
   const load = useCallback(async () => {
     try {
@@ -90,37 +114,87 @@ export default function StudentDetail() {
 
   // ----- Payments -----
   const openPayAdd = () => setPayDlg({ open: true, editing: null, form: emptyPayment() });
-  const openPayEdit = (p) => setPayDlg({ open: true, editing: p, form: {
-    date: p.date, amount: p.amount, route: p.route, sub_agent_type: p.sub_agent_type || "sub_agent",
-    sub_agent_name: p.sub_agent_name || "", account_id: p.account_id || "", remarks: p.remarks || "",
-    schedule_id: p.schedule_id || "",
-  } });
+  const openPayEdit = (p) => setPayDlg({
+    open: true, editing: p,
+    form: {
+      date: p.date, amount: String(p.amount), fee_type: p.fee_type || "other",
+      received_in: {
+        type: p.received_in?.type || "college",
+        name: p.received_in?.name || "",
+        account_id: p.received_in?.account_id || "",
+      },
+      has_adjustment: !!p.has_adjustment,
+      adjustments: (p.adjustments || []).map(a => ({ ...a, amount: String(a.amount) })),
+      schedule_id: p.schedule_id || "",
+      remarks: p.remarks || "",
+    }
+  });
+
   const submitPay = async (e) => {
     e.preventDefault();
     const f = payDlg.form;
     const payload = {
-      date: f.date, amount: parseFloat(f.amount) || 0, route: f.route,
-      sub_agent_type: f.route === "sub_agent" ? f.sub_agent_type : null,
-      sub_agent_name: f.route === "sub_agent" ? (f.sub_agent_name || null) : null,
-      account_id: f.account_id || null,
-      remarks: f.remarks || "",
+      date: f.date,
+      amount: parseFloat(f.amount) || 0,
+      fee_type: f.fee_type,
+      received_in: {
+        type: f.received_in.type,
+        name: f.received_in.name || null,
+        account_id: f.received_in.account_id || null,
+      },
+      has_adjustment: !!f.has_adjustment,
+      adjustments: f.has_adjustment ? f.adjustments.map(a => ({
+        kind: a.kind,
+        amount: parseFloat(a.amount) || 0,
+        payment_date: a.payment_date,
+        payment_mode: a.payment_mode,
+        sub_agent_type: a.kind === "sc_adjusted" ? (a.sub_agent_type || null) : null,
+        sub_agent_name: a.kind === "sc_adjusted" ? (a.sub_agent_name || null) : null,
+        remarks: a.remarks || "",
+      })) : [],
       schedule_id: f.schedule_id || null,
+      remarks: f.remarks || "",
     };
     try {
       const { data } = payDlg.editing
         ? await api.patch(`/students/${id}/payments/${payDlg.editing.id}`, payload)
         : await api.post(`/students/${id}/payments`, payload);
       setS(data); setPayDlg({ ...payDlg, open: false }); toast.success("Saved");
-    } catch { toast.error("Failed"); }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed");
+    }
   };
   const removePay = async (pid) => {
     if (!confirm("Delete payment?")) return;
     const { data } = await api.delete(`/students/${id}/payments/${pid}`); setS(data);
   };
 
+  const updateAdj = (idx, k, v) => {
+    const adjs = payDlg.form.adjustments.slice();
+    adjs[idx] = { ...adjs[idx], [k]: v };
+    setPayDlg({ ...payDlg, form: { ...payDlg.form, adjustments: adjs } });
+  };
+  const addAdj = () => setPayDlg({
+    ...payDlg,
+    form: {
+      ...payDlg.form,
+      adjustments: [...payDlg.form.adjustments, {
+        kind: "paid_to_college", amount: "", payment_date: payDlg.form.date,
+        payment_mode: "bank_transfer", sub_agent_type: "sub_agent", sub_agent_name: "", remarks: "",
+      }],
+    },
+  });
+  const removeAdj = (idx) => setPayDlg({
+    ...payDlg,
+    form: { ...payDlg.form, adjustments: payDlg.form.adjustments.filter((_, i) => i !== idx) },
+  });
+
+  const fAdjTotal = payDlg.form.adjustments.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+  const fAmount = parseFloat(payDlg.form.amount) || 0;
+  const adjBalance = fAmount - fAdjTotal;
+
   return (
     <div className="space-y-6 animate-fade-in" data-testid="student-detail">
-      {/* Back nav */}
       <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900" data-testid="back-to-list">
         <ArrowLeft size={14} /> All students
       </Link>
@@ -174,7 +248,6 @@ export default function StudentDetail() {
         )}
       </Card>
 
-      {/* Summary tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="summary-tiles">
         <Tile label="SC Out Fixed" value={formatMoney(s.sc_out_fixed, currency)} />
         <Tile label="Scheduled total" value={formatMoney(s.scheduled_total, currency)} />
@@ -270,64 +343,136 @@ export default function StudentDetail() {
             <DialogTrigger asChild>
               <Button onClick={openPayAdd} data-testid="add-payment" className="h-9 bg-stone-900 hover:bg-stone-800 text-stone-50"><Plus size={14} className="mr-1.5" /> Log payment</Button>
             </DialogTrigger>
-            <DialogContent className="bg-white max-w-lg">
+            <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-display">{payDlg.editing ? "Edit" : "Log"} payment</DialogTitle>
                 <DialogDescription className="text-xs text-stone-500">Record an installment received from this student.</DialogDescription>
               </DialogHeader>
-              <form onSubmit={submitPay} className="space-y-3">
+              <form onSubmit={submitPay} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Date</Label><Input type="date" required value={payDlg.form.date} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, date: e.target.value } })} data-testid="pay-date" /></div>
+                  <div><Label>Date credited</Label><Input type="date" required value={payDlg.form.date} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, date: e.target.value } })} data-testid="pay-date" /></div>
+                  <div>
+                    <Label>Against schedule</Label>
+                    <Select value={payDlg.form.schedule_id || "_none"} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, schedule_id: v === "_none" ? "" : v } })}>
+                      <SelectTrigger data-testid="pay-schedule"><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">None</SelectItem>
+                        {(s.schedules || []).map(sc => <SelectItem key={sc.id} value={sc.id}>{sc.label} — {formatMoney(sc.amount, currency)}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Fee type</Label>
+                    <Select value={payDlg.form.fee_type} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, fee_type: v } })}>
+                      <SelectTrigger data-testid="pay-fee-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="booking_admission">Booking / Admission Fees</SelectItem>
+                        <SelectItem value="tution">Tution Fees</SelectItem>
+                        <SelectItem value="other">Other Fees</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div><Label>Amount</Label><Input type="number" step="0.01" required value={payDlg.form.amount} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, amount: e.target.value } })} data-testid="pay-amount" /></div>
                 </div>
-                <div>
-                  <Label>Route</Label>
-                  <Select value={payDlg.form.route} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, route: v } })}>
-                    <SelectTrigger data-testid="pay-route"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="college">Paid to college</SelectItem>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="sub_agent">With Sub-agent / Associate / KM</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {payDlg.form.route === "sub_agent" && (
-                  <div className="grid grid-cols-2 gap-3" data-testid="pay-subagent-block">
-                    <div>
-                      <Label>Type</Label>
-                      <Select value={payDlg.form.sub_agent_type} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, sub_agent_type: v } })}>
-                        <SelectTrigger data-testid="pay-sub-type"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="sub_agent">Sub Agent</SelectItem>
-                          <SelectItem value="associate">Associate</SelectItem>
-                          <SelectItem value="km">KM</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div><Label>Name</Label><Input value={payDlg.form.sub_agent_name} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, sub_agent_name: e.target.value } })} placeholder="e.g. Rohan Mehta" data-testid="pay-sub-name" /></div>
+
+                <div className="rounded-md border border-stone-200 p-4 space-y-3" data-testid="received-in-block">
+                  <Label>Received in</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select value={payDlg.form.received_in.type} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, received_in: { ...payDlg.form.received_in, type: v } } })}>
+                      <SelectTrigger data-testid="pay-recv-type"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="college">College Acc.</SelectItem>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="bank">Bank Acc.</SelectItem>
+                        <SelectItem value="km">KM Acc.</SelectItem>
+                        <SelectItem value="sub_agent">Sub Agent Acc.</SelectItem>
+                        <SelectItem value="associate">Associate Acc.</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(["sub_agent", "associate", "km"].includes(payDlg.form.received_in.type)) && (
+                      <Input
+                        value={payDlg.form.received_in.name}
+                        onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, received_in: { ...payDlg.form.received_in, name: e.target.value } } })}
+                        placeholder="Name (e.g. Rohan Mehta)"
+                        data-testid="pay-recv-name"
+                      />
+                    )}
                   </div>
-                )}
-                <div>
-                  <Label>Account (optional)</Label>
-                  <Select value={payDlg.form.account_id || "_none"} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, account_id: v === "_none" ? "" : v } })}>
-                    <SelectTrigger data-testid="pay-account"><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">None</SelectItem>
-                      {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <Label className="text-xs">Internal account (optional — enables auto-logging as income transaction)</Label>
+                    <Select value={payDlg.form.received_in.account_id || "_none"} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, received_in: { ...payDlg.form.received_in, account_id: v === "_none" ? "" : v } } })}>
+                      <SelectTrigger className="h-9" data-testid="pay-recv-account"><SelectValue placeholder="No internal account" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">No auto-log</SelectItem>
+                        {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <Label>Against schedule (optional)</Label>
-                  <Select value={payDlg.form.schedule_id || "_none"} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, schedule_id: v === "_none" ? "" : v } })}>
-                    <SelectTrigger data-testid="pay-schedule"><SelectValue placeholder="None" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">None</SelectItem>
-                      {(s.schedules || []).map(sc => <SelectItem key={sc.id} value={sc.id}>{sc.label} — {formatMoney(sc.amount, currency)}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+
+                <div className="rounded-md border border-stone-200 p-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={!!payDlg.form.has_adjustment}
+                      onCheckedChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, has_adjustment: !!v, adjustments: v && payDlg.form.adjustments.length === 0 ? [{ kind: "paid_to_college", amount: "", payment_date: payDlg.form.date, payment_mode: "bank_transfer", sub_agent_type: "sub_agent", sub_agent_name: "", remarks: "" }] : payDlg.form.adjustments } })}
+                      data-testid="pay-has-adjustment"
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">This payment has an adjustment</p>
+                      <p className="text-xs text-stone-600 mt-0.5">Split the amount across "Paid to College" and "SC Adjusted with Sub/KM" (specify type).</p>
+                    </div>
+                  </label>
+
+                  {payDlg.form.has_adjustment && (
+                    <div className="space-y-3 pt-2 border-t border-stone-200" data-testid="adjustments-block">
+                      {payDlg.form.adjustments.map((adj, idx) => (
+                        <div key={idx} className="rounded-md bg-stone-50 p-3 space-y-2" data-testid={`adj-row-${idx}`}>
+                          <div className="grid grid-cols-12 gap-2 items-start">
+                            <Select value={adj.kind} onValueChange={(v) => updateAdj(idx, "kind", v)}>
+                              <SelectTrigger className="col-span-5" data-testid={`adj-kind-${idx}`}><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="paid_to_college">Paid to College</SelectItem>
+                                <SelectItem value="sc_adjusted">SC Adjusted (with Sub / Associate / KM)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input className="col-span-6" type="number" step="0.01" placeholder="Amount" value={adj.amount} onChange={(e) => updateAdj(idx, "amount", e.target.value)} data-testid={`adj-amount-${idx}`} />
+                            <button type="button" onClick={() => removeAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-stone-400 hover:text-rose-700" data-testid={`adj-remove-${idx}`}><X size={14} /></button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Input type="date" value={adj.payment_date} onChange={(e) => updateAdj(idx, "payment_date", e.target.value)} data-testid={`adj-date-${idx}`} />
+                            <Select value={adj.payment_mode} onValueChange={(v) => updateAdj(idx, "payment_mode", v)}>
+                              <SelectTrigger data-testid={`adj-mode-${idx}`}><SelectValue /></SelectTrigger>
+                              <SelectContent>{PAYMENT_MODES.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          {adj.kind === "sc_adjusted" && (
+                            <div className="grid grid-cols-2 gap-2" data-testid={`adj-sub-${idx}`}>
+                              <Select value={adj.sub_agent_type} onValueChange={(v) => updateAdj(idx, "sub_agent_type", v)}>
+                                <SelectTrigger data-testid={`adj-sub-type-${idx}`}><SelectValue /></SelectTrigger>
+                                <SelectContent>{SUB_AGENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                              </Select>
+                              <Input value={adj.sub_agent_name} onChange={(e) => updateAdj(idx, "sub_agent_name", e.target.value)} placeholder="Name" data-testid={`adj-sub-name-${idx}`} />
+                            </div>
+                          )}
+                          <Input value={adj.remarks} onChange={(e) => updateAdj(idx, "remarks", e.target.value)} placeholder="Remarks" data-testid={`adj-remarks-${idx}`} />
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between">
+                        <Button type="button" size="sm" variant="outline" onClick={addAdj} data-testid="adj-add"><Plus size={14} className="mr-1" /> Add adjustment row</Button>
+                        <span className={`text-xs tabular-nums ${Math.abs(adjBalance) < 0.01 ? "text-emerald-700" : "text-rose-700"}`} data-testid="adj-balance">
+                          Adjustments {formatMoney(fAdjTotal, currency)} of {formatMoney(fAmount, currency)} · Δ {formatMoney(adjBalance, currency)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div><Label>Remarks</Label><Input value={payDlg.form.remarks} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, remarks: e.target.value } })} placeholder="e.g. SC Adjusted, Booking Amount" data-testid="pay-remarks" /></div>
+
+                <div><Label>Remarks</Label><Input value={payDlg.form.remarks} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, remarks: e.target.value } })} placeholder="e.g. Booking Amount" data-testid="pay-remarks" /></div>
+
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setPayDlg({ ...payDlg, open: false })}>Cancel</Button>
                   <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="pay-save">Save</Button>
@@ -342,49 +487,79 @@ export default function StudentDetail() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left bg-stone-50 border-b border-stone-200">
-                <th className="px-6 py-3 label-eyebrow">Date</th>
-                <th className="px-6 py-3 label-eyebrow">Route</th>
-                <th className="px-6 py-3 label-eyebrow">Channel / Account</th>
+                <th className="px-6 py-3 label-eyebrow w-8"></th>
+                <th className="px-6 py-3 label-eyebrow">Date credited</th>
+                <th className="px-6 py-3 label-eyebrow">Schedule / Fee</th>
+                <th className="px-6 py-3 label-eyebrow">Received in</th>
                 <th className="px-6 py-3 label-eyebrow text-right">Amount</th>
-                <th className="px-6 py-3 label-eyebrow">Against</th>
                 <th className="px-6 py-3 label-eyebrow">Remarks</th>
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
               {s.payments.map(p => {
-                const route = ROUTE_LABELS[p.route] || ROUTE_LABELS.cash;
-                const Icon = route.icon;
+                const ri = RECEIVED_IN[p.received_in?.type] || RECEIVED_IN.cash;
+                const Icon = ri.icon;
                 const sch = (s.schedules || []).find(x => x.id === p.schedule_id);
-                const acc = accounts.find(a => a.id === p.account_id);
+                const isExp = !!expanded[p.id];
+                const hasAdj = p.has_adjustment && (p.adjustments || []).length > 0;
                 return (
-                  <tr key={p.id} className="hover:bg-stone-50" data-testid={`pay-row-${p.id}`}>
-                    <td className="px-6 py-3 tabular-nums text-stone-600">{formatDate(p.date)}</td>
-                    <td className="px-6 py-3">
-                      <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded ${route.color}`}>
-                        <Icon size={12} />
-                        {route.label}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-stone-600">
-                      {p.route === "sub_agent" ? (
-                        <span>{SUB_AGENT_LABEL[p.sub_agent_type] || "—"}{p.sub_agent_name ? ` · ${p.sub_agent_name}` : ""}</span>
-                      ) : acc ? acc.name : "—"}
-                    </td>
-                    <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700">{formatMoney(p.amount, currency)}</td>
-                    <td className="px-6 py-3 text-stone-600">{sch ? sch.label : "—"}</td>
-                    <td className="px-6 py-3 text-stone-600">{p.remarks || "—"}</td>
-                    <td className="px-6 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openPayEdit(p)} data-testid={`pay-edit-${p.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={14} /></button>
-                      <button onClick={() => removePay(p.id)} data-testid={`pay-del-${p.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={14} /></button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={p.id}>
+                    <tr className="hover:bg-stone-50" data-testid={`pay-row-${p.id}`}>
+                      <td className="px-6 py-3">
+                        {hasAdj && (
+                          <button onClick={() => setExpanded({ ...expanded, [p.id]: !isExp })} className="text-stone-400 hover:text-stone-900" data-testid={`pay-expand-${p.id}`}>
+                            {isExp ? <CaretUp size={14} /> : <CaretDown size={14} />}
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 tabular-nums text-stone-600">{formatDate(p.date)}</td>
+                      <td className="px-6 py-3">
+                        <div className="font-medium">{sch ? sch.label : "Unscheduled"}</div>
+                        <div className="text-xs text-stone-500">{FEE_TYPE_LABELS[p.fee_type] || "Other Fees"}</div>
+                      </td>
+                      <td className="px-6 py-3">
+                        <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded ${ri.color}`}>
+                          <Icon size={12} /> {ri.label}
+                        </span>
+                        {p.received_in?.name && <div className="text-xs text-stone-500 mt-1">{p.received_in.name}</div>}
+                      </td>
+                      <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700">{formatMoney(p.amount, currency)}</td>
+                      <td className="px-6 py-3 text-stone-600">{p.remarks || "—"}</td>
+                      <td className="px-6 py-3 text-right whitespace-nowrap">
+                        <button onClick={() => openPayEdit(p)} data-testid={`pay-edit-${p.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={14} /></button>
+                        <button onClick={() => removePay(p.id)} data-testid={`pay-del-${p.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={14} /></button>
+                      </td>
+                    </tr>
+                    {hasAdj && isExp && (
+                      <tr className="bg-stone-50">
+                        <td colSpan={7} className="px-6 py-3">
+                          <p className="label-eyebrow mb-2">Adjustments</p>
+                          <div className="space-y-1.5">
+                            {p.adjustments.map((a, idx) => (
+                              <div key={a.id || idx} className="flex items-center gap-2 text-xs text-stone-700">
+                                <span className={`px-1.5 py-0.5 rounded ${a.kind === "paid_to_college" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {a.kind === "paid_to_college" ? "Paid to College" : "SC Adjusted"}
+                                </span>
+                                <span className="tabular-nums font-medium">{formatMoney(a.amount, currency)}</span>
+                                <span className="text-stone-500">on {formatDate(a.payment_date)} · {PAYMENT_MODES.find(m => m.value === a.payment_mode)?.label}</span>
+                                {a.kind === "sc_adjusted" && a.sub_agent_name && (
+                                  <span className="text-stone-500">· with {SUB_AGENT_TYPES.find(t => t.value === a.sub_agent_type)?.label} {a.sub_agent_name}</span>
+                                )}
+                                {a.remarks && <span className="text-stone-500">· {a.remarks}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
               <tr className="bg-stone-50 font-medium">
-                <td colSpan={3} className="px-6 py-3 text-stone-600 label-eyebrow">Total collected</td>
+                <td colSpan={4} className="px-6 py-3 text-stone-600 label-eyebrow">Total collected</td>
                 <td className="px-6 py-3 text-right tabular-nums text-emerald-700" data-testid="pay-total">{formatMoney(s.collected_total, currency)}</td>
-                <td colSpan={3}></td>
+                <td colSpan={2}></td>
               </tr>
             </tbody>
           </table>
@@ -413,8 +588,13 @@ function nextScheduleLabel(schedules) {
 
 function emptyPayment() {
   return {
-    date: todayISO(), amount: "", route: "college",
-    sub_agent_type: "sub_agent", sub_agent_name: "",
-    account_id: "", remarks: "", schedule_id: "",
+    date: todayISO(),
+    amount: "",
+    fee_type: "booking_admission",
+    received_in: { type: "college", name: "", account_id: "" },
+    has_adjustment: false,
+    adjustments: [],
+    schedule_id: "",
+    remarks: "",
   };
 }

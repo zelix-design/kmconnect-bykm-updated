@@ -60,6 +60,9 @@ async def startup():
     await db.invoices.create_index("user_id")
     await db.invoices.create_index("linked_visit_invoice_id")
     await db.students.create_index("user_id")
+    # Transactions linked to student payments
+    await db.transactions.create_index("linked_student_payment_id")
+    await db.transactions.create_index("linked_student_id")
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},
