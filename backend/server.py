@@ -68,6 +68,11 @@ async def startup():
         {"invoice_type": {"$exists": False}},
         {"$set": {"invoice_type": "campus_visit"}},
     )
+    # One-shot scrub: drop ephemeral TestAgent demo rows left from earlier QA runs.
+    await db.students.update_many(
+        {},
+        {"$pull": {"payments": {"received_in.name": "TestAgent"}}},
+    )
     await seed_admin_and_backfill()
 
 

@@ -7,7 +7,7 @@ Each student document embeds:
 from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso
@@ -47,6 +47,15 @@ class ReceivedIn(BaseModel):
     name: Optional[str] = None      # sub-agent / KM / associate / contact name
     account_id: Optional[str] = None  # internal account where money was received
 
+    @model_validator(mode="after")
+    def _name_required_for_agent(self):
+        if self.type in {"sub_agent", "associate", "km"}:
+            if not self.name or not self.name.strip():
+                raise ValueError(
+                    f"received_in.name is required when type is '{self.type}'"
+                )
+        return self
+
 
 class Adjustment(BaseModel):
     id: Optional[str] = None
@@ -57,6 +66,19 @@ class Adjustment(BaseModel):
     sub_agent_type: Optional[SubAgentType] = None  # only when kind=sc_adjusted
     sub_agent_name: Optional[str] = None
     remarks: Optional[str] = ""
+
+    @model_validator(mode="after")
+    def _sub_agent_required_for_sc_adjusted(self):
+        if self.kind == "sc_adjusted":
+            if not self.sub_agent_type:
+                raise ValueError(
+                    "sub_agent_type is required when adjustment kind is 'sc_adjusted'"
+                )
+            if not self.sub_agent_name or not self.sub_agent_name.strip():
+                raise ValueError(
+                    "sub_agent_name is required when adjustment kind is 'sc_adjusted'"
+                )
+        return self
 
 
 class PaymentItemIn(BaseModel):
@@ -259,6 +281,88 @@ async def agent_ledger(user: dict = Depends(get_current_user)):
         out.append(row)
     out.sort(key=lambda r: r["total_received"], reverse=True)
     return out
+
+
+@router.get("/agent-ledger/payments")
+async def agent_payments(
+    type: str,
+    name: str,
+    user: dict = Depends(get_current_user),
+):
+    """Flat list of every payment routed through a specific (type, name) agent.
+
+    Each row includes the student context, the payment itself, and the
+    breakdown of adjustments (paid_to_college / sc_adjusted)."""
+    if type not in {"sub_agent", "associate", "km"}:
+        raise HTTPException(400, "type must be one of sub_agent, associate, km")
+    user_id = user["id"]
+    students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
+
+    rows = []
+    totals = {
+        "total_received": 0.0,
+        "paid_to_college": 0.0,
+        "sc_adjusted": 0.0,
+        "payments_count": 0,
+        "students_count": 0,
+    }
+    student_set = set()
+
+    target = name.strip()
+    for st in students:
+        payments = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
+        for p in payments:
+            r = p.get("received_in") or {}
+            if r.get("type") != type:
+                continue
+            if (r.get("name") or "—").strip() != target:
+                continue
+            paid_to_college = sum(
+                float(a.get("amount") or 0)
+                for a in (p.get("adjustments") or [])
+                if a.get("kind") == "paid_to_college"
+            )
+            sc_adjusted = sum(
+                float(a.get("amount") or 0)
+                for a in (p.get("adjustments") or [])
+                if a.get("kind") == "sc_adjusted"
+            )
+            totals["total_received"] += float(p.get("amount") or 0)
+            totals["paid_to_college"] += paid_to_college
+            totals["sc_adjusted"] += sc_adjusted
+            totals["payments_count"] += 1
+            student_set.add(st["id"])
+            sch = next(
+                (sc for sc in (st.get("schedules") or []) if sc.get("id") == p.get("schedule_id")),
+                None,
+            )
+            rows.append({
+                "payment_id": p["id"],
+                "date": p.get("date"),
+                "amount": round(float(p.get("amount") or 0), 2),
+                "fee_type": p.get("fee_type"),
+                "schedule_label": sch["label"] if sch else None,
+                "remarks": p.get("remarks") or "",
+                "has_adjustment": bool(p.get("has_adjustment")),
+                "adjustments": p.get("adjustments") or [],
+                "student_id": st["id"],
+                "student_name": st.get("name"),
+                "course": st.get("course"),
+                "college": st.get("college"),
+                "paid_to_college": round(paid_to_college, 2),
+                "sc_adjusted": round(sc_adjusted, 2),
+            })
+
+    totals["students_count"] = len(student_set)
+    totals["total_received"] = round(totals["total_received"], 2)
+    totals["paid_to_college"] = round(totals["paid_to_college"], 2)
+    totals["sc_adjusted"] = round(totals["sc_adjusted"], 2)
+    totals["holding"] = round(
+        totals["total_received"] - totals["paid_to_college"] - totals["sc_adjusted"], 2
+    )
+
+    rows.sort(key=lambda r: r["date"] or "", reverse=True)
+    return {"type": type, "name": target, "totals": totals, "payments": rows}
 
 
 @router.get("/{student_id}")
