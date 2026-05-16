@@ -64,6 +64,16 @@
 - [x] **Students filters**: 3 text filters — Student Name, College, Reference (testids `filter-name`, `filter-college`, `filter-reference`). Client-side substring match.
 - [x] **Visually verified** in preview env. Filter on "NAF" correctly reduced 6 → 1 card.
 
+## Implementation status — 2026-02-16 (iteration 12: Hyphoneer-inspired Overview)
+- [x] **Inline tile tabs** — Transactions / Students / Clients / Ledger tiles now switch the bottom section content on the same Overview page (no navigation).
+- [x] **Bottom data list** filtered by Today / Weekly / Monthly tab strip; row click → drill into detail page; "View all" link → respective full page.
+- [x] **Pastel stat cards** (amber/emerald/rose/violet) with trend % vs previous month (computed client-side from cashflow series).
+- [x] **Activity area chart** with gradient fills (Income green, Expense rose) — replaces bar chart.
+- [x] **Latest spendings** card combines the existing donut + category list (Where it went merged in).
+- [x] **Dark sidebar** (bg-stone-950 + emerald accent on logo + white-bg active item).
+- [x] **Ledger nav** uses Notebook icon for visual differentiation from Clients.
+- [x] Self-tested: clicking `tile-students` keeps user on Overview, swaps bottom section to `student-list` data-testid.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

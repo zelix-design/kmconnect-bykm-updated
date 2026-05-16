@@ -2,7 +2,7 @@ import React from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import {
-  ChartLineUp, House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle, Student,
+  ChartLineUp, House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle, Student, Notebook,
 } from "@phosphor-icons/react";
 
 const navItems = [
@@ -13,7 +13,7 @@ const navItems = [
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices" },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students" },
-  { to: "/agents", label: "Ledger", icon: UsersThree, tid: "nav-ledger" },
+  { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger" },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories" },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings" },
 ];
@@ -30,12 +30,12 @@ export default function AppShell() {
   return (
     <div className="min-h-screen w-full bg-stone-50 text-stone-900 flex">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-stone-200 bg-white">
+      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-stone-900 bg-stone-950 text-stone-100">
         <div className="px-6 py-6 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-md bg-stone-900 flex items-center justify-center">
-            <ChartLineUp size={18} weight="bold" className="text-emerald-400" />
+          <div className="w-8 h-8 rounded-md bg-stone-50 flex items-center justify-center">
+            <ChartLineUp size={18} weight="bold" className="text-emerald-600" />
           </div>
-          <span className="font-display text-lg tracking-tight">FinFlow</span>
+          <span className="font-display text-lg tracking-tight text-stone-50">FinFlow</span>
         </div>
 
         <nav className="px-3 flex-1 space-y-0.5">
@@ -48,8 +48,8 @@ export default function AppShell() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm lift ${
                   isActive
-                    ? "bg-stone-900 text-stone-50"
-                    : "text-stone-700 hover:bg-stone-100 hover:text-stone-900"
+                    ? "bg-stone-50 text-stone-900"
+                    : "text-stone-300 hover:bg-stone-800 hover:text-stone-50"
                 }`
               }
             >
@@ -59,16 +59,16 @@ export default function AppShell() {
           ))}
         </nav>
 
-        <div className="border-t border-stone-200 p-3">
+        <div className="border-t border-stone-800 p-3">
           <div className="px-3 py-2">
             <p className="text-xs text-stone-500 truncate">{user?.business_name || "Workspace"}</p>
-            <p className="text-sm font-medium truncate" data-testid="user-name">{user?.name}</p>
-            <p className="text-xs text-stone-500 truncate" data-testid="user-email">{user?.email}</p>
+            <p className="text-sm font-medium truncate text-stone-50" data-testid="user-name">{user?.name}</p>
+            <p className="text-xs text-stone-400 truncate" data-testid="user-email">{user?.email}</p>
           </div>
           <button
             onClick={handleLogout}
             data-testid="logout-btn"
-            className="w-full mt-1 flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-stone-700 hover:bg-stone-100 lift"
+            className="w-full mt-1 flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-stone-300 hover:bg-stone-800 hover:text-stone-50 lift"
           >
             <SignOut size={18} /> Sign out
           </button>
