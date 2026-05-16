@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
-  Student, Notebook, Sun, Moon, List as ListIcon, X, MagnifyingGlass, Bell, CircleDashed,
+  Student, Notebook, Sun, Moon, List as ListIcon, X, MagnifyingGlass, Bell,
 } from "@phosphor-icons/react";
 
 const navItems = [
@@ -44,12 +44,12 @@ function SidebarContent({ user, onItemClick, onLogout }) {
     <>
       {/* Brand */}
       <div className="px-6 py-5 flex items-center gap-3 border-b border-[hsl(var(--sidebar-border))]">
-        <div className="w-9 h-9 rounded-xl bg-amber-gradient flex items-center justify-center shadow-md shadow-orange-500/30">
-          <CircleDashed size={18} weight="bold" className="text-white" />
+        <div className="w-11 h-11 rounded-xl bg-card border border-border flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+          <img src="/km-mark.png" alt="KM Foundation" className="w-9 h-9 object-contain" />
         </div>
-        <div className="flex flex-col">
-          <span className="font-display text-lg font-semibold tracking-tight text-[hsl(var(--sidebar-fg))]">FinFlow</span>
-          <span className="text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))]">Ledger ·  Premium</span>
+        <div className="flex flex-col min-w-0">
+          <span className="font-display text-base font-semibold tracking-tight text-[hsl(var(--sidebar-fg))] truncate">FinFlow</span>
+          <span className="text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--sidebar-muted))] truncate">by KM Foundation</span>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export default function AppShell() {
   const pageTitle = PAGE_TITLES[location.pathname]
     || (location.pathname.startsWith("/students/") ? "Student" : "")
     || (location.pathname.startsWith("/agents/") ? "Agent detail" : "")
-    || "FinFlow";
+    || "FinFlow by KM Foundation";
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 

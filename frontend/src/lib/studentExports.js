@@ -62,7 +62,7 @@ export function downloadStudentPdf({ student, user }) {
   doc.setFontSize(11);
   doc.setTextColor(28, 25, 23);
   doc.setFont("helvetica", "bold");
-  doc.text(user?.business_name || user?.name || "FinFlow", pageWidth - margin, 70, { align: "right" });
+  doc.text(user?.business_name || user?.name || "FinFlow by KM Foundation", pageWidth - margin, 70, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(120, 113, 108);
@@ -261,7 +261,7 @@ export function downloadStudentPdf({ student, user }) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(168, 162, 158);
-    doc.text("Generated with FinFlow", margin, pageHeight - 28);
+    doc.text("Generated with FinFlow by KM Foundation", margin, pageHeight - 28);
     doc.text(`Page ${i} / ${pageCount}`, pageWidth - margin, pageHeight - 28, { align: "right" });
   }
 

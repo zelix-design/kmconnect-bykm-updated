@@ -5,7 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CircleDashed, Wallet, ArrowRight, Sun, Moon, Sparkle, ShieldCheck, ChartBar } from "@phosphor-icons/react";
+import { Wallet, ArrowRight, Sun, Moon, Sparkle, ShieldCheck, ChartBar } from "@phosphor-icons/react";
 
 export default function AuthPage({ mode }) {
   const isLogin = mode === "login";
@@ -38,10 +38,13 @@ export default function AuthPage({ mode }) {
         <div className="absolute inset-0 grain-overlay opacity-30" />
 
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30">
-            <CircleDashed size={20} weight="bold" />
+          <div className="w-12 h-12 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center ring-1 ring-white/30 overflow-hidden">
+            <img src="/km-mark.png" alt="KM Foundation" className="w-9 h-9 object-contain" />
           </div>
-          <span className="font-display text-xl tracking-tight font-semibold">FinFlow</span>
+          <div className="flex flex-col">
+            <span className="font-display text-xl tracking-tight font-semibold leading-tight">FinFlow</span>
+            <span className="text-[11px] uppercase tracking-[0.18em] text-white/80">by KM Foundation</span>
+          </div>
         </div>
 
         <div className="relative z-10 max-w-md space-y-6">
@@ -62,7 +65,7 @@ export default function AuthPage({ mode }) {
           </ul>
         </div>
 
-        <div className="relative z-10 text-xs text-white/70">© FinFlow Ledger · 2026</div>
+        <div className="relative z-10 text-xs text-white/70">© FinFlow by KM Foundation · 2026</div>
       </div>
 
       {/* Form */}
@@ -82,10 +85,13 @@ export default function AuthPage({ mode }) {
           <div className="space-y-3">
             {/* Mobile brand */}
             <div className="lg:hidden flex items-center gap-2.5 mb-6">
-              <div className="w-9 h-9 rounded-xl bg-amber-gradient flex items-center justify-center">
-                <CircleDashed size={18} weight="bold" className="text-white" />
+              <div className="w-10 h-10 rounded-xl bg-card border border-border flex items-center justify-center overflow-hidden">
+                <img src="/km-mark.png" alt="KM Foundation" className="w-8 h-8 object-contain" />
               </div>
-              <span className="font-display text-lg font-semibold">FinFlow</span>
+              <div className="flex flex-col">
+                <span className="font-display text-base font-semibold leading-tight">FinFlow</span>
+                <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">by KM Foundation</span>
+              </div>
             </div>
             <p className="label-eyebrow">{isLogin ? "Welcome back" : "Get started"}</p>
             <h2 className="font-display text-3xl sm:text-4xl font-semibold text-foreground tracking-tight">
