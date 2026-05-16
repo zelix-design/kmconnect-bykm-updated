@@ -85,6 +85,14 @@ class InvoiceItem(BaseModel):
     unit_price: float = 0.0
 
 
+class PreviousScPayment(BaseModel):
+    has: bool = False
+    amount: float = 0.0
+    mode: Optional[Literal["cash", "bank_transfer", "upi", "cheque", "card", "other"]] = "bank_transfer"
+    date: Optional[str] = None
+    account_id: Optional[str] = None
+
+
 class InvoiceIn(BaseModel):
     client_id: str
     invoice_number: str
@@ -106,3 +114,5 @@ class InvoiceIn(BaseModel):
     academic_year: Optional[str] = None
     # When a service-charge invoice draws credit from a specific campus visit
     linked_visit_invoice_id: Optional[str] = None
+    # Service-charge: a prior payment already received towards this SC
+    previous_sc_payment: Optional[PreviousScPayment] = None

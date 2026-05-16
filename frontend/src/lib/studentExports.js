@@ -36,6 +36,7 @@ const SUB_AGENT_LABELS = {
 const STATUS_LABELS = {
   inquiry: "Inquiry",
   enrolled: "Enrolled",
+  cancelled: "Cancelled",
   completed: "Completed",
 };
 
@@ -72,6 +73,7 @@ export function downloadStudentPdf({ student, user }) {
   const statusColors = {
     inquiry: [231, 229, 228],
     enrolled: [187, 247, 208],
+    cancelled: [254, 205, 211],
     completed: [186, 230, 253],
   };
   const sc = statusColors[student.status] || [231, 229, 228];

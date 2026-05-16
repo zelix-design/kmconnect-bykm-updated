@@ -38,6 +38,7 @@ const blankForm = () => ({
   college: "",
   academic_year: "",
   linked_visit_invoice_id: null,
+  previous_sc_payment: { has: false, amount: "", mode: "bank_transfer", date: "", account_id: "" },
 });
 
 function nextInvoiceNumber(list) {
@@ -134,6 +135,15 @@ export default function Invoices() {
       college: inv.college || "",
       academic_year: inv.academic_year || "",
       linked_visit_invoice_id: inv.linked_visit_invoice_id || null,
+      previous_sc_payment: inv.previous_sc_payment
+        ? {
+            has: !!inv.previous_sc_payment.has,
+            amount: inv.previous_sc_payment.amount ?? "",
+            mode: inv.previous_sc_payment.mode || "bank_transfer",
+            date: inv.previous_sc_payment.date || "",
+            account_id: inv.previous_sc_payment.account_id || accounts[0]?.id || "",
+          }
+        : { has: false, amount: "", mode: "bank_transfer", date: "", account_id: accounts[0]?.id || "" },
     });
     setOpen(true);
   };
@@ -171,6 +181,15 @@ export default function Invoices() {
       college: isService ? (form.college || null) : null,
       academic_year: isService ? (form.academic_year || null) : null,
       linked_visit_invoice_id: isService ? (form.linked_visit_invoice_id || null) : null,
+      previous_sc_payment: isService && form.previous_sc_payment?.has
+        ? {
+            has: true,
+            amount: parseFloat(form.previous_sc_payment.amount) || 0,
+            mode: form.previous_sc_payment.mode || "bank_transfer",
+            date: form.previous_sc_payment.date || form.issue_date,
+            account_id: form.previous_sc_payment.account_id || null,
+          }
+        : null,
     };
     try {
       if (editing) await api.patch(`/invoices/${editing.id}`, payload);

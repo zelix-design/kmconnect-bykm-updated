@@ -455,13 +455,13 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
   );
 }
 
-const STATUS_COLORS = { inquiry: "#a8a29e", enrolled: "#10b981", completed: "#0ea5e9" };
-const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", completed: "Completed" };
+const STATUS_COLORS = { inquiry: "#a8a29e", enrolled: "#10b981", cancelled: "#e11d48", completed: "#0ea5e9" };
+const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", cancelled: "Cancelled", completed: "Completed" };
 
 function StudentsOverview({ students, currency, range }) {
   const stats = useMemo(() => {
     const total = students.length;
-    const counts = { inquiry: 0, enrolled: 0, completed: 0 };
+    const counts = { inquiry: 0, enrolled: 0, cancelled: 0, completed: 0 };
     let scFixed = 0, collected = 0, balance = 0;
     students.forEach((s) => {
       counts[s.status] = (counts[s.status] || 0) + 1;
@@ -913,6 +913,7 @@ function TxList({ items, currency }) {
 const STATUS_BADGE = {
   inquiry: "bg-stone-100 text-stone-700",
   enrolled: "bg-emerald-50 text-emerald-700",
+  cancelled: "bg-rose-50 text-rose-700",
   completed: "bg-sky-50 text-sky-700",
 };
 

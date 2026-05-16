@@ -17,14 +17,30 @@ import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/compon
 const STATUS_STYLES = {
   inquiry: "bg-stone-100 text-stone-700",
   enrolled: "bg-emerald-50 text-emerald-700",
+  cancelled: "bg-rose-50 text-rose-700",
   completed: "bg-sky-50 text-sky-700",
 };
 
 const STATUS_LABEL = {
   inquiry: "Inquiry",
   enrolled: "Enrolled",
+  cancelled: "Cancelled",
   completed: "Completed",
 };
+
+// Card tint per status — soft pastel background
+const CARD_TINT = {
+  inquiry: "bg-stone-50/80 border-stone-200",
+  enrolled: "bg-emerald-50/60 border-emerald-200/70",
+  cancelled: "bg-rose-50/60 border-rose-200/70",
+  completed: "bg-sky-50/60 border-sky-200/70",
+};
+
+const STATUS_OPTIONS = [
+  { value: "inquiry", label: "Inquiry" },
+  { value: "enrolled", label: "Enrolled" },
+  { value: "cancelled", label: "Cancelled" },
+];
 
 const emptyForm = () => ({
   name: "", course: "", college: "", reference: "",
@@ -148,9 +164,7 @@ export default function Students() {
                   <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                     <SelectTrigger data-testid="st-status"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="inquiry">Inquiry</SelectItem>
-                      <SelectItem value="enrolled">Enrolled</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
+                      {STATUS_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -222,10 +236,10 @@ export default function Students() {
                 data-testid={`st-card-${s.id}`}
                 className="group block"
               >
-                <Card className="p-5 border border-stone-200 bg-white rounded-lg shadow-none hover:border-stone-400 hover:shadow-sm transition-all h-full flex flex-col">
+                <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm hover:border-stone-400 transition-all h-full flex flex-col ${CARD_TINT[s.status] || "bg-white border-stone-200"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-md bg-stone-100 text-stone-700 flex items-center justify-center font-medium shrink-0">
+                      <div className="w-11 h-11 rounded-md bg-white/70 text-stone-700 flex items-center justify-center font-medium shrink-0 border border-white">
                         {(s.name || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -243,7 +257,7 @@ export default function Students() {
                     <p className="flex items-center gap-2"><UserCircle size={14} className="text-stone-400" /> <span className="truncate">{s.reference || "—"}</span></p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+                  <div className="mt-4 pt-3 border-t border-white/60 flex items-center justify-between text-xs">
                     <span className="text-stone-500">Collected</span>
                     <span className="tabular-nums font-medium text-emerald-700">{formatMoney(s.collected_total, currency)}</span>
                   </div>

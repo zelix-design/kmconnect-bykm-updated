@@ -44,7 +44,7 @@ class StudentIn(BaseModel):
     college: Optional[str] = None
     reference: Optional[str] = None
     sc_out_fixed: float = 0.0
-    status: Literal["inquiry", "enrolled", "completed"] = "inquiry"
+    status: Literal["inquiry", "enrolled", "cancelled", "completed"] = "inquiry"
     enrollment_date: Optional[str] = None
     notes: Optional[str] = ""
     fees_plan: Optional[FeesPlan] = None

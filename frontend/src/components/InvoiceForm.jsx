@@ -61,7 +61,9 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
   const totalAmount = form.particulars.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const taxAmount = totalAmount * ((parseFloat(form.tax_rate) || 0) / 100);
   const credit = parseFloat(form.credit_amount) || 0;
-  const grandTotal = totalAmount + taxAmount - credit;
+  const psp = form.previous_sc_payment || { has: false, amount: 0 };
+  const prevPay = isService && psp.has ? (parseFloat(psp.amount) || 0) : 0;
+  const grandTotal = totalAmount + taxAmount - credit - prevPay;
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
@@ -312,6 +314,83 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
 
       <div><Label>Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Payment terms, thank you note…" /></div>
 
+      {/* Previous payment towards SC (service charge only) */}
+      {isService && (
+        <div className="rounded-md border border-stone-200 p-4 space-y-3" data-testid="prev-sc-block">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <Checkbox
+              checked={!!psp.has}
+              onCheckedChange={(v) => setForm({
+                ...form,
+                previous_sc_payment: {
+                  has: !!v,
+                  amount: psp.amount || "",
+                  mode: psp.mode || "bank_transfer",
+                  date: psp.date || form.issue_date,
+                  account_id: psp.account_id || (accounts[0]?.id || ""),
+                },
+              })}
+              data-testid="prev-sc-has"
+            />
+            <div>
+              <p className="text-sm font-medium">Previous payment towards SC</p>
+              <p className="text-xs text-stone-500 mt-0.5">A prior part-payment already received against this service charge. Logged as income and subtracted from the balance.</p>
+            </div>
+          </label>
+          {psp.has && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pl-7">
+              <div>
+                <Label className="text-xs">Amount</Label>
+                <Input
+                  type="number" step="0.01"
+                  value={psp.amount}
+                  onChange={(e) => setForm({ ...form, previous_sc_payment: { ...psp, amount: e.target.value } })}
+                  data-testid="prev-sc-amount"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Mode</Label>
+                <Select
+                  value={psp.mode || "bank_transfer"}
+                  onValueChange={(v) => setForm({ ...form, previous_sc_payment: { ...psp, mode: v } })}
+                >
+                  <SelectTrigger className="h-9" data-testid="prev-sc-mode"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="upi">UPI</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="card">Card</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Date of Payment</Label>
+                <Input
+                  type="date"
+                  value={psp.date || ""}
+                  onChange={(e) => setForm({ ...form, previous_sc_payment: { ...psp, date: e.target.value } })}
+                  data-testid="prev-sc-date"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <Label className="text-xs">Credit to account</Label>
+                <Select
+                  value={psp.account_id || (accounts[0]?.id || "")}
+                  onValueChange={(v) => setForm({ ...form, previous_sc_payment: { ...psp, account_id: v } })}
+                >
+                  <SelectTrigger className="h-9" data-testid="prev-sc-account"><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Live totals */}
       <div className="border-t border-stone-200 pt-4 space-y-1.5 text-sm bg-stone-50 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
         <div className="flex justify-between"><span className="text-stone-600">{isService ? "Total Amount" : "Total Expense"}</span><span className="tabular-nums font-medium" data-testid="inv-subtotal">{formatMoney(totalAmount, currency)}</span></div>
@@ -320,6 +399,9 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
         )}
         {credit > 0 && (
           <div className="flex justify-between"><span className="text-stone-600">{isService ? "Expense Credit of Campus Visit" : "Credit toward expense"}</span><span className="tabular-nums text-rose-700">− {formatMoney(credit, currency)}</span></div>
+        )}
+        {prevPay > 0 && (
+          <div className="flex justify-between" data-testid="totals-prev-sc"><span className="text-stone-600">Previous payment towards SC</span><span className="tabular-nums text-rose-700">− {formatMoney(prevPay, currency)}</span></div>
         )}
         <div className="flex justify-between border-t border-stone-200 mt-2 pt-2 text-base font-semibold"><span>Total</span><span className="tabular-nums" data-testid="inv-total">{formatMoney(grandTotal, currency)}</span></div>
       </div>

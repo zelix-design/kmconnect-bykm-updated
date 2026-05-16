@@ -19,7 +19,7 @@ import FeesPlanFields, { emptyFeesPlan, feesPlanFromApi, normalizeFeesPlanForApi
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
   { value: "enrolled", label: "Enrolled" },
-  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 
 const RECEIVED_IN = {
@@ -366,7 +366,7 @@ export default function StudentDetail() {
                 {s.reference && <span>· Referred by {s.reference}</span>}
               </div>
               <div className="mt-3 flex items-center gap-2 text-xs">
-                <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${s.status === "enrolled" ? "bg-emerald-50 text-emerald-700" : s.status === "completed" ? "bg-sky-50 text-sky-700" : "bg-stone-100 text-stone-700"}`}>{s.status}</span>
+                <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${s.status === "enrolled" ? "bg-emerald-50 text-emerald-700" : s.status === "cancelled" ? "bg-rose-50 text-rose-700" : s.status === "completed" ? "bg-sky-50 text-sky-700" : "bg-stone-100 text-stone-700"}`}>{s.status}</span>
                 {s.enrollment_date && <span className="text-stone-500">Enrolled {formatDate(s.enrollment_date)}</span>}
               </div>
               {s.notes && <p className="mt-3 text-sm text-stone-600">{s.notes}</p>}

@@ -24,11 +24,56 @@ PARTICULAR_TO_CATEGORY = {
 }
 
 
-def _compute_totals(items: List[dict], tax_rate: float, credit_amount: float = 0.0) -> dict:
+def _compute_totals(items: List[dict], tax_rate: float, credit_amount: float = 0.0, previous_payment: float = 0.0) -> dict:
     subtotal = sum(it["quantity"] * it["unit_price"] for it in items)
     tax_amount = round(subtotal * (tax_rate / 100.0), 2)
-    total = round(subtotal + tax_amount - (credit_amount or 0.0), 2)
+    total = round(subtotal + tax_amount - (credit_amount or 0.0) - (previous_payment or 0.0), 2)
     return {"subtotal": round(subtotal, 2), "tax_amount": tax_amount, "total": total}
+
+
+async def _sync_invoice_sc_payment_transaction(user_id: str, invoice: dict) -> None:
+    """For a service_charge invoice with a previous_sc_payment, mirror it as
+    an income transaction. Idempotent: prior linked tx is removed first."""
+    invoice_id = invoice["id"]
+    # Always clear any prior SC-payment tx
+    await db.transactions.delete_many({
+        "user_id": user_id,
+        "linked_sc_payment_invoice_id": invoice_id,
+    })
+
+    if invoice.get("invoice_type") != "service_charge":
+        return
+    psp = invoice.get("previous_sc_payment") or {}
+    if not psp.get("has"):
+        return
+    amount = float(psp.get("amount") or 0)
+    if amount <= 0:
+        return
+
+    account_id = psp.get("account_id")
+    if not account_id:
+        # Default to first account
+        first_account = await db.accounts.find_one({"user_id": user_id}, {"_id": 0})
+        if not first_account:
+            return
+        account_id = first_account["id"]
+
+    cat = await db.categories.find_one(
+        {"user_id": user_id, "type": "income"}, {"_id": 0, "id": 1}
+    )
+    await db.transactions.insert_one({
+        "id": gen_id(),
+        "user_id": user_id,
+        "created_at": now_iso(),
+        "type": "income",
+        "amount": round(amount, 2),
+        "account_id": account_id,
+        "category_id": cat["id"] if cat else None,
+        "date": psp.get("date") or invoice.get("issue_date"),
+        "description": f"Prior SC payment · Invoice {invoice.get('invoice_number')}",
+        "client_id": invoice.get("client_id"),
+        "linked_sc_payment_invoice_id": invoice_id,
+    })
 
 
 async def _sync_invoice_expense_transactions(user_id: str, invoice: dict) -> None:
@@ -166,7 +211,9 @@ async def list_invoices(user: dict = Depends(get_current_user)):
 @router.post("")
 async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_user)):
     items = [i.model_dump() for i in payload.items]
-    totals = _compute_totals(items, payload.tax_rate, payload.credit_amount)
+    psp = payload.previous_sc_payment.model_dump() if payload.previous_sc_payment else None
+    prev_amt = psp["amount"] if (psp and psp.get("has")) else 0.0
+    totals = _compute_totals(items, payload.tax_rate, payload.credit_amount, prev_amt)
     doc = {
         "id": gen_id(),
         "user_id": user["id"],
@@ -177,13 +224,16 @@ async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_us
     await db.invoices.insert_one(doc)
     doc.pop("_id", None)
     await _sync_invoice_expense_transactions(user["id"], doc)
+    await _sync_invoice_sc_payment_transaction(user["id"], doc)
     return doc
 
 
 @router.patch("/{invoice_id}")
 async def update_invoice(invoice_id: str, payload: InvoiceIn, user: dict = Depends(get_current_user)):
     items = [i.model_dump() for i in payload.items]
-    totals = _compute_totals(items, payload.tax_rate, payload.credit_amount)
+    psp = payload.previous_sc_payment.model_dump() if payload.previous_sc_payment else None
+    prev_amt = psp["amount"] if (psp and psp.get("has")) else 0.0
+    totals = _compute_totals(items, payload.tax_rate, payload.credit_amount, prev_amt)
     update = {**payload.model_dump(), **totals}
     res = await db.invoices.update_one(
         {"id": invoice_id, "user_id": user["id"]},
@@ -193,6 +243,7 @@ async def update_invoice(invoice_id: str, payload: InvoiceIn, user: dict = Depen
         raise HTTPException(404, "Invoice not found")
     fresh = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
     await _sync_invoice_expense_transactions(user["id"], fresh)
+    await _sync_invoice_sc_payment_transaction(user["id"], fresh)
     return fresh
 
 
@@ -217,5 +268,8 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(404, "Invoice not found")
     await db.transactions.delete_many(
         {"user_id": user["id"], "linked_invoice_id": invoice_id}
+    )
+    await db.transactions.delete_many(
+        {"user_id": user["id"], "linked_sc_payment_invoice_id": invoice_id}
     )
     return {"ok": True}

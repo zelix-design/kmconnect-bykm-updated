@@ -164,6 +164,21 @@ export function downloadInvoicePDF({ invoice, client, user }) {
     doc.text(`- ${formatMoney(credit, currency)}`, rightX, endY, { align: "right" });
   }
 
+  const psp = invoice.previous_sc_payment;
+  const prevPay = isService && psp?.has ? (psp.amount || 0) : 0;
+  if (prevPay > 0) {
+    endY += 16;
+    doc.setTextColor(120, 113, 108);
+    const modeLabel = {
+      cash: "Cash", bank_transfer: "Bank Transfer", upi: "UPI",
+      cheque: "Cheque", card: "Card", other: "Other",
+    }[psp.mode] || "";
+    const datePart = psp.date ? ` · ${formatDate(psp.date)}` : "";
+    doc.text(`Previous payment towards SC${modeLabel ? ` (${modeLabel})` : ""}${datePart}`, labelX, endY);
+    doc.setTextColor(190, 18, 60);
+    doc.text(`- ${formatMoney(prevPay, currency)}`, rightX, endY, { align: "right" });
+  }
+
   endY += 10;
   doc.setDrawColor(231, 229, 228);
   doc.line(labelX, endY, rightX, endY);
@@ -172,7 +187,7 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.setTextColor(28, 25, 23);
-  doc.text("Total", labelX, endY);
+  doc.text(prevPay > 0 ? "Balance Due" : "Total", labelX, endY);
   doc.text(formatMoney(invoice.total, currency), rightX, endY, { align: "right" });
 
   // Notes
