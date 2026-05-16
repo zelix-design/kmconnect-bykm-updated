@@ -57,6 +57,13 @@
 - [x] Hardened dev-only ResizeObserver warning suppression (console.error layer).
 - [x] **Tested**: backend 11/11 pytest iteration_10.py · frontend Playwright UI verified · see `/app/test_reports/iteration_10.json`.
 
+## Implementation status — 2026-02-16 (iteration 11: Overview tiles, Students grid)
+- [x] **Sidebar**: renamed "Sub-agents" → "Ledger" (testid `nav-ledger`).
+- [x] **Dashboard**: 4 quick-nav tiles (Transactions, Students, Clients, Ledger) below greeting (testid `quick-nav-tiles`).
+- [x] **Students page**: list → responsive grid of cards (testid `students-grid`, `st-card-{id}`) sorted by enrollment_date desc (recent first). Each card shows Name, Course, College, Reference, Status badge, Collected, Balance.
+- [x] **Students filters**: 3 text filters — Student Name, College, Reference (testids `filter-name`, `filter-college`, `filter-reference`). Client-side substring match.
+- [x] **Visually verified** in preview env. Filter on "NAF" correctly reduced 6 → 1 card.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

@@ -13,7 +13,7 @@ const navItems = [
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices" },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students" },
-  { to: "/agents", label: "Sub-agents", icon: UsersThree, tid: "nav-agents" },
+  { to: "/agents", label: "Ledger", icon: UsersThree, tid: "nav-ledger" },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories" },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings" },
 ];

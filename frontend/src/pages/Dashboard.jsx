@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell,
 } from "recharts";
-import { TrendUp, TrendDown, Receipt, FileText, ArrowUpRight, ArrowDownRight, CalendarBlank } from "@phosphor-icons/react";
+import { TrendUp, TrendDown, Receipt, FileText, ArrowUpRight, ArrowDownRight, CalendarBlank, Student, UsersThree, Notebook } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
 function StatCard({ eyebrow, value, hint, accent, icon: Icon, testId }) {
@@ -110,6 +110,32 @@ export default function Dashboard() {
           </Link>
         </div>
       </header>
+
+      {/* Quick navigation tiles */}
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="quick-nav-tiles">
+        {[
+          { to: "/transactions", label: "Transactions", icon: Receipt, accent: "bg-stone-100 text-stone-700", tid: "tile-transactions" },
+          { to: "/students", label: "Students", icon: Student, accent: "bg-emerald-50 text-emerald-700", tid: "tile-students" },
+          { to: "/clients", label: "Clients", icon: UsersThree, accent: "bg-sky-50 text-sky-700", tid: "tile-clients" },
+          { to: "/agents", label: "Ledger", icon: Notebook, accent: "bg-amber-50 text-amber-700", tid: "tile-ledger" },
+        ].map((t) => (
+          <Link
+            key={t.to}
+            to={t.to}
+            data-testid={t.tid}
+            className="group flex items-center gap-3 p-4 rounded-lg bg-white border border-stone-200 hover:border-stone-400 hover:shadow-sm transition-all"
+          >
+            <div className={`w-10 h-10 rounded-md flex items-center justify-center ${t.accent}`}>
+              <t.icon size={18} weight="regular" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-stone-900">{t.label}</p>
+              <p className="text-xs text-stone-500">Open</p>
+            </div>
+            <ArrowUpRight size={14} className="text-stone-400 group-hover:text-stone-900 transition-colors" />
+          </Link>
+        ))}
+      </section>
 
       {/* Date range filter */}
       <div className="flex flex-wrap items-center gap-3" data-testid="date-range-filter">
