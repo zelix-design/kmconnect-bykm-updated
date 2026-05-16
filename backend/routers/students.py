@@ -17,6 +17,27 @@ router = APIRouter(prefix="/api/students", tags=["students"])
 
 
 # ---------- Models ----------
+PackageStatus = Literal["admission_tuition", "incl_food_accomm"]
+InstallmentMode = Literal["semester", "yearly"]
+
+
+class FeesPlan(BaseModel):
+    installment_mode: InstallmentMode = "yearly"
+    year_1: float = 0.0
+    year_2: float = 0.0
+    year_3: Optional[float] = None
+    year_4: Optional[float] = None
+    has_scholarship: bool = False
+    scholarship_amount: float = 0.0
+    package_status: PackageStatus = "admission_tuition"
+
+    @model_validator(mode="after")
+    def _scholarship_amount(self):
+        if not self.has_scholarship:
+            self.scholarship_amount = 0.0
+        return self
+
+
 class StudentIn(BaseModel):
     name: str
     course: Optional[str] = None
@@ -26,6 +47,7 @@ class StudentIn(BaseModel):
     status: Literal["inquiry", "enrolled", "completed"] = "inquiry"
     enrollment_date: Optional[str] = None
     notes: Optional[str] = ""
+    fees_plan: Optional[FeesPlan] = None
 
 
 class ScheduleItemIn(BaseModel):
@@ -128,11 +150,96 @@ def _summarize(s: dict) -> dict:
     scheduled_total = round(sum(x.get("amount", 0) for x in schedules), 2)
     collected_total = round(sum(x.get("amount", 0) for x in payments), 2)
     sc_fixed = s.get("sc_out_fixed", 0) or 0
+    fp = s.get("fees_plan") or {}
+    total_fees = round(
+        (fp.get("year_1") or 0) + (fp.get("year_2") or 0)
+        + (fp.get("year_3") or 0) + (fp.get("year_4") or 0)
+        - (fp.get("scholarship_amount", 0) or 0 if fp.get("has_scholarship") else 0),
+        2,
+    )
+    if fp:
+        fp["total_fees"] = total_fees
+        s["fees_plan"] = fp
     s["scheduled_total"] = scheduled_total
     s["collected_total"] = collected_total
     s["balance_vs_scheduled"] = round(scheduled_total - collected_total, 2)
     s["balance_vs_sc"] = round(sc_fixed - collected_total, 2)
     return s
+
+
+# Auto-generate schedule rows from a fees_plan. Returns list of {label, amount, year_key}.
+_YEAR_FIELDS = [
+    ("1st Year", "year_1"),
+    ("2nd Year", "year_2"),
+    ("3rd Year", "year_3"),
+    ("4th Year", "year_4"),
+]
+
+
+def _fees_plan_rows(fees_plan: Optional[dict]) -> List[dict]:
+    if not fees_plan:
+        return []
+    rows = []
+    for label, key in _YEAR_FIELDS:
+        amt = fees_plan.get(key)
+        if amt is None:
+            continue
+        try:
+            amt = float(amt)
+        except (TypeError, ValueError):
+            continue
+        if amt <= 0:
+            continue
+        rows.append({"label": label, "amount": round(amt, 2), "year_key": key})
+    return rows
+
+
+def _merge_fees_plan_schedules(
+    existing: List[dict], fees_plan: Optional[dict], referenced_ids: set
+) -> List[dict]:
+    """Reconcile existing schedules with a (possibly updated) fees_plan.
+    - Preserves manually-added schedules (source != 'fees_plan') untouched.
+    - For each year amount > 0, upserts a fees_plan-sourced schedule by year_key.
+    - For year_keys that drop to 0/None, deletes the schedule only if not referenced
+      by any payment; otherwise zeroes its amount.
+    """
+    desired = {r["year_key"]: r for r in _fees_plan_rows(fees_plan)}
+    out: List[dict] = []
+    seen_keys = set()
+    for sc in existing or []:
+        if sc.get("source") != "fees_plan":
+            out.append(sc)
+            continue
+        yk = sc.get("year_key")
+        if not yk:
+            out.append(sc)
+            continue
+        if yk in desired:
+            sc = {**sc, "label": desired[yk]["label"], "amount": desired[yk]["amount"]}
+            out.append(sc)
+            seen_keys.add(yk)
+        else:
+            # year was zeroed/removed
+            if sc.get("id") in referenced_ids:
+                sc = {**sc, "amount": 0.0}
+                out.append(sc)
+                seen_keys.add(yk)
+            # otherwise drop it
+    # Add new fees_plan rows that didn't exist before
+    for yk, row in desired.items():
+        if yk in seen_keys:
+            continue
+        out.append({
+            "id": gen_id(),
+            "created_at": now_iso(),
+            "label": row["label"],
+            "amount": row["amount"],
+            "remarks": "Auto from fees plan",
+            "due_date": None,
+            "source": "fees_plan",
+            "year_key": yk,
+        })
+    return out
 
 
 async def _auto_log_payment_transaction(user_id: str, student: dict, payment: dict) -> None:
@@ -211,13 +318,16 @@ async def list_students(user: dict = Depends(get_current_user)):
 
 @router.post("")
 async def create_student(payload: StudentIn, user: dict = Depends(get_current_user)):
+    data = payload.model_dump()
+    fees_plan = data.get("fees_plan")
+    schedules = _merge_fees_plan_schedules([], fees_plan, set()) if fees_plan else []
     doc = {
         "id": gen_id(),
         "user_id": user["id"],
         "created_at": now_iso(),
-        "schedules": [],
+        "schedules": schedules,
         "payments": [],
-        **payload.model_dump(),
+        **data,
     }
     await db.students.insert_one(doc)
     doc.pop("_id", None)
@@ -375,12 +485,28 @@ async def get_student(student_id: str, user: dict = Depends(get_current_user)):
 
 @router.patch("/{student_id}")
 async def update_student(student_id: str, payload: StudentIn, user: dict = Depends(get_current_user)):
-    res = await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
-        {"$set": payload.model_dump()},
+    existing = await db.students.find_one(
+        {"id": student_id, "user_id": user["id"]}, {"_id": 0}
     )
-    if res.matched_count == 0:
+    if not existing:
         raise HTTPException(404, "Student not found")
+
+    data = payload.model_dump()
+    fees_plan = data.get("fees_plan")
+    # Reconcile fees_plan rows with existing schedules. Preserve manual ones,
+    # and don't drop fee_plan rows that already have payments linked.
+    referenced_ids = {
+        p.get("schedule_id") for p in (existing.get("payments") or []) if p.get("schedule_id")
+    }
+    new_schedules = _merge_fees_plan_schedules(
+        existing.get("schedules") or [], fees_plan, referenced_ids
+    )
+    data["schedules"] = new_schedules
+
+    await db.students.update_one(
+        {"id": student_id, "user_id": user["id"]},
+        {"$set": data},
+    )
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
     return _summarize(s)
 

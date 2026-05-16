@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Plus, PencilSimple, Trash, Bank, Wallet, UsersThree, CaretDown, CaretUp, Briefcase, IdentificationBadge, X, FilePdf } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentPdf } from "@/lib/studentExports";
+import FeesPlanFields, { emptyFeesPlan, feesPlanFromApi, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -60,20 +61,27 @@ export default function StudentDetail() {
   const currency = user?.currency || "USD";
   const [s, setS] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [clients, setClients] = useState([]);
   const [editHeader, setEditHeader] = useState(false);
   const [header, setHeader] = useState({});
   const [schDlg, setSchDlg] = useState({ open: false, editing: null, form: { label: "1st Payment", amount: "", remarks: "", due_date: "" } });
   const [payDlg, setPayDlg] = useState({ open: false, editing: null, form: emptyPayment() });
+  const [entryDlg, setEntryDlg] = useState({ open: false, form: emptyEntry() });
   const [expanded, setExpanded] = useState({});
 
   const load = useCallback(async () => {
     try {
-      const [s, a] = await Promise.all([api.get(`/students/${id}`), api.get("/accounts")]);
-      setS(s.data); setAccounts(a.data);
+      const [sr, a, c] = await Promise.all([
+        api.get(`/students/${id}`),
+        api.get("/accounts"),
+        api.get("/clients"),
+      ]);
+      setS(sr.data); setAccounts(a.data); setClients(c.data);
       setHeader({
-        name: s.data.name, course: s.data.course || "", college: s.data.college || "",
-        reference: s.data.reference || "", sc_out_fixed: s.data.sc_out_fixed || 0,
-        status: s.data.status, enrollment_date: s.data.enrollment_date || "", notes: s.data.notes || "",
+        name: sr.data.name, course: sr.data.course || "", college: sr.data.college || "",
+        reference: sr.data.reference || "", sc_out_fixed: sr.data.sc_out_fixed || 0,
+        status: sr.data.status, enrollment_date: sr.data.enrollment_date || "", notes: sr.data.notes || "",
+        fees_plan: feesPlanFromApi(sr.data.fees_plan),
       });
     } catch { toast.error("Could not load student"); nav("/students"); }
   }, [id, nav]);
@@ -83,10 +91,14 @@ export default function StudentDetail() {
 
   const saveHeader = async () => {
     try {
-      const payload = { ...header, sc_out_fixed: parseFloat(header.sc_out_fixed) || 0 };
+      const payload = {
+        ...header,
+        sc_out_fixed: parseFloat(header.sc_out_fixed) || 0,
+        fees_plan: normalizeFeesPlanForApi(header.fees_plan),
+      };
       const { data } = await api.patch(`/students/${id}`, payload);
       setS(data); setEditHeader(false); toast.success("Saved");
-    } catch { toast.error("Failed"); }
+    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
   };
 
   const removeStudent = async () => {
@@ -194,6 +206,102 @@ export default function StudentDetail() {
   const fAmount = parseFloat(payDlg.form.amount) || 0;
   const adjBalance = fAmount - fAdjTotal;
 
+  // ----- Combined Add Entry -----
+  const openEntryAdd = () => {
+    const defaultLabel = nextScheduleLabel(s.schedules);
+    setEntryDlg({
+      open: true,
+      form: {
+        ...emptyEntry(),
+        schedule: { ...emptyEntry().schedule, label: defaultLabel },
+      },
+    });
+  };
+  const updateEntry = (patch) => setEntryDlg({ ...entryDlg, form: { ...entryDlg.form, ...patch } });
+  const updateEntrySch = (patch) => updateEntry({ schedule: { ...entryDlg.form.schedule, ...patch } });
+  const updateEntryPay = (patch) => updateEntry({ payment: { ...entryDlg.form.payment, ...patch } });
+  const updateEntryPayRecv = (patch) => updateEntryPay({ received_in: { ...entryDlg.form.payment.received_in, ...patch } });
+
+  const submitEntry = async (e) => {
+    e.preventDefault();
+    const f = entryDlg.form;
+    if (!f.create_schedule && !f.log_payment) {
+      toast.error("Select at least one of Schedule or Payment");
+      return;
+    }
+    try {
+      let scheduleId = f.existing_schedule_id || null;
+      let updated = s;
+      // 1) Create schedule first
+      if (f.create_schedule) {
+        const schPayload = {
+          label: f.schedule.label,
+          amount: parseFloat(f.schedule.amount) || 0,
+          remarks: f.schedule.remarks || "",
+          due_date: f.schedule.due_date || null,
+        };
+        const { data } = await api.post(`/students/${id}/schedules`, schPayload);
+        updated = data;
+        const created = (data.schedules || []).find((x) =>
+          x.label === schPayload.label && x.amount === schPayload.amount
+        );
+        scheduleId = created?.id || null;
+      }
+      // 2) Log payment
+      if (f.log_payment) {
+        const pf = f.payment;
+        const payPayload = {
+          date: pf.date,
+          amount: parseFloat(pf.amount) || (f.create_schedule ? (parseFloat(f.schedule.amount) || 0) : 0),
+          fee_type: pf.fee_type,
+          received_in: {
+            type: pf.received_in.type,
+            name: pf.received_in.name || null,
+            account_id: pf.received_in.account_id || null,
+          },
+          has_adjustment: !!pf.has_adjustment,
+          adjustments: pf.has_adjustment ? pf.adjustments.map((a) => ({
+            kind: a.kind,
+            amount: parseFloat(a.amount) || 0,
+            payment_date: a.payment_date,
+            payment_mode: a.payment_mode,
+            sub_agent_type: a.kind === "sc_adjusted" ? (a.sub_agent_type || null) : null,
+            sub_agent_name: a.kind === "sc_adjusted" ? (a.sub_agent_name || null) : null,
+            remarks: a.remarks || "",
+          })) : [],
+          schedule_id: scheduleId,
+          remarks: pf.remarks || "",
+        };
+        const { data } = await api.post(`/students/${id}/payments`, payPayload);
+        updated = data;
+      }
+      setS(updated);
+      setEntryDlg({ open: false, form: emptyEntry() });
+      toast.success("Entry saved");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed");
+    }
+  };
+
+  const updateEntryAdj = (idx, k, v) => {
+    const adjs = entryDlg.form.payment.adjustments.slice();
+    adjs[idx] = { ...adjs[idx], [k]: v };
+    updateEntryPay({ adjustments: adjs });
+  };
+  const addEntryAdj = () => updateEntryPay({
+    adjustments: [...entryDlg.form.payment.adjustments, {
+      kind: "paid_to_college", amount: "", payment_date: entryDlg.form.payment.date,
+      payment_mode: "bank_transfer", sub_agent_type: "sub_agent", sub_agent_name: "", remarks: "",
+    }],
+  });
+  const removeEntryAdj = (idx) => updateEntryPay({
+    adjustments: entryDlg.form.payment.adjustments.filter((_, i) => i !== idx),
+  });
+
+  const eAmount = parseFloat(entryDlg.form.payment.amount) || (entryDlg.form.create_schedule ? (parseFloat(entryDlg.form.schedule.amount) || 0) : 0);
+  const eAdjTotal = entryDlg.form.payment.adjustments.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+  const eAdjBalance = eAmount - eAdjTotal;
+
   return (
     <div className="space-y-6 animate-fade-in" data-testid="student-detail">
       <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900" data-testid="back-to-list">
@@ -208,7 +316,24 @@ export default function StudentDetail() {
               <div><Label>Name</Label><Input value={header.name} onChange={(e) => setHeader({ ...header, name: e.target.value })} /></div>
               <div><Label>Course</Label><Input value={header.course} onChange={(e) => setHeader({ ...header, course: e.target.value })} /></div>
               <div><Label>College</Label><Input value={header.college} onChange={(e) => setHeader({ ...header, college: e.target.value })} /></div>
-              <div><Label>Reference</Label><Input value={header.reference} onChange={(e) => setHeader({ ...header, reference: e.target.value })} /></div>
+              <div>
+                <Label>Reference</Label>
+                <Select
+                  value={header.reference || "_none"}
+                  onValueChange={(v) => setHeader({ ...header, reference: v === "_none" ? "" : v })}
+                >
+                  <SelectTrigger data-testid="hdr-reference"><SelectValue placeholder="Select referring client" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— None —</SelectItem>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                    {header.reference && !clients.some((c) => c.name === header.reference) && (
+                      <SelectItem value={header.reference}>{header.reference} (legacy)</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <div><Label>SC Out Fixed</Label><Input type="number" step="0.01" value={header.sc_out_fixed} onChange={(e) => setHeader({ ...header, sc_out_fixed: e.target.value })} /></div>
               <div>
                 <Label>Status</Label>
@@ -219,6 +344,11 @@ export default function StudentDetail() {
               </div>
               <div><Label>Enrollment Date</Label><Input type="date" value={header.enrollment_date} onChange={(e) => setHeader({ ...header, enrollment_date: e.target.value })} /></div>
             </div>
+            <FeesPlanFields
+              fp={header.fees_plan || emptyFeesPlan()}
+              onChange={(next) => setHeader({ ...header, fees_plan: next })}
+              currency={currency}
+            />
             <div><Label>Notes</Label><Textarea rows={2} value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditHeader(false)}>Cancel</Button>
@@ -241,7 +371,14 @@ export default function StudentDetail() {
               </div>
               {s.notes && <p className="mt-3 text-sm text-stone-600">{s.notes}</p>}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                onClick={openEntryAdd}
+                className="bg-stone-900 hover:bg-stone-800 text-stone-50"
+                data-testid="add-entry-btn"
+              >
+                <Plus size={14} className="mr-1.5" /> Add entry
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => {
@@ -279,9 +416,6 @@ export default function StudentDetail() {
             <h3 className="font-display text-lg mt-0.5">Planned installments</h3>
           </div>
           <Dialog open={schDlg.open} onOpenChange={(v) => setSchDlg({ ...schDlg, open: v })}>
-            <DialogTrigger asChild>
-              <Button onClick={openSchAdd} data-testid="add-schedule" className="h-9 bg-stone-900 hover:bg-stone-800 text-stone-50"><Plus size={14} className="mr-1.5" /> Add schedule</Button>
-            </DialogTrigger>
             <DialogContent className="bg-white">
               <DialogHeader>
                 <DialogTitle className="font-display">{schDlg.editing ? "Edit" : "Add"} schedule</DialogTitle>
@@ -356,9 +490,6 @@ export default function StudentDetail() {
             <h3 className="font-display text-lg mt-0.5">Money trail</h3>
           </div>
           <Dialog open={payDlg.open} onOpenChange={(v) => setPayDlg({ ...payDlg, open: v })}>
-            <DialogTrigger asChild>
-              <Button onClick={openPayAdd} data-testid="add-payment" className="h-9 bg-stone-900 hover:bg-stone-800 text-stone-50"><Plus size={14} className="mr-1.5" /> Log payment</Button>
-            </DialogTrigger>
             <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-display">{payDlg.editing ? "Edit" : "Log"} payment</DialogTitle>
@@ -581,6 +712,209 @@ export default function StudentDetail() {
           </table>
         )}
       </Card>
+
+      {/* Combined Add entry dialog */}
+      <Dialog open={entryDlg.open} onOpenChange={(v) => setEntryDlg({ ...entryDlg, open: v })}>
+        <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="entry-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Add entry</DialogTitle>
+            <DialogDescription className="text-xs text-stone-500">
+              Add a planned schedule and / or record a payment received — both in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitEntry} className="space-y-5">
+            {/* Schedule section */}
+            <div className="rounded-md border border-stone-200 p-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!!entryDlg.form.create_schedule}
+                  onCheckedChange={(v) => updateEntry({ create_schedule: !!v, existing_schedule_id: v ? "" : entryDlg.form.existing_schedule_id })}
+                  data-testid="entry-create-schedule"
+                />
+                <span className="text-sm font-medium">Create a new schedule row</span>
+              </label>
+
+              {entryDlg.form.create_schedule ? (
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <Label>Schedule</Label>
+                    <Select value={entryDlg.form.schedule.label} onValueChange={(v) => updateEntrySch({ label: v })}>
+                      <SelectTrigger data-testid="entry-sch-label"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PRESET_SCHEDULE_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                        {!PRESET_SCHEDULE_LABELS.includes(entryDlg.form.schedule.label) && entryDlg.form.schedule.label && (
+                          <SelectItem value={entryDlg.form.schedule.label}>{entryDlg.form.schedule.label}</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <Input className="mt-2" placeholder="Or type a custom label" value={entryDlg.form.schedule.label} onChange={(e) => updateEntrySch({ label: e.target.value })} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label>Amount</Label><Input type="number" step="0.01" required value={entryDlg.form.schedule.amount} onChange={(e) => updateEntrySch({ amount: e.target.value })} data-testid="entry-sch-amount" /></div>
+                    <div><Label>Due date</Label><Input type="date" value={entryDlg.form.schedule.due_date} onChange={(e) => updateEntrySch({ due_date: e.target.value })} /></div>
+                  </div>
+                  <div><Label>Remarks</Label><Input value={entryDlg.form.schedule.remarks} onChange={(e) => updateEntrySch({ remarks: e.target.value })} placeholder="e.g. Booking Amount paid towards Tution Fees" /></div>
+                </div>
+              ) : (
+                <div>
+                  <Label>Pick an existing schedule</Label>
+                  <Select
+                    value={entryDlg.form.existing_schedule_id || "_none"}
+                    onValueChange={(v) => updateEntry({ existing_schedule_id: v === "_none" ? "" : v })}
+                  >
+                    <SelectTrigger data-testid="entry-existing-schedule"><SelectValue placeholder="None" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">None</SelectItem>
+                      {(s.schedules || []).map((sc) => (
+                        <SelectItem key={sc.id} value={sc.id}>{sc.label} — {formatMoney(sc.amount, currency)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {/* Payment section */}
+            <div className="rounded-md border border-stone-200 p-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={!!entryDlg.form.log_payment}
+                  onCheckedChange={(v) => updateEntry({ log_payment: !!v })}
+                  data-testid="entry-log-payment"
+                />
+                <span className="text-sm font-medium">Also log a payment now</span>
+              </label>
+
+              {entryDlg.form.log_payment && (
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label>Date credited</Label><Input type="date" required value={entryDlg.form.payment.date} onChange={(e) => updateEntryPay({ date: e.target.value })} data-testid="entry-pay-date" /></div>
+                    <div>
+                      <Label>Fee type</Label>
+                      <Select value={entryDlg.form.payment.fee_type} onValueChange={(v) => updateEntryPay({ fee_type: v })}>
+                        <SelectTrigger data-testid="entry-pay-fee-type"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="booking_admission">Booking / Admission Fees</SelectItem>
+                          <SelectItem value="tution">Tution Fees</SelectItem>
+                          <SelectItem value="other">Other Fees</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Amount</Label>
+                    <Input
+                      type="number" step="0.01"
+                      placeholder={entryDlg.form.create_schedule ? `Default: ${entryDlg.form.schedule.amount || "0"}` : "0.00"}
+                      value={entryDlg.form.payment.amount}
+                      onChange={(e) => updateEntryPay({ amount: e.target.value })}
+                      data-testid="entry-pay-amount"
+                    />
+                    <p className="text-xs text-stone-500 mt-1">Leave blank to use the schedule amount.</p>
+                  </div>
+                  <div className="rounded-md border border-stone-200 p-3 space-y-2">
+                    <Label>Received in</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={entryDlg.form.payment.received_in.type} onValueChange={(v) => updateEntryPayRecv({ type: v })}>
+                        <SelectTrigger data-testid="entry-pay-recv-type"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="college">College Acc.</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="bank">Bank Acc.</SelectItem>
+                          <SelectItem value="km">KM Acc.</SelectItem>
+                          <SelectItem value="sub_agent">Sub Agent Acc.</SelectItem>
+                          <SelectItem value="associate">Associate Acc.</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {(["sub_agent", "associate", "km"].includes(entryDlg.form.payment.received_in.type)) && (
+                        <Input
+                          value={entryDlg.form.payment.received_in.name}
+                          onChange={(e) => updateEntryPayRecv({ name: e.target.value })}
+                          placeholder="Name (e.g. Rohan Mehta)"
+                          data-testid="entry-pay-recv-name"
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <Label className="text-xs">Internal account (auto-log to income)</Label>
+                      <Select value={entryDlg.form.payment.received_in.account_id || "_none"} onValueChange={(v) => updateEntryPayRecv({ account_id: v === "_none" ? "" : v })}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="No internal account" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">No auto-log</SelectItem>
+                          {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-stone-200 p-3 space-y-2">
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={!!entryDlg.form.payment.has_adjustment}
+                        onCheckedChange={(v) => updateEntryPay({
+                          has_adjustment: !!v,
+                          adjustments: v && entryDlg.form.payment.adjustments.length === 0
+                            ? [{ kind: "paid_to_college", amount: "", payment_date: entryDlg.form.payment.date, payment_mode: "bank_transfer", sub_agent_type: "sub_agent", sub_agent_name: "", remarks: "" }]
+                            : entryDlg.form.payment.adjustments,
+                        })}
+                        data-testid="entry-has-adjustment"
+                      />
+                      <span className="text-sm font-medium">Add adjustment (Paid to College / SC Adjusted)</span>
+                    </label>
+                    {entryDlg.form.payment.has_adjustment && (
+                      <div className="space-y-2 pt-1">
+                        {entryDlg.form.payment.adjustments.map((adj, idx) => (
+                          <div key={idx} className="rounded-md bg-stone-50 p-3 space-y-2">
+                            <div className="grid grid-cols-12 gap-2 items-start">
+                              <Select value={adj.kind} onValueChange={(v) => updateEntryAdj(idx, "kind", v)}>
+                                <SelectTrigger className="col-span-5"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="paid_to_college">Paid to College</SelectItem>
+                                  <SelectItem value="sc_adjusted">SC Adjusted (Sub / Associate / KM)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input className="col-span-6" type="number" step="0.01" placeholder="Amount" value={adj.amount} onChange={(e) => updateEntryAdj(idx, "amount", e.target.value)} />
+                              <button type="button" onClick={() => removeEntryAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-stone-400 hover:text-rose-700"><X size={14} /></button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input type="date" value={adj.payment_date} onChange={(e) => updateEntryAdj(idx, "payment_date", e.target.value)} />
+                              <Select value={adj.payment_mode} onValueChange={(v) => updateEntryAdj(idx, "payment_mode", v)}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>{PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                            {adj.kind === "sc_adjusted" && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Select value={adj.sub_agent_type} onValueChange={(v) => updateEntryAdj(idx, "sub_agent_type", v)}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>{SUB_AGENT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                                </Select>
+                                <Input value={adj.sub_agent_name} onChange={(e) => updateEntryAdj(idx, "sub_agent_name", e.target.value)} placeholder="Name" />
+                              </div>
+                            )}
+                            <Input value={adj.remarks} onChange={(e) => updateEntryAdj(idx, "remarks", e.target.value)} placeholder="Remarks" />
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between">
+                          <Button type="button" size="sm" variant="outline" onClick={addEntryAdj}><Plus size={14} className="mr-1" /> Add adjustment</Button>
+                          <span className={`text-xs tabular-nums ${Math.abs(eAdjBalance) < 0.01 ? "text-emerald-700" : "text-rose-700"}`}>
+                            Adjustments {formatMoney(eAdjTotal, currency)} of {formatMoney(eAmount, currency)} · Δ {formatMoney(eAdjBalance, currency)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div><Label>Remarks</Label><Input value={entryDlg.form.payment.remarks} onChange={(e) => updateEntryPay({ remarks: e.target.value })} placeholder="Payment remarks" /></div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEntryDlg({ ...entryDlg, open: false })}>Cancel</Button>
+              <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="entry-save">Save entry</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -612,5 +946,17 @@ function emptyPayment() {
     adjustments: [],
     schedule_id: "",
     remarks: "",
+  };
+}
+
+function emptyEntry() {
+  return {
+    // Schedule section
+    create_schedule: true,
+    schedule: { label: "1st Payment", amount: "", remarks: "", due_date: "" },
+    existing_schedule_id: "",
+    // Payment section
+    log_payment: true,
+    payment: emptyPayment(),
   };
 }

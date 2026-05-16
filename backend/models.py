@@ -41,12 +41,21 @@ class AccountIn(BaseModel):
 
 
 # ---------- Clients ----------
+ClientType = Literal[
+    "sub_agent_associate",
+    "associate_consultant",
+    "km_blr_office",
+    "km_tcr_office",
+    "km_kmly_office",
+]
+
+
 class ClientIn(BaseModel):
     name: str
+    client_type: Optional[ClientType] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     company: Optional[str] = None
-    address: Optional[str] = None
 
 
 # ---------- Categories ----------

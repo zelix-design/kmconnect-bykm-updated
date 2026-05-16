@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 10 (Clients client_type + filter, Students fees_plan auto-schedule + reconcile, StudentDetail unified Add entry dialog) tested end-to-end. BACKEND: 11/11 new tests pass in 2.13s (test_iteration10.py). Verified: (1) POST /api/clients accepts client_type Literal, echoes it, no address field in payload/response; (2) PATCH /api/clients updates client_type; client_type omitted -> None (optional in backend); invalid client_type -> 422; (3) POST /api/students with fees_plan auto-generates 3 schedules (year_1/2/3) with source='fees_plan' and year_key, exact labels '1st Year','2nd Year','3rd Year', amounts match; year_4=null is skipped; (4) summarize.fees_plan.total_fees = year_1+year_2+year_3+year_4 - scholarship_amount (when has_scholarship); 100k+120k+130k-25k = 325000 verified; (5) PATCH fees_plan reconciliation preserves schedule IDs in-place (id preserved when amount updated); adds new year_4 row; drops year_3 row when set to null (not referenced); (6) When year_1 schedule is referenced by a payment, PATCH that zeroes year_1 keeps the schedule row (amount=0, id preserved) instead of dropping it -- correct safety behavior; (7) PATCH on a legacy student without fees_plan does NOT corrupt their manual schedules. FRONTEND (Playwright on https://budget-buddy-5001.preview.emergentagent.com): logged in admin@finflow.com; Clients page shows Type filter dropdown (cli-filter-type) + Add Client dialog has Client Type select (cli-type, default Sub Agent / Associate), NO address field; new client TEST_IT10_UISubAgent created and deleted via UI. Students page shows Reference dropdown (st-reference) populated from /clients + FeesPlanFields block (fees-plan-block) with fp-year-1/2/3/4, fp-has-scholarship, fp-scholarship-amount, fp-package-status, fp-installment-mode, fp-total-fees. Total Fees recompute in real-time: 100k+110k+120k -> Rs.3,30,000.00; adding 30k scholarship -> Rs.3,00,000.00. Submitting created TEST_IT10_UIStudent with auto-generated schedule rows '1st Year Rs.1,00,000.00', '2nd Year Rs.1,10,000.00', '3rd Year Rs.1,20,000.00' and Scheduled Total = Rs.3,30,000.00 -- matching backend. StudentDetail page: standalone 'Add schedule' and 'Log payment' buttons are GONE (both selectors returned null). Single 'Add entry' button (add-entry-btn) opens combined entry-dialog with two checkbox-toggled sections: 'Create a new schedule row' (pre-checked) and 'Also log a payment now' (pre-checked), each with its own form fields. PDF export button visible on detail page. Edit header view uses data-testid='hdr-reference' (not 'st-reference') and renders FeesPlanFields block -- spec satisfied.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global", "issues": ["CRA dev error overlay for 'ResizeObserver loop completed with undelivered notifications' occasionally paints over the Clients page (intercepts dropdown clicks). Iteration-8's suppression in index.js does not catch this benign warning variant. Production builds are unaffected (no overlay). Workaround: programmatically remove the iframe/div in tests. Suggest extending the index.js error-event filter to also swallow 'ResizeObserver loop completed with undelivered notifications' message string."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10.py",
+    "/app/test_reports/pytest/iteration10.xml"
+  ],
+  "action_items": [
+    "(Dev-only ergonomics) Extend ResizeObserver error suppression in /app/frontend/src/index.js to also match the message 'ResizeObserver loop completed with undelivered notifications' (currently only catches the older 'ResizeObserver loop limit exceeded' variant). Production unaffected; this only hides the red CRA dev overlay during local testing.",
+    "(Code review, non-blocking) routers/clients.py PATCH performs a full $set of payload.model_dump() -- if a future PATCH caller omits client_type, it would overwrite an existing value to None. Backend uses Pydantic Optional default so this is by-design today, but consider exclude_unset=True if partial updates become a UI requirement.",
+    "(Code review, non-blocking) backend/routers/students.py _merge_fees_plan_schedules: when a fee_plan year is removed and not referenced by payments, the schedule row is silently dropped from the seen_keys tracking but never added to out[]. Confirmed by tests, but a one-line comment would help future maintainers."
+  ],
+  "critical_code_review_comments": [
+    "models.py ClientIn correctly removes 'address' field; client_type uses Literal so Pydantic rejects unknown values with 422 -- verified.",
+    "routers/students.py _fees_plan_rows handles None/non-numeric/zero/negative amounts defensively. Labels are hard-coded constants matching the spec exactly ('1st Year','2nd Year','3rd Year','4th Year').",
+    "_merge_fees_plan_schedules correctly preserves source!='fees_plan' (manual) schedules and uses payment-referenced ids set to decide whether to drop or zero a removed year. Update path preserves the schedule id which is critical for keeping payment.schedule_id links intact -- verified in test_patch_reconcile_update_inplace.",
+    "_summarize computes total_fees inside fees_plan dict only when fp truthy -- avoids returning a phantom fees_plan on legacy students with none.",
+    "Frontend FeesPlanFields is a clean shared component (~170 lines). normalizeFeesPlanForApi correctly sends null for empty year_3/year_4 (not 0) so backend's year_key drop logic works. computeTotalFees uses Math.max(0, ...) which guards against negative totals when scholarship > years.",
+    "Students.jsx Reference dropdown uses sentinel '_none' for null reference -- correct Radix Select pattern (Radix can't have empty string value).",
+    "StudentDetail.jsx single 'Add entry' button replaces two separate triggers. The combined dialog uses two independently-toggleable sections each gated by a checkbox -- matches the spec for the unified UX. Form-level validation correctly prevents save when neither section has required fields filled (browser native validation on schedule Amount input)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10.py",
+    "/app/test_reports/pytest/iteration10.xml"
+  ],
+  "success_rate": {"backend": "100% (11/11 iteration-10 tests)", "frontend": "100% on iteration-10 acceptance criteria"},
+  "test_credentials": "admin@finflow.com / Admin@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "test_iteration10.py creates ephemeral TEST_IT10_* clients and one TEST_IT10_Student per test with autocleanup via fixtures. One TEST_IT10_UIStudent + 1 TEST_IT10_UISubAgent client may remain in the admin account from frontend UI testing -- the UI run deleted the UISubAgent client but the UIStudent persists (used to verify the 'Add entry' dialog).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) python -m pytest /app/backend/tests/test_iteration10.py -v. Iteration-10 testids: cli-filter-type, cli-type, cli-name, cli-email, cli-phone, cli-company, cli-save, client-card-{id}, edit-cli-{id}, delete-cli-{id}; st-reference (Add Student dialog), hdr-reference (StudentDetail Edit header), fees-plan-block, fp-installment-mode, fp-year-1..4, fp-has-scholarship, fp-scholarship-amount, fp-package-status, fp-total-fees; add-entry-btn, entry-dialog (StudentDetail unified). Standalone add-schedule-btn and add-payment-btn are REMOVED -- do not look for them. The seed admin still has the iteration-8 Aarav Sharma + Rohan Mehta data intact; iteration-10 tests do not touch it.",
+  "rca of the issue": "N/A -- no failing tests this iteration. Pre-existing iteration_7 stale failures from iteration-8 schema change still present (unchanged from iter 8 report). Suggest deleting test_iteration7.py."
+}

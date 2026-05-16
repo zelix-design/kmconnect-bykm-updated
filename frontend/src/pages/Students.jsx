@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, ArrowRight, Student as StudentIcon, FileXls } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
+import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 
 const STATUS_STYLES = {
   inquiry: "bg-stone-100 text-stone-700",
@@ -19,29 +20,40 @@ const STATUS_STYLES = {
   completed: "bg-sky-50 text-sky-700",
 };
 
-const emptyForm = {
+const emptyForm = () => ({
   name: "", course: "", college: "", reference: "",
   sc_out_fixed: 0, status: "inquiry", enrollment_date: "", notes: "",
-};
+  fees_plan: emptyFeesPlan(),
+});
 
 export default function Students() {
   const { user } = useAuth();
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
+  const [clients, setClients] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(emptyForm());
 
-  const load = async () => setList((await api.get("/students")).data);
+  const load = async () => {
+    const [s, c] = await Promise.all([api.get("/students"), api.get("/clients")]);
+    setList(s.data); setClients(c.data);
+  };
   useEffect(() => { load(); }, []);
 
   const submit = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...form, sc_out_fixed: parseFloat(form.sc_out_fixed) || 0 };
+      const payload = {
+        ...form,
+        sc_out_fixed: parseFloat(form.sc_out_fixed) || 0,
+        fees_plan: normalizeFeesPlanForApi(form.fees_plan),
+      };
       await api.post("/students", payload);
       toast.success("Student added");
-      setOpen(false); setForm(emptyForm); load();
-    } catch { toast.error("Failed"); }
+      setOpen(false); setForm(emptyForm()); load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed");
+    }
   };
 
   return (
@@ -52,7 +64,7 @@ export default function Students() {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Students</h1>
           <p className="text-sm text-stone-600 mt-1">Track fees collection, schedules, and payment routes per student.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -78,10 +90,10 @@ export default function Students() {
               </Button>
             </DialogTrigger>
           </div>
-          <DialogContent className="bg-white max-w-xl">
+          <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">New student</DialogTitle>
-              <DialogDescription className="text-xs text-stone-500">Add a student record. You can update schedules and payments on the detail page.</DialogDescription>
+              <DialogDescription className="text-xs text-stone-500">Enrol a student and lock in the fee structure. Schedules are generated automatically.</DialogDescription>
             </DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div><Label>Student Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="st-name" /></div>
@@ -90,7 +102,21 @@ export default function Students() {
                 <div><Label>College</Label><Input value={form.college} onChange={(e) => setForm({ ...form, college: e.target.value })} placeholder="IIT Delhi" data-testid="st-college" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Reference</Label><Input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} placeholder="Who referred them" data-testid="st-reference" /></div>
+                <div>
+                  <Label>Reference</Label>
+                  <Select
+                    value={form.reference || "_none"}
+                    onValueChange={(v) => setForm({ ...form, reference: v === "_none" ? "" : v })}
+                  >
+                    <SelectTrigger data-testid="st-reference"><SelectValue placeholder="Select referring client" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">— None —</SelectItem>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div><Label>SC Out Fixed</Label><Input type="number" step="0.01" value={form.sc_out_fixed} onChange={(e) => setForm({ ...form, sc_out_fixed: e.target.value })} data-testid="st-sc" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -107,6 +133,13 @@ export default function Students() {
                 </div>
                 <div><Label>Enrollment Date</Label><Input type="date" value={form.enrollment_date} onChange={(e) => setForm({ ...form, enrollment_date: e.target.value })} data-testid="st-enroll-date" /></div>
               </div>
+
+              <FeesPlanFields
+                fp={form.fees_plan}
+                onChange={(next) => setForm({ ...form, fees_plan: next })}
+                currency={currency}
+              />
+
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="st-save">Add</Button>
