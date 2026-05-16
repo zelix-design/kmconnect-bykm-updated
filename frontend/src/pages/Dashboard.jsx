@@ -102,7 +102,7 @@ function withinFilter(dateStr, filter) {
   return true;
 }
 
-// Build 6-month buckets [{month, count}] given list of ISO dates.
+// Build N-month buckets ending at "now" given list of {date, value}.
 function monthlyBuckets(dates) {
   const now = new Date();
   const buckets = [];
@@ -128,6 +128,44 @@ function monthlyBuckets(dates) {
   });
   return buckets;
 }
+
+// Build buckets across ALL months present in `dates`, padded to the current
+// month so the chart trails to "today". Caps at the latest 24 months.
+function allTimeMonthlyBuckets(dates) {
+  const valid = dates.map((d) => ({ ...d, _d: d.date ? new Date(d.date) : null }))
+    .filter((d) => d._d && !isNaN(d._d.getTime()));
+  if (!valid.length) return [];
+  const now = new Date();
+  let min = valid[0]._d;
+  valid.forEach((v) => { if (v._d < min) min = v._d; });
+  // Walk from min month to current month (inclusive)
+  const start = new Date(min.getFullYear(), min.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), 1);
+  const map = new Map();
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
+    map.set(key, {
+      key,
+      month: cursor.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
+      count: 0,
+      value: 0,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  valid.forEach(({ _d, value }) => {
+    const k = `${_d.getFullYear()}-${_d.getMonth()}`;
+    if (map.has(k)) {
+      const b = map.get(k);
+      b.count += 1;
+      b.value += value || 0;
+    }
+  });
+  const out = Array.from(map.values());
+  return out.length > 24 ? out.slice(-24) : out;
+}
+
+function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -269,13 +307,13 @@ export default function Dashboard() {
       {/* Tile-driven overview */}
       <div data-testid={`overview-${activeTile}`} className="space-y-7">
         {activeTile === "transactions" && (
-          <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} currency={currency} range={range} />
+          <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} transactions={transactions} currency={currency} range={range} />
         )}
         {activeTile === "students" && (
-          <StudentsOverview students={students} currency={currency} />
+          <StudentsOverview students={students} currency={currency} range={range} />
         )}
         {activeTile === "clients" && (
-          <ClientsOverview clients={clients} />
+          <ClientsOverview clients={clients} students={students} />
         )}
         {activeTile === "ledger" && (
           <LedgerOverview ledger={ledger} students={students} currency={currency} />
@@ -333,7 +371,7 @@ export default function Dashboard() {
 
 // -------- Tile-specific overview blocks --------
 
-function TransactionsOverview({ summary, cashflow, byCat, currency, range }) {
+function TransactionsOverview({ summary, cashflow, byCat, transactions, currency, range }) {
   const cfTrend = useMemo(() => {
     if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
     const cur = cashflow[cashflow.length - 1];
@@ -342,11 +380,17 @@ function TransactionsOverview({ summary, cashflow, byCat, currency, range }) {
     return { income: pct(cur.income, prev.income), expense: pct(cur.expense, prev.expense) };
   }, [cashflow]);
   const totalSpendings = byCat.reduce((s, c) => s + (c.total || 0), 0);
+  const todaysSpend = useMemo(() => {
+    const today = todayISO();
+    return (transactions || [])
+      .filter((t) => t.type === "expense" && (t.date || "").slice(0, 10) === today)
+      .reduce((s, t) => s + (t.amount || 0), 0);
+  }, [transactions]);
 
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="stat-balance" eyebrow="Total balance" value={formatMoney(summary?.total_balance ?? 0, currency)} palette="amber" icon={ShoppingBag} hint="All time, all accounts" />
+        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={formatMoney(todaysSpend, currency)} palette="amber" icon={ShoppingBag} hint="All expense transactions today" />
         <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight} />
         <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight} />
         <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue" />
@@ -414,7 +458,7 @@ function TransactionsOverview({ summary, cashflow, byCat, currency, range }) {
 const STATUS_COLORS = { inquiry: "#a8a29e", enrolled: "#10b981", completed: "#0ea5e9" };
 const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", completed: "Completed" };
 
-function StudentsOverview({ students, currency }) {
+function StudentsOverview({ students, currency, range }) {
   const stats = useMemo(() => {
     const total = students.length;
     const counts = { inquiry: 0, enrolled: 0, completed: 0 };
@@ -428,6 +472,22 @@ function StudentsOverview({ students, currency }) {
     return { total, counts, scFixed, collected, balance };
   }, [students]);
 
+  // Enrolled in period
+  const periodStats = useMemo(() => {
+    if (!range) return { count: 0, collected: 0 };
+    const inRange = (s) => {
+      const d = s.enrollment_date || s.created_at;
+      if (!d) return false;
+      const ds = String(d).slice(0, 10);
+      return ds >= range.start && ds <= range.end;
+    };
+    const subset = students.filter(inRange);
+    return {
+      count: subset.length,
+      collected: subset.reduce((sum, s) => sum + (s.collected_total || 0), 0),
+    };
+  }, [students, range]);
+
   const trend = useMemo(
     () => monthlyBuckets(students.map((s) => ({ date: s.enrollment_date || s.created_at, value: 1 }))),
     [students]
@@ -440,9 +500,22 @@ function StudentsOverview({ students, currency }) {
     [stats]
   );
 
-  const topColleges = useMemo(() => {
+  const enrolledColleges = useMemo(() => {
     const m = {};
-    students.forEach((s) => { if (s.college) m[s.college] = (m[s.college] || 0) + 1; });
+    students.forEach((s) => {
+      if (s.college && s.status === "enrolled") {
+        m[s.college] = (m[s.college] || 0) + 1;
+      }
+    });
+    return Object.entries(m).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [students]);
+
+  const topReferences = useMemo(() => {
+    const m = {};
+    students.forEach((s) => {
+      const ref = (s.reference || "").trim();
+      if (ref) m[ref] = (m[ref] || 0) + 1;
+    });
     return Object.entries(m).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
   }, [students]);
 
@@ -452,7 +525,7 @@ function StudentsOverview({ students, currency }) {
         <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student} />
         <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight} />
         <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Out Fixed" />
-        <StatCard testId="st-stat-sc" eyebrow="SC Out Fixed" value={formatMoney(stats.scFixed, currency)} palette="violet" icon={FileText} hint="All students" />
+        <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
@@ -495,11 +568,24 @@ function StudentsOverview({ students, currency }) {
                   </li>
                 ))}
               </ul>
-              {topColleges.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-stone-100">
-                  <p className="label-eyebrow mb-2">Top colleges</p>
+              {topReferences.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="top-references">
+                  <p className="label-eyebrow mb-2">Top references</p>
                   <ul className="space-y-1.5">
-                    {topColleges.map((c) => (
+                    {topReferences.map((r) => (
+                      <li key={r.name} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 min-w-0 truncate"><IdentificationBadge size={12} className="text-stone-400 shrink-0" /> <span className="truncate">{r.name}</span></span>
+                        <span className="font-medium tabular-nums text-stone-700">{r.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {enrolledColleges.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="enrolled-colleges">
+                  <p className="label-eyebrow mb-2">Enrolled colleges</p>
+                  <ul className="space-y-1.5">
+                    {enrolledColleges.map((c) => (
                       <li key={c.name} className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 min-w-0 truncate"><Buildings size={12} className="text-stone-400 shrink-0" /> <span className="truncate">{c.name}</span></span>
                         <span className="font-medium tabular-nums text-stone-700">{c.count}</span>
@@ -524,7 +610,7 @@ const CLIENT_TYPES = [
   { value: "km_kmly_office", label: "KM KMLY Office", short: "KM KMLY", color: "#e11d48" },
 ];
 
-function ClientsOverview({ clients }) {
+function ClientsOverview({ clients, students }) {
   const stats = useMemo(() => {
     const total = clients.length;
     const counts = Object.fromEntries(CLIENT_TYPES.map((t) => [t.value, 0]));
@@ -542,6 +628,21 @@ function ClientsOverview({ clients }) {
     () => CLIENT_TYPES.map((t) => ({ name: t.short, value: stats.counts[t.value] || 0, color: t.color })).filter((x) => x.value > 0),
     [stats]
   );
+
+  // Top referrers — count students whose `reference` matches a client name
+  const topReferrers = useMemo(() => {
+    const studentCountByRef = {};
+    (students || []).forEach((s) => {
+      const ref = (s.reference || "").trim();
+      if (ref) studentCountByRef[ref] = (studentCountByRef[ref] || 0) + 1;
+    });
+    const rows = (clients || []).map((c) => ({
+      name: c.name,
+      type: c.client_type,
+      count: studentCountByRef[c.name] || 0,
+    }));
+    return rows.filter((r) => r.count > 0).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [clients, students]);
 
   return (
     <>
@@ -589,6 +690,44 @@ function ClientsOverview({ clients }) {
                   </li>
                 ))}
               </ul>
+
+              {/* KM offices breakdown */}
+              <div className="mt-5 pt-4 border-t border-stone-100" data-testid="km-breakdown">
+                <p className="label-eyebrow mb-2">KM offices</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: "BLR", value: stats.counts.km_blr_office, color: "#059669" },
+                    { label: "TCR", value: stats.counts.km_tcr_office, color: "#0284c7" },
+                    { label: "KMLY", value: stats.counts.km_kmly_office, color: "#e11d48" },
+                  ].map((k) => (
+                    <div key={k.label} className="rounded-md bg-stone-50 p-2 text-center" data-testid={`km-${k.label.toLowerCase()}`}>
+                      <p className="text-[10px] uppercase tracking-wider text-stone-500">{k.label}</p>
+                      <p className="font-display text-base tabular-nums" style={{ color: k.color }}>{k.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top referrers (clients who referred students) */}
+              {topReferrers.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="top-referrers">
+                  <p className="label-eyebrow mb-2">Top referrers</p>
+                  <ul className="space-y-1.5">
+                    {topReferrers.map((r) => (
+                      <li key={r.name} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 min-w-0 truncate">
+                          <IdentificationBadge size={12} className="text-stone-400 shrink-0" />
+                          <span className="truncate">{r.name}</span>
+                        </span>
+                        <span className="text-stone-700 tabular-nums">
+                          <span className="font-medium">{r.count}</span>
+                          <span className="text-stone-400 ml-1">student{r.count === 1 ? "" : "s"}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </Card>
@@ -618,7 +757,7 @@ function LedgerOverview({ ledger, students, currency }) {
     return { totalReceived, paidToCollege, scAdjusted, holding, byType, countByType };
   }, [ledger]);
 
-  // Monthly routed amount from students' adjustments (sc_adjusted)
+  // Monthly routed amount from students' adjustments (sc_adjusted) — ALL TIME
   const trend = useMemo(() => {
     const dates = [];
     (students || []).forEach((s) => {
@@ -634,7 +773,7 @@ function LedgerOverview({ ledger, students, currency }) {
         }
       });
     });
-    return monthlyBuckets(dates);
+    return allTimeMonthlyBuckets(dates);
   }, [students]);
 
   const topAgents = useMemo(
@@ -652,12 +791,23 @@ function LedgerOverview({ ledger, students, currency }) {
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`} />
         <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings} />
-        <StatCard testId="lg-stat-sc" eyebrow="SC adjusted" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} />
-        <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled" />
+        <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out" />
+        <div className="relative" data-testid="lg-stat-holding-wrapper">
+          <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled" />
+          {stats.holding > 0 && (
+            <Link
+              to="/agents"
+              data-testid="settle-pending-badge"
+              className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full bg-rose-900 text-rose-50 hover:bg-rose-800 lift"
+            >
+              Settle pending <ArrowUpRight size={10} weight="bold" />
+            </Link>
+          )}
+        </div>
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Activity" title="Amount routed · last 6 months" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
+          <ChartHeader eyebrow="Activity" title="Amount routed · all time, monthly" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend}>
