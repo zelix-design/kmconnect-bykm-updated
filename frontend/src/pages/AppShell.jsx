@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
-  Student, Notebook, Sun, Moon, List as ListIcon, X, MagnifyingGlass, Bell,
+  Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass, Bell,
 } from "@phosphor-icons/react";
 
 const navItems = [
@@ -39,7 +39,7 @@ function initialsOf(name) {
   return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
 }
 
-function SidebarContent({ user, onItemClick, onLogout }) {
+function SidebarContent({ onItemClick }) {
   return (
     <>
       {/* Brand */}
@@ -53,24 +53,8 @@ function SidebarContent({ user, onItemClick, onLogout }) {
         </div>
       </div>
 
-      {/* Profile block (Purple Admin style) */}
-      <div className="px-6 py-6 border-b border-[hsl(var(--sidebar-border))]">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-12 h-12 rounded-full bg-amber-gradient text-white font-display text-base font-semibold flex items-center justify-center ring-2 ring-orange-500/20" data-testid="sidebar-avatar">
-              {initialsOf(user?.name).toUpperCase()}
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-[hsl(var(--sidebar-bg))]" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-[hsl(var(--sidebar-fg))] truncate" data-testid="sidebar-user-name">{user?.name || "User"}</p>
-            <p className="text-[11px] text-[hsl(var(--sidebar-muted))] truncate" data-testid="sidebar-user-business">{user?.business_name || user?.email}</p>
-          </div>
-        </div>
-      </div>
-
       {/* Nav */}
-      <nav className="px-3 py-4 flex-1 space-y-0.5 overflow-y-auto">
+      <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto">
         <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">Workspace</p>
         {navItems.map((item) => (
           <NavLink
@@ -92,17 +76,6 @@ function SidebarContent({ user, onItemClick, onLogout }) {
           </NavLink>
         ))}
       </nav>
-
-      {/* Footer */}
-      <div className="border-t border-[hsl(var(--sidebar-border))] p-3">
-        <button
-          onClick={onLogout}
-          data-testid="logout-btn"
-          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-[hsl(var(--sidebar-fg))] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-        >
-          <SignOut size={18} /> Sign out
-        </button>
-      </div>
     </>
   );
 }
@@ -206,24 +179,24 @@ export default function AppShell() {
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-background" />
             </button>
             <ThemeToggle />
-            <div className="hidden sm:flex items-center gap-2.5 pl-3 ml-1 border-l border-border h-8">
-              <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center" data-testid="topbar-avatar">
+            <div className="flex items-center gap-2.5 pl-3 ml-1 border-l border-border h-8">
+              <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0" data-testid="topbar-avatar">
                 {initialsOf(user?.name).toUpperCase()}
               </div>
-              <div className="hidden lg:block min-w-0">
+              <div className="hidden md:block min-w-0">
                 <p className="text-xs font-medium leading-tight truncate max-w-[140px]" data-testid="topbar-user-name">{user?.name}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">{user?.currency || "USD"}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">{user?.business_name || user?.currency || "USD"}</p>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                data-testid="logout-btn"
+                title="Sign out"
+                className="ml-1 w-9 h-9 rounded-full bg-muted/60 hover:bg-rose-500/15 text-foreground hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center transition-colors"
+              >
+                <SignOut size={16} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleLogout}
-              data-testid="logout-btn-top"
-              className="sm:hidden w-10 h-10 rounded-full bg-muted/60 hover:bg-rose-500/15 text-foreground hover:text-rose-600 flex items-center justify-center transition-colors"
-              title="Sign out"
-            >
-              <X size={18} />
-            </button>
           </div>
         </header>
 
