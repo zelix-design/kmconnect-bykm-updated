@@ -48,6 +48,15 @@
 - [x] Currency-aware number formatting in XLSX (USD/INR)
 - [x] Verified: 27 KB XLSX with 4 sheets, individual student PDF generated for sample student
 
+## Implementation status — 2026-02-16 (iteration 10: Client types, Fees plan, Combined entry)
+- [x] **Clients**: removed Address field, added required Client Type (Sub Agent/Associate, Associate Consultant, KM BLR/TCR/KMLY Office); type filter on list.
+- [x] **Students**: Reference field is a dropdown of clients (Add Student + Edit header).
+- [x] **Fees fixed at admission** block (shared `FeesPlanFields`): Installments (Yearly/Semester), Year 1-4 amounts, Scholarship toggle + amount, Package Status, auto Total Fees. Embedded in New Student dialog + Edit header.
+- [x] Backend auto-generates schedule rows (`1st Year`, `2nd Year`, ...) from `fees_plan` on create; `_merge_fees_plan_schedules` reconciles on update — preserves manual rows + ids referenced by payments.
+- [x] **Combined "Add entry" dialog** on Student Detail — single button replaces "Add schedule" + "Log payment"; two stacked checkbox-toggled sections; saves both in one click.
+- [x] Hardened dev-only ResizeObserver warning suppression (console.error layer).
+- [x] **Tested**: backend 11/11 pytest iteration_10.py · frontend Playwright UI verified · see `/app/test_reports/iteration_10.json`.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

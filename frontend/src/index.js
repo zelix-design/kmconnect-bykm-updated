@@ -25,6 +25,12 @@ if (typeof window !== "undefined") {
       e.preventDefault();
     }
   });
+  // CRA's react-error-overlay also hooks console.error, so filter at that layer.
+  const origError = window.console.error;
+  window.console.error = (...args) => {
+    if (args.length && swallow(args[0])) return;
+    origError.apply(window.console, args);
+  };
 }
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
