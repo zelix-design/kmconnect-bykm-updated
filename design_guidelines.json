@@ -1,107 +1,172 @@
 {
-  "theme": "Light",
-  "archetype": "Archetype 1 (Organic & Earthy)",
-  "typography": {
-    "heading_font": "Outfit",
-    "body_font": "IBM Plex Sans",
-    "font_imports": [
-      "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=Outfit:wght@300;500;700&display=swap');"
-    ],
-    "scale": {
-      "h1": "text-4xl sm:text-5xl font-light tracking-tight",
-      "h2": "text-2xl sm:text-3xl font-medium tracking-tight",
-      "h3": "text-xl sm:text-2xl font-medium",
-      "h4": "text-lg sm:text-xl font-medium",
-      "body": "text-base font-normal",
-      "labels": "text-xs tracking-[0.2em] uppercase font-semibold"
+  "project_name": "Financial Management Dashboard",
+  "theme_and_archetype": {
+    "domain": "Finance / Small Business / Education Consultancy",
+    "theme": "Light/Dark Toggle",
+    "archetype": "4 (Swiss & High-Contrast - Dashboard Variant)",
+    "primary_vibe": "Premium Admin Dashboard with Amber Orange Accents (Purple Admin template inspired)"
+  },
+  "color_palette": {
+    "primary": {
+      "hex": "#F97316",
+      "tailwind": "orange-500",
+      "description": "Main brand color, replaces purple"
+    },
+    "primary_gradient": {
+      "light": "bg-gradient-to-r from-amber-400 to-orange-500",
+      "dark": "bg-gradient-to-r from-amber-500 to-orange-600",
+      "description": "Used for active sidebar items, primary buttons, and gradient stat cards"
+    },
+    "background": {
+      "light": "#F4F5F7",
+      "dark": "#0F172A"
+    },
+    "surface": {
+      "light": "#FFFFFF",
+      "dark": "#1E293B"
+    },
+    "shadcn_css_variables": {
+      "light": {
+        "--background": "210 20% 98%",
+        "--foreground": "222.2 84% 4.9%",
+        "--card": "0 0% 100%",
+        "--card-foreground": "222.2 84% 4.9%",
+        "--popover": "0 0% 100%",
+        "--popover-foreground": "222.2 84% 4.9%",
+        "--primary": "24.6 95% 53.1%",
+        "--primary-foreground": "210 40% 98%",
+        "--secondary": "210 40% 96.1%",
+        "--secondary-foreground": "222.2 47.4% 11.2%",
+        "--muted": "210 40% 96.1%",
+        "--muted-foreground": "215.4 16.3% 46.9%",
+        "--accent": "38 92% 50%",
+        "--accent-foreground": "222.2 47.4% 11.2%",
+        "--destructive": "0 84.2% 60.2%",
+        "--destructive-foreground": "210 40% 98%",
+        "--border": "214.3 31.8% 91.4%",
+        "--input": "214.3 31.8% 91.4%",
+        "--ring": "24.6 95% 53.1%",
+        "--radius": "0.75rem",
+        "--sidebar-bg": "0 0% 100%",
+        "--sidebar-active": "24.6 95% 53.1%"
+      },
+      "dark": {
+        "--background": "222.2 84% 4.9%",
+        "--foreground": "210 40% 98%",
+        "--card": "217.2 32.6% 17.5%",
+        "--card-foreground": "210 40% 98%",
+        "--popover": "222.2 84% 4.9%",
+        "--popover-foreground": "210 40% 98%",
+        "--primary": "24.6 95% 53.1%",
+        "--primary-foreground": "222.2 47.4% 11.2%",
+        "--secondary": "217.2 32.6% 17.5%",
+        "--secondary-foreground": "210 40% 98%",
+        "--muted": "217.2 32.6% 17.5%",
+        "--muted-foreground": "215 20.2% 65.1%",
+        "--accent": "38 92% 50%",
+        "--accent-foreground": "210 40% 98%",
+        "--destructive": "0 62.8% 30.6%",
+        "--destructive-foreground": "210 40% 98%",
+        "--border": "217.2 32.6% 17.5%",
+        "--input": "217.2 32.6% 17.5%",
+        "--ring": "24.6 95% 53.1%",
+        "--radius": "0.75rem",
+        "--sidebar-bg": "222.2 84% 4.9%",
+        "--sidebar-active": "24.6 95% 53.1%"
+      }
     }
   },
-  "colors": {
-    "background": {
-      "main": "bg-stone-50",
-      "surface": "bg-white",
-      "surface_hover": "bg-stone-100"
+  "typography": {
+    "fonts": {
+      "heading": "Outfit, sans-serif",
+      "body": "DM Sans, sans-serif"
     },
-    "text": {
-      "primary": "text-stone-900",
-      "secondary": "text-stone-600",
-      "disabled": "text-stone-400"
+    "scale": {
+      "h1": "text-3xl md:text-4xl font-bold tracking-tight",
+      "h2": "text-2xl md:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl md:text-2xl font-semibold",
+      "h4": "text-lg md:text-xl font-medium",
+      "body": "text-sm md:text-base text-muted-foreground",
+      "small": "text-xs uppercase tracking-wider font-medium"
     },
-    "accents": {
-      "primary": "bg-stone-900 text-white hover:bg-stone-800",
-      "success": "bg-emerald-700 text-white hover:bg-emerald-800",
-      "danger": "bg-rose-700 text-white hover:bg-rose-800",
-      "warning": "bg-amber-600 text-white hover:bg-amber-700"
-    },
-    "borders": {
-      "default": "border-stone-200"
-    }
+    "rules": "Never use Inter for headings. Use Outfit for a premium, structured admin feel."
   },
   "layout_and_spacing": {
-    "philosophy": "Generous Spacing, Optical Alignment, Data Density",
-    "dashboard_grid": "Control Room Grid (Density, Data Correlation, Scanability)",
-    "rules": [
-      "Mobile-first responsive grids, always start with grid-cols-1",
-      "Containers with border must have p-6 or p-8 internal padding to prevent collision",
-      "Never center everything; left-align data, text, and inputs for better readability",
-      "Every pixel utilized in dashboards, ensure widgets stretch horizontally and vertically (h-full)"
-    ]
+    "sidebar": {
+      "width": "w-64",
+      "mobile_behavior": "hidden md:flex off-canvas drawer on mobile",
+      "profile_block": "Flex column, p-6, border-b border-border. Avatar rounded-full h-16 w-16 mb-3 ring-2 ring-primary/20. Name bold text-foreground, role text-sm text-muted-foreground. Small absolute dot indicator for online status.",
+      "nav_items": "Rounded-lg mx-3 my-1 px-4 py-3 flex items-center gap-3 transition-colors. Inactive: hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-orange-500. Active: bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-md shadow-orange-500/20.",
+      "icons": "Phosphor Icons (size 20 or 24, duotone for active, regular for inactive)"
+    },
+    "header": {
+      "height": "h-16 or h-20",
+      "layout": "Sticky top-0 z-40 w-full backdrop-blur-xl bg-background/80 border-b border-border px-6 flex items-center justify-between",
+      "search": "Relative, w-64 md:w-96. Icon absolute left 3, input rounded-full bg-muted border-none pl-10 focus-visible:ring-1 focus-visible:ring-primary",
+      "actions": "Flex gap-4 items-center. Theme toggle, Currency Switch (USD/INR dropdown), Notification bell (relative with absolute top-0 right-0 h-2 w-2 bg-orange-500 rounded-full ring-2 ring-background), User menu dropdown."
+    },
+    "container": "p-6 md:p-8 space-y-8 max-w-[1600px] mx-auto",
+    "grid_system": "Use 'Bento' grid variants for dashboards. grid-cols-1 md:grid-cols-2 lg:grid-cols-4 for stat cards. gap-6."
   },
   "components": {
-    "strategy": "Shadcn UI customized for tactile, grounded look. Avoid generic SaaS aesthetic.",
-    "buttons": "Flat background, rounded-md, subtle hover lift (-translate-y-[1px]), crisp edges.",
-    "cards": "Neumorphism Tactile Variant - flat background (bg-white), 1px subtle border (border-stone-200), no drop shadow by default.",
-    "inputs": "Flat borders, neutral background, sharp readability.",
-    "tables": "Dense rows, left-aligned data, clear borders between rows, subtle bg-stone-50 hover state on rows.",
-    "icons": {
-      "library": "@phosphor-icons/react",
-      "install_command": "yarn add @phosphor-icons/react",
-      "usage": "Use Phosphor icons for data-dense tools and dashboard UI elements. Weight: regular or duotone."
+    "stat_cards": {
+      "variants": [
+        {
+          "name": "Gradient Accent",
+          "style": "bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-2xl p-6 relative overflow-hidden shadow-lg shadow-orange-500/20",
+          "elements": "Large amount text-3xl font-bold, subtle transparent icon (opacity-20) absolute -right-4 -bottom-4 h-32 w-32"
+        },
+        {
+          "name": "Standard Admin",
+          "style": "bg-card text-card-foreground rounded-2xl p-6 border border-border shadow-sm",
+          "elements": "Orange icon container (bg-orange-50 dark:bg-orange-500/10 text-orange-500 rounded-xl p-3), Title text-muted-foreground, Value text-3xl font-bold"
+        }
+      ]
+    },
+    "cards": {
+      "general": "rounded-2xl border border-border shadow-sm bg-card overflow-hidden",
+      "header": "px-6 py-5 border-b border-border flex items-center justify-between bg-card/50"
+    },
+    "tables": {
+      "style": "w-full text-sm text-left",
+      "header": "text-xs uppercase bg-muted/50 text-muted-foreground py-3 px-4 font-medium tracking-wider",
+      "rows": "border-b border-border hover:bg-muted/30 transition-colors",
+      "cells": "py-4 px-4 align-middle",
+      "badges": {
+        "income": "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800",
+        "expense": "bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-800",
+        "pending": "bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+      }
+    },
+    "buttons": {
+      "primary": "bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white shadow-md shadow-orange-500/20 rounded-lg px-4 py-2 transition-all hover:-translate-y-0.5",
+      "secondary": "bg-muted text-foreground hover:bg-muted/80 rounded-lg",
+      "outline": "border border-border bg-transparent hover:bg-muted rounded-lg"
     }
   },
-  "motion": {
-    "interactions": [
-      "Hover states on all interactive elements: explicit text color change and subtle bg transition.",
-      "Focus states strictly enforced for accessibility (ring-2 ring-stone-900 ring-offset-2).",
-      "Staggered entrance animations for dashboard widgets using framer-motion.",
-      "Respect prefers-reduced-motion."
-    ]
+  "page_layouts": {
+    "dashboard_overview": "Top: 4 stat cards (Net Worth, Today's Spend, Enrolled, Settle Pending). Middle: Grid 12 - Col span 8 (Revenue/Expense Line Chart), Col span 4 (Expense by Category Donut/List). Bottom: Recent Transactions Table.",
+    "transactions_list": "Header card with filters (Date range, Account, Category). Table with columns: Date, Description, Category, Account, Amount (colored), Status.",
+    "invoices": "Advanced Form: Type selector (Campus Visit / Service Charge). Dynamic particulars list linked to expenses. Totals card fixed to right side or bottom. PDF Generation trigger.",
+    "students": "Grid view of student cards (status-tinted top border). Detail view: Split layout. Left: Info card + add entry dialog trigger. Right: Vertical timeline of scheduled payments vs actual collections.",
+    "quick_entry": "Large toggle (Debit / Credit) using custom radio cards. Massive keypad-style or large text input for Amount to minimize friction. Select account and category.",
+    "auth": "Split screen. Left (or right): Massive brand hero panel with subtle orange gradient and 3D floating dashboard illustration or abstract pattern. Other side: Clean, centered login/register form."
   },
-  "image_urls": [
-    {
-      "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2MzR8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBjb3Jwb3JhdGUlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3ODc5NTAyM3ww&ixlib=rb-4.1.0&q=85",
-      "category": "user_avatar",
-      "description": "Default avatar for user profile"
-    },
-    {
-      "url": "https://images.pexels.com/photos/14589344/pexels-photo-14589344.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "category": "client_avatar",
-      "description": "Avatar for a client in the clients list"
-    },
-    {
-      "url": "https://static.prod-images.emergentagent.com/jobs/08a8ca6a-72d5-407c-95c8-80ace9a8e29f/images/42f48dae72e83944fbde022ce495af6a2ba0db6d6dce9c77703c493691506d87.png",
-      "category": "auth_hero",
-      "description": "Abstract textural background for the login and registration page hero/side panel"
-    }
-  ],
-  "accessibility": {
-    "rules": [
-      "All interactive elements MUST include data-testid attribute in kebab-case format.",
-      "Maintain strict contrast ratios for text visibility (APCA > WCAG).",
-      "Use explicit hover/focus state colors. Never rely solely on inheritance."
-    ]
+  "motion_and_interactions": {
+    "hover": "Subtle -translate-y-[1px] on interactive cards and primary buttons.",
+    "transitions": "Use 'transition-all duration-200 ease-in-out' for color and shadow changes.",
+    "theme_toggle": "Smooth fade/switch of icons (Sun/Moon Phosphor icons)."
   },
-  "instructions_to_main_agent": [
-    "Read /app/design_guidelines.json completely before writing any code.",
-    "Ensure global CSS imports fonts (Outfit & IBM Plex Sans) via Google Fonts.",
-    "Configure Tailwind config (tailwind.config.js) with custom font families and stone/emerald/rose color palette.",
-    "Implement Shadcn UI, but override defaults to match the organic, flat, bordered aesthetic (remove large drop-shadows on cards).",
-    "Use Phosphor icons exclusively, executing the install command first.",
-    "Implement dashboard layout using strict CSS grid or bento grid concepts ensuring widgets align cleanly.",
-    "Ensure multi-currency toggle updates state universally without breaking layout.",
-    "Use Recharts or Shadcn Charts for financial metrics, styled with the emerald/rose palette.",
-    "Apply the Auth Hero image in a split-screen layout for the login/register flows.",
-    "Never use placeholders for images; use the links provided in this JSON.",
-    "Use data-testid on every clickable button, link, and major block for robust testing."
-  ]
+  "testing": {
+    "requirements": "All interactive elements (buttons, inputs, links, dropdowns, table rows) MUST have a data-testid attribute.",
+    "format": "kebab-case, role-based. e.g., 'data-testid=\"sidebar-nav-dashboard\"', 'data-testid=\"quick-entry-submit-btn\"'"
+  },
+  "icons": {
+    "library": "Phosphor Icons (@phosphor-icons/react)",
+    "rules": "Use duotone for active states/large decorative icons, regular/light for inactive or dense tables. Do NOT mix libraries."
+  },
+  "implementation_notes": {
+    "file_extensions": "Use .js and .jsx extensions. Do not use .tsx.",
+    "shadcn": "Initialize shadcn and apply the custom CSS variables in globals.css. Override default border radius to 0.75rem (xl) or 1rem (2xl) for softer, premium 'Purple Admin' feel."
+  }
 }
