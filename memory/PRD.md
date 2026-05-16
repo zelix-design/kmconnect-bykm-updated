@@ -74,6 +74,15 @@
 - [x] **Ledger nav** uses Notebook icon for visual differentiation from Clients.
 - [x] Self-tested: clicking `tile-students` keeps user on Overview, swaps bottom section to `student-list` data-testid.
 
+## Implementation status — 2026-02-16 (iteration 13: Tile-driven overviews)
+- [x] Each tile now swaps the **entire middle section** (4 stat cards + Activity chart + side panel) on the same page — no navigation.
+- [x] **Transactions** overview: total balance, income, expenses, outstanding · income-vs-expense area · spending-by-category donut.
+- [x] **Students** overview: total / collected / outstanding / SC fixed · enrollment trend · status donut + top colleges.
+- [x] **Clients** overview: total / Sub-Agents / Consultants / KM-Offices · clients-added trend · client-type donut.
+- [x] **Ledger** overview: total routed / paid-to-college / SC adjusted / holding · monthly-routed trend · top-contacts horizontal bar · contact-type donut.
+- [x] All charts computed client-side from existing endpoints (`/students`, `/clients`, `/students/agent-ledger`).
+- [x] Smoke-tested all four tile views render with correct data-testids (`overview-transactions`, `overview-students`, `overview-clients`, `overview-ledger`).
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

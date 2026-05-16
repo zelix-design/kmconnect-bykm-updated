@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
 import {
   ShoppingBag, ChartPie, UsersThree, Receipt, FileText, CalendarBlank,
   Student, Notebook, ArrowUpRight, ArrowDownRight, CaretUp, CaretDown,
+  IdentificationBadge, Briefcase, Buildings, GraduationCap,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 
@@ -39,18 +40,19 @@ function rangeFor(preset) {
 }
 
 const PALETTES = {
-  amber: { bg: "bg-amber-50", text: "text-amber-700", icon: "bg-amber-100 text-amber-700" },
-  violet: { bg: "bg-violet-50", text: "text-violet-700", icon: "bg-violet-100 text-violet-700" },
-  emerald: { bg: "bg-emerald-50", text: "text-emerald-700", icon: "bg-emerald-100 text-emerald-700" },
-  rose: { bg: "bg-rose-50", text: "text-rose-700", icon: "bg-rose-100 text-rose-700" },
-  sky: { bg: "bg-sky-50", text: "text-sky-700", icon: "bg-sky-100 text-sky-700" },
+  amber: { bg: "bg-amber-50", icon: "bg-amber-100 text-amber-700" },
+  violet: { bg: "bg-violet-50", icon: "bg-violet-100 text-violet-700" },
+  emerald: { bg: "bg-emerald-50", icon: "bg-emerald-100 text-emerald-700" },
+  rose: { bg: "bg-rose-50", icon: "bg-rose-100 text-rose-700" },
+  sky: { bg: "bg-sky-50", icon: "bg-sky-100 text-sky-700" },
+  stone: { bg: "bg-stone-100", icon: "bg-stone-200 text-stone-700" },
 };
 
 function StatCard({ eyebrow, value, trend, hint, palette, icon: Icon, testId }) {
   const p = PALETTES[palette] || PALETTES.amber;
   const positive = trend != null && trend >= 0;
   return (
-    <Card className={`p-5 rounded-xl shadow-none border-0 ${p.bg}`}>
+    <Card className={`p-5 rounded-xl shadow-none border-0 ${p.bg}`} data-testid={testId}>
       <div className="flex items-start justify-between">
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.icon}`}>
           {Icon && <Icon size={18} weight="duotone" />}
@@ -62,8 +64,8 @@ function StatCard({ eyebrow, value, trend, hint, palette, icon: Icon, testId }) 
           </span>
         )}
       </div>
-      <p className="font-display text-2xl mt-4 text-stone-900 tabular-nums" data-testid={`${testId}-value`}>{value}</p>
-      <p className="text-xs text-stone-600 mt-1" data-testid={`${testId}-label`}>{eyebrow}</p>
+      <p className="font-display text-2xl mt-4 text-stone-900 tabular-nums">{value}</p>
+      <p className="text-xs text-stone-600 mt-1">{eyebrow}</p>
       {hint && <p className="text-[10px] text-stone-500 mt-0.5">{hint}</p>}
     </Card>
   );
@@ -98,6 +100,33 @@ function withinFilter(dateStr, filter) {
     return d >= s;
   }
   return true;
+}
+
+// Build 6-month buckets [{month, count}] given list of ISO dates.
+function monthlyBuckets(dates) {
+  const now = new Date();
+  const buckets = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+      month: d.toLocaleDateString("en-US", { month: "short" }),
+      count: 0,
+      value: 0,
+    });
+  }
+  const idx = Object.fromEntries(buckets.map((b, i) => [b.key, i]));
+  dates.forEach(({ date, value }) => {
+    if (!date) return;
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return;
+    const k = `${d.getFullYear()}-${d.getMonth()}`;
+    if (idx[k] !== undefined) {
+      buckets[idx[k]].count += 1;
+      buckets[idx[k]].value += value || 0;
+    }
+  });
+  return buckets;
 }
 
 export default function Dashboard() {
@@ -145,20 +174,6 @@ export default function Dashboard() {
       setLedger(lg.data);
     })().catch(() => {});
   }, [range]);
-
-  // Trend % from cashflow series
-  const cfTrend = useMemo(() => {
-    if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
-    const cur = cashflow[cashflow.length - 1];
-    const prev = cashflow[cashflow.length - 2];
-    const pct = (a, b) => (b > 0 ? ((a - b) / b) * 100 : (a > 0 ? 100 : 0));
-    return { income: pct(cur.income, prev.income), expense: pct(cur.expense, prev.expense) };
-  }, [cashflow]);
-
-  const totalSpendings = useMemo(
-    () => byCat.reduce((s, c) => s + (c.total || 0), 0),
-    [byCat]
-  );
 
   const filteredTransactions = useMemo(
     () => transactions.filter((t) => withinFilter(t.date, listFilter)),
@@ -251,123 +266,21 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Pastel summary cards */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          testId="stat-balance"
-          eyebrow="Total balance"
-          value={formatMoney(summary?.total_balance ?? 0, currency)}
-          palette="amber"
-          icon={ShoppingBag}
-          hint="All time, all accounts"
-        />
-        <StatCard
-          testId="stat-income"
-          eyebrow={`Income · ${range?.label || ""}`}
-          value={formatMoney(summary?.month_income ?? 0, currency)}
-          trend={cfTrend.income}
-          palette="emerald"
-          icon={ArrowUpRight}
-        />
-        <StatCard
-          testId="stat-expense"
-          eyebrow={`Expenses · ${range?.label || ""}`}
-          value={formatMoney(summary?.month_expense ?? 0, currency)}
-          trend={cfTrend.expense}
-          palette="rose"
-          icon={ArrowDownRight}
-        />
-        <StatCard
-          testId="stat-outstanding"
-          eyebrow="Outstanding invoices"
-          value={formatMoney(summary?.outstanding_invoices ?? 0, currency)}
-          palette="violet"
-          icon={FileText}
-          hint="Sent + overdue"
-        />
-      </section>
-
-      {/* Activity + Latest spendings (with donut) */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="label-eyebrow">Activity</p>
-              <h3 className="font-display text-xl mt-1">Last 6 months</h3>
-            </div>
-            <div className="flex items-center gap-3 text-xs text-stone-600">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Income</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-600 inline-block" />Expense</span>
-            </div>
-          </div>
-          <div className="h-72 -ml-2" data-testid="cashflow-chart" style={{ minHeight: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashflow}>
-                <defs>
-                  <linearGradient id="grad-inc" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#f43f5e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }}
-                  formatter={(v) => formatMoney(v, currency)}
-                />
-                <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
-                <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="label-eyebrow">Latest spendings</p>
-              <h3 className="font-display text-xl mt-1">By category</h3>
-            </div>
-            <span className="text-xs text-stone-500" data-testid="spendings-total">{formatMoney(totalSpendings, currency)}</span>
-          </div>
-          {byCat.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-sm text-stone-500" data-testid="empty-categories">
-              No expenses in this period.
-            </div>
-          ) : (
-            <>
-              <div className="h-40 mt-2" data-testid="category-pie" style={{ minHeight: 160 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {byCat.map((entry, i) => (<Cell key={i} fill={entry.color || "#78716c"} />))}
-                    </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <ul className="mt-4 space-y-2.5">
-                {byCat.slice(0, 5).map((c) => (
-                  <li key={c.category_id} className="flex items-center justify-between text-sm" data-testid={`cat-row-${c.category_id}`}>
-                    <span className="flex items-center gap-2 min-w-0">
-                      <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: `${c.color}1A`, color: c.color }}>
-                        <ChartPie size={14} weight="duotone" />
-                      </span>
-                      <span className="truncate">{c.name}</span>
-                    </span>
-                    <span className="font-medium tabular-nums text-stone-700">{formatMoney(c.total, currency)}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Card>
-      </section>
+      {/* Tile-driven overview */}
+      <div data-testid={`overview-${activeTile}`} className="space-y-7">
+        {activeTile === "transactions" && (
+          <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} currency={currency} range={range} />
+        )}
+        {activeTile === "students" && (
+          <StudentsOverview students={students} currency={currency} />
+        )}
+        {activeTile === "clients" && (
+          <ClientsOverview clients={clients} />
+        )}
+        {activeTile === "ledger" && (
+          <LedgerOverview ledger={ledger} students={students} currency={currency} />
+        )}
+      </div>
 
       {/* Inline list driven by active tile */}
       <section data-testid="active-tile-section">
@@ -408,23 +321,420 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {activeTile === "transactions" && (
-            <TxList items={filteredTransactions} currency={currency} />
-          )}
-          {activeTile === "students" && (
-            <StudentList items={filteredStudents} currency={currency} />
-          )}
-          {activeTile === "clients" && (
-            <ClientList items={filteredClients} />
-          )}
-          {activeTile === "ledger" && (
-            <LedgerList items={ledger} currency={currency} />
-          )}
+          {activeTile === "transactions" && <TxList items={filteredTransactions} currency={currency} />}
+          {activeTile === "students" && <StudentList items={filteredStudents} currency={currency} />}
+          {activeTile === "clients" && <ClientList items={filteredClients} />}
+          {activeTile === "ledger" && <LedgerList items={ledger} currency={currency} />}
         </Card>
       </section>
     </div>
   );
 }
+
+// -------- Tile-specific overview blocks --------
+
+function TransactionsOverview({ summary, cashflow, byCat, currency, range }) {
+  const cfTrend = useMemo(() => {
+    if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
+    const cur = cashflow[cashflow.length - 1];
+    const prev = cashflow[cashflow.length - 2];
+    const pct = (a, b) => (b > 0 ? ((a - b) / b) * 100 : (a > 0 ? 100 : 0));
+    return { income: pct(cur.income, prev.income), expense: pct(cur.expense, prev.expense) };
+  }, [cashflow]);
+  const totalSpendings = byCat.reduce((s, c) => s + (c.total || 0), 0);
+
+  return (
+    <>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard testId="stat-balance" eyebrow="Total balance" value={formatMoney(summary?.total_balance ?? 0, currency)} palette="amber" icon={ShoppingBag} hint="All time, all accounts" />
+        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight} />
+        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight} />
+        <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue" />
+      </section>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Last 6 months" right={
+            <div className="flex items-center gap-3 text-xs text-stone-600">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Income</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-600 inline-block" />Expense</span>
+            </div>
+          } />
+          <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={cashflow}>
+                <defs>
+                  <linearGradient id="grad-inc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="100%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
+                <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Latest spendings" title="By category" right={<span className="text-xs text-stone-500">{formatMoney(totalSpendings, currency)}</span>} />
+          {byCat.length === 0 ? (
+            <Empty label="No expenses in this period." />
+          ) : (
+            <>
+              <div className="h-40 mt-2" style={{ minHeight: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                      {byCat.map((entry, i) => (<Cell key={i} fill={entry.color || "#78716c"} />))}
+                    </Pie>
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="mt-4 space-y-2.5">
+                {byCat.slice(0, 5).map((c) => (
+                  <li key={c.category_id} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: `${c.color}1A`, color: c.color }}><ChartPie size={14} weight="duotone" /></span>
+                      <span className="truncate">{c.name}</span>
+                    </span>
+                    <span className="font-medium tabular-nums text-stone-700">{formatMoney(c.total, currency)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Card>
+      </section>
+    </>
+  );
+}
+
+const STATUS_COLORS = { inquiry: "#a8a29e", enrolled: "#10b981", completed: "#0ea5e9" };
+const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", completed: "Completed" };
+
+function StudentsOverview({ students, currency }) {
+  const stats = useMemo(() => {
+    const total = students.length;
+    const counts = { inquiry: 0, enrolled: 0, completed: 0 };
+    let scFixed = 0, collected = 0, balance = 0;
+    students.forEach((s) => {
+      counts[s.status] = (counts[s.status] || 0) + 1;
+      scFixed += s.sc_out_fixed || 0;
+      collected += s.collected_total || 0;
+      balance += s.balance_vs_sc || 0;
+    });
+    return { total, counts, scFixed, collected, balance };
+  }, [students]);
+
+  const trend = useMemo(
+    () => monthlyBuckets(students.map((s) => ({ date: s.enrollment_date || s.created_at, value: 1 }))),
+    [students]
+  );
+
+  const statusPie = useMemo(
+    () => Object.entries(stats.counts)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ name: STATUS_LABEL[k], status: k, value: v, color: STATUS_COLORS[k] })),
+    [stats]
+  );
+
+  const topColleges = useMemo(() => {
+    const m = {};
+    students.forEach((s) => { if (s.college) m[s.college] = (m[s.college] || 0) + 1; });
+    return Object.entries(m).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [students]);
+
+  return (
+    <>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student} />
+        <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight} />
+        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Out Fixed" />
+        <StatCard testId="st-stat-sc" eyebrow="SC Out Fixed" value={formatMoney(stats.scFixed, currency)} palette="violet" icon={FileText} hint="All students" />
+      </section>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Enrollments · last 6 months" right={<span className="text-xs text-stone-500">{stats.total} total</span>} />
+          <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend}>
+                <defs><linearGradient id="grad-enroll" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Pipeline" title="By status" right={<span className="text-xs text-stone-500">{stats.total} students</span>} />
+          {statusPie.length === 0 ? <Empty label="No students yet." /> : (
+            <>
+              <div className="h-40 mt-2" style={{ minHeight: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                      {statusPie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="mt-4 space-y-2.5">
+                {statusPie.map((s) => (
+                  <li key={s.status} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
+                      <span>{s.name}</span>
+                    </span>
+                    <span className="font-medium tabular-nums text-stone-700">{s.value}</span>
+                  </li>
+                ))}
+              </ul>
+              {topColleges.length > 0 && (
+                <div className="mt-5 pt-4 border-t border-stone-100">
+                  <p className="label-eyebrow mb-2">Top colleges</p>
+                  <ul className="space-y-1.5">
+                    {topColleges.map((c) => (
+                      <li key={c.name} className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1.5 min-w-0 truncate"><Buildings size={12} className="text-stone-400 shrink-0" /> <span className="truncate">{c.name}</span></span>
+                        <span className="font-medium tabular-nums text-stone-700">{c.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      </section>
+    </>
+  );
+}
+
+const CLIENT_TYPES = [
+  { value: "sub_agent_associate", label: "Sub Agent / Associate", short: "Sub / Assoc.", color: "#7c3aed" },
+  { value: "associate_consultant", label: "Associate Consultant", short: "Consultant", color: "#d97706" },
+  { value: "km_blr_office", label: "KM BLR Office", short: "KM BLR", color: "#059669" },
+  { value: "km_tcr_office", label: "KM TCR Office", short: "KM TCR", color: "#0284c7" },
+  { value: "km_kmly_office", label: "KM KMLY Office", short: "KM KMLY", color: "#e11d48" },
+];
+
+function ClientsOverview({ clients }) {
+  const stats = useMemo(() => {
+    const total = clients.length;
+    const counts = Object.fromEntries(CLIENT_TYPES.map((t) => [t.value, 0]));
+    clients.forEach((c) => { if (c.client_type && counts[c.client_type] != null) counts[c.client_type]++; });
+    const kmTotal = counts.km_blr_office + counts.km_tcr_office + counts.km_kmly_office;
+    return { total, counts, kmTotal };
+  }, [clients]);
+
+  const trend = useMemo(
+    () => monthlyBuckets(clients.map((c) => ({ date: c.created_at, value: 1 }))),
+    [clients]
+  );
+
+  const typePie = useMemo(
+    () => CLIENT_TYPES.map((t) => ({ name: t.short, value: stats.counts[t.value] || 0, color: t.color })).filter((x) => x.value > 0),
+    [stats]
+  );
+
+  return (
+    <>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard testId="cl-stat-total" eyebrow="Total clients" value={String(stats.total)} palette="amber" icon={UsersThree} />
+        <StatCard testId="cl-stat-sub" eyebrow="Sub Agents / Associates" value={String(stats.counts.sub_agent_associate)} palette="violet" icon={IdentificationBadge} />
+        <StatCard testId="cl-stat-consultant" eyebrow="Associate Consultants" value={String(stats.counts.associate_consultant)} palette="rose" icon={Briefcase} />
+        <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={String(stats.kmTotal)} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined" />
+      </section>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Clients added · last 6 months" right={<span className="text-xs text-stone-500">{stats.total} total</span>} />
+          <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend}>
+                <defs><linearGradient id="grad-client" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.35} /><stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Mix" title="By client type" right={<span className="text-xs text-stone-500">{stats.total} clients</span>} />
+          {typePie.length === 0 ? <Empty label="No clients yet." /> : (
+            <>
+              <div className="h-40 mt-2" style={{ minHeight: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                      {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="mt-4 space-y-2.5">
+                {CLIENT_TYPES.map((t) => (
+                  <li key={t.value} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 min-w-0"><span className="w-2 h-2 rounded-sm shrink-0" style={{ background: t.color }} /><span className="truncate">{t.short}</span></span>
+                    <span className="font-medium tabular-nums text-stone-700">{stats.counts[t.value] || 0}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Card>
+      </section>
+    </>
+  );
+}
+
+const LEDGER_TYPE_LABEL = { sub_agent: "Sub Agent", associate: "Associate", km: "KM" };
+const LEDGER_TYPE_COLOR = { sub_agent: "#7c3aed", associate: "#d97706", km: "#059669" };
+
+function LedgerOverview({ ledger, students, currency }) {
+  const stats = useMemo(() => {
+    let totalReceived = 0, paidToCollege = 0, scAdjusted = 0, holding = 0;
+    const byType = { sub_agent: 0, associate: 0, km: 0 };
+    const countByType = { sub_agent: 0, associate: 0, km: 0 };
+    (ledger || []).forEach((r) => {
+      totalReceived += r.total_received || 0;
+      paidToCollege += r.paid_to_college || 0;
+      scAdjusted += r.sc_adjusted || 0;
+      holding += r.holding || 0;
+      if (byType[r.type] != null) {
+        byType[r.type] += r.total_received || 0;
+        countByType[r.type] += 1;
+      }
+    });
+    return { totalReceived, paidToCollege, scAdjusted, holding, byType, countByType };
+  }, [ledger]);
+
+  // Monthly routed amount from students' adjustments (sc_adjusted)
+  const trend = useMemo(() => {
+    const dates = [];
+    (students || []).forEach((s) => {
+      (s.payments || []).forEach((p) => {
+        (p.adjustments || []).forEach((a) => {
+          if (a.kind === "sc_adjusted") {
+            dates.push({ date: a.payment_date || p.date, value: a.amount || 0 });
+          }
+        });
+        const recv = p.received_in;
+        if (recv && ["sub_agent", "associate", "km"].includes(recv.type)) {
+          dates.push({ date: p.date, value: p.amount || 0 });
+        }
+      });
+    });
+    return monthlyBuckets(dates);
+  }, [students]);
+
+  const topAgents = useMemo(
+    () => [...(ledger || [])].slice(0, 5).map((r) => ({ name: r.name, value: r.total_received, type: r.type })),
+    [ledger]
+  );
+
+  const typePie = useMemo(
+    () => Object.entries(stats.byType).filter(([, v]) => v > 0).map(([k, v]) => ({ name: LEDGER_TYPE_LABEL[k], value: v, color: LEDGER_TYPE_COLOR[k], type: k })),
+    [stats]
+  );
+
+  return (
+    <>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`} />
+        <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings} />
+        <StatCard testId="lg-stat-sc" eyebrow="SC adjusted" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} />
+        <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled" />
+      </section>
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Amount routed · last 6 months" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
+          <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend}>
+                <defs><linearGradient id="grad-ledger" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35} /><stop offset="100%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          {topAgents.length > 0 && (
+            <div className="mt-6">
+              <p className="label-eyebrow mb-2">Top contacts</p>
+              <div className="h-44 -ml-2" style={{ minHeight: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart layout="vertical" data={topAgents} margin={{ left: 8, right: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "#78716c", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
+                    <YAxis dataKey="name" type="category" tick={{ fill: "#44403c", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
+                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {topAgents.map((a, i) => (<Cell key={i} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </Card>
+        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+          <ChartHeader eyebrow="Mix" title="By contact type" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
+          {typePie.length === 0 ? <Empty label="No ledger activity yet." /> : (
+            <>
+              <div className="h-40 mt-2" style={{ minHeight: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                      {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                    </Pie>
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="mt-4 space-y-2.5">
+                {typePie.map((s) => (
+                  <li key={s.type} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
+                      <span className="truncate">{s.name} <span className="text-stone-400">· {stats.countByType[s.type]}</span></span>
+                    </span>
+                    <span className="font-medium tabular-nums text-stone-700">{formatMoney(s.value, currency)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Card>
+      </section>
+    </>
+  );
+}
+
+function ChartHeader({ eyebrow, title, right }) {
+  return (
+    <div className="flex items-start justify-between mb-3 gap-3">
+      <div>
+        <p className="label-eyebrow">{eyebrow}</p>
+        <h3 className="font-display text-xl mt-1">{title}</h3>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+// -------- Bottom lists (unchanged from before) --------
 
 function TxList({ items, currency }) {
   if (!items.length) return <Empty label="No transactions in this window." />;
@@ -469,7 +779,7 @@ function StudentList({ items, currency }) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{s.name}</p>
-                <p className="text-xs text-stone-500 truncate">{[s.course, s.college, s.reference].filter(Boolean).join(" · ") || "—"}</p>
+                <p className="text-xs text-stone-500 truncate flex items-center gap-1.5"><GraduationCap size={12} /> {[s.course, s.college, s.reference].filter(Boolean).join(" · ") || "—"}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -526,15 +836,15 @@ function LedgerList({ items, currency }) {
             className="flex items-center justify-between px-6 py-3.5 hover:bg-stone-50"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${LEDGER_TYPE_COLOR[row.type] || "#7c3aed"}1A`, color: LEDGER_TYPE_COLOR[row.type] || "#7c3aed" }}>
                 <Notebook size={16} weight="duotone" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{row.name}</p>
-                <p className="text-xs text-stone-500 truncate">{row.type}</p>
+                <p className="text-xs text-stone-500 truncate">{LEDGER_TYPE_LABEL[row.type] || row.type}</p>
               </div>
             </div>
-            <span className="tabular-nums text-sm font-medium text-stone-700">{formatMoney(row.total ?? 0, currency)}</span>
+            <span className="tabular-nums text-sm font-medium text-stone-700">{formatMoney(row.total_received ?? 0, currency)}</span>
           </Link>
         </li>
       ))}
