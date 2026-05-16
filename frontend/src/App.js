@@ -2,6 +2,7 @@ import React from "react";
 import "@/index.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 
 import AuthPage from "@/pages/AuthPage";
@@ -23,7 +24,7 @@ function Protected({ children }) {
   const { user } = useAuth();
   if (user === null) {
     return (
-      <div className="h-screen w-full flex items-center justify-center text-stone-500" data-testid="auth-loading">
+      <div className="h-screen w-full flex items-center justify-center text-muted-foreground" data-testid="auth-loading">
         <div className="animate-pulse text-sm tracking-widest uppercase">Loading…</div>
       </div>
     );
@@ -41,8 +42,9 @@ function PublicOnly({ children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicOnly><AuthPage mode="login" /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
@@ -62,8 +64,9 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
-      <Toaster position="top-right" richColors />
-    </AuthProvider>
+        </BrowserRouter>
+        <Toaster position="top-right" richColors />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

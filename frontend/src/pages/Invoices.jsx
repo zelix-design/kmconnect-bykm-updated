@@ -12,10 +12,10 @@ import { downloadInvoicePDF } from "@/lib/invoicePdf";
 import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular, serviceParticular } from "@/components/InvoiceForm";
 
 const STATUS_STYLES = {
-  draft: "bg-stone-100 text-stone-700",
-  sent: "bg-sky-50 text-sky-700",
-  paid: "bg-emerald-50 text-emerald-700",
-  overdue: "bg-rose-50 text-rose-700",
+  draft: "bg-muted text-foreground",
+  sent: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
+  paid: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  overdue: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
 };
 
 const blankForm = () => ({
@@ -221,14 +221,14 @@ export default function Invoices() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openCreate} disabled={clients.length === 0} data-testid="add-invoice-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+            <Button onClick={openCreate} disabled={clients.length === 0} data-testid="add-invoice-btn" className="h-10 btn-amber border-0">
               <Plus size={16} className="mr-1.5" /> New invoice
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-white max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogContent className="bg-card max-w-3xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">{editing ? "Edit" : "New"} invoice</DialogTitle>
-              <DialogDescription className="text-xs text-stone-500">
+              <DialogDescription className="text-xs text-muted-foreground">
                 Fill in client, visit details, particulars and totals. Particulars can optionally auto-log as expense transactions.
               </DialogDescription>
             </DialogHeader>
@@ -252,14 +252,14 @@ export default function Invoices() {
         </Card>
       )}
 
-      <Card className="border border-stone-200 bg-white rounded-lg shadow-none overflow-hidden">
+      <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
         {list.length === 0 ? (
-          <div className="p-12 text-center text-sm text-stone-500" data-testid="empty-invoices">No invoices yet.</div>
+          <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-invoices">No invoices yet.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left bg-stone-50 border-b border-stone-200">
+                <tr className="text-left bg-muted/40 border-b border-border">
                   <th className="px-6 py-3 label-eyebrow">Invoice</th>
                   <th className="px-6 py-3 label-eyebrow">Client / Student</th>
                   <th className="px-6 py-3 label-eyebrow">Date</th>
@@ -268,25 +268,25 @@ export default function Invoices() {
                   <th className="px-6 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200">
+              <tbody className="divide-y divide-border">
                 {list.map(inv => (
-                  <tr key={inv.id} className="hover:bg-stone-50" data-testid={`inv-row-${inv.id}`}>
+                  <tr key={inv.id} className="hover:bg-muted/40" data-testid={`inv-row-${inv.id}`}>
                     <td className="px-6 py-3.5">
                       <p className="font-medium">{inv.invoice_number}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${inv.invoice_type === "service_charge" ? "bg-indigo-50 text-indigo-700" : "bg-stone-100 text-stone-700"}`}>
+                        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${inv.invoice_type === "service_charge" ? "bg-indigo-100/60 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400" : "bg-muted text-foreground"}`}>
                           {inv.invoice_type === "service_charge" ? "Service" : "Campus visit"}
                         </span>
-                        {inv.campus_visit_no && <p className="text-xs text-stone-500">Visit #{inv.campus_visit_no}</p>}
-                        {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Auto-logged</span>}
+                        {inv.campus_visit_no && <p className="text-xs text-muted-foreground">Visit #{inv.campus_visit_no}</p>}
+                        {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">Auto-logged</span>}
                       </div>
                     </td>
                     <td className="px-6 py-3.5">
                       <p>{clientMap[inv.client_id]?.name || "—"}</p>
-                      {inv.student_name && <p className="text-xs text-stone-500">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}{inv.college ? ` · ${inv.college}` : ""}</p>}
-                      {inv.academic_year && <p className="text-xs text-stone-400">AY {inv.academic_year}</p>}
+                      {inv.student_name && <p className="text-xs text-muted-foreground">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}{inv.college ? ` · ${inv.college}` : ""}</p>}
+                      {inv.academic_year && <p className="text-xs text-muted-foreground/70">AY {inv.academic_year}</p>}
                     </td>
-                    <td className="px-6 py-3.5 text-stone-600">{formatDate(inv.issue_date)}</td>
+                    <td className="px-6 py-3.5 text-muted-foreground">{formatDate(inv.issue_date)}</td>
                     <td className="px-6 py-3.5">
                       <Select value={inv.status} onValueChange={(v) => updateStatus(inv.id, v)}>
                         <SelectTrigger className={`h-7 w-28 text-xs ${STATUS_STYLES[inv.status]}`} data-testid={`inv-status-${inv.id}`}><SelectValue /></SelectTrigger>
@@ -300,9 +300,9 @@ export default function Invoices() {
                     </td>
                     <td className="px-6 py-3.5 text-right tabular-nums font-medium">{formatMoney(inv.total, currency)}</td>
                     <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                      <button onClick={() => downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user })} data-testid={`pdf-inv-${inv.id}`} className="text-stone-500 hover:text-stone-900 p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
-                      <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={16} /></button>
-                      <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={16} /></button>
+                      <button onClick={() => downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user })} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
+                      <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                      <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
                     </td>
                   </tr>
                 ))}

@@ -15,10 +15,10 @@ import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 
 const STATUS_STYLES = {
-  inquiry: "bg-stone-100 text-stone-700",
-  enrolled: "bg-emerald-50 text-emerald-700",
-  cancelled: "bg-rose-50 text-rose-700",
-  completed: "bg-sky-50 text-sky-700",
+  inquiry: "bg-muted text-foreground",
+  enrolled: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  cancelled: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  completed: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
 };
 
 const STATUS_LABEL = {
@@ -30,10 +30,10 @@ const STATUS_LABEL = {
 
 // Card tint per status — soft pastel background
 const CARD_TINT = {
-  inquiry: "bg-stone-50/80 border-stone-200",
-  enrolled: "bg-emerald-50/60 border-emerald-200/70",
-  cancelled: "bg-rose-50/60 border-rose-200/70",
-  completed: "bg-sky-50/60 border-sky-200/70",
+  inquiry: "bg-muted/40 border-border",
+  enrolled: "bg-emerald-100/40 dark:bg-emerald-500/10 border-emerald-200/70 dark:border-emerald-500/30",
+  cancelled: "bg-rose-100/40 dark:bg-rose-500/10 border-rose-200/70 dark:border-rose-500/30",
+  completed: "bg-sky-100/40 dark:bg-sky-500/10 border-sky-200/70 dark:border-sky-500/30",
 };
 
 const STATUS_OPTIONS = [
@@ -101,7 +101,7 @@ export default function Students() {
         <div>
           <p className="label-eyebrow">Pipeline</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Students</h1>
-          <p className="text-sm text-stone-600 mt-1">Recent enrollments — search by name, college, or reference.</p>
+          <p className="text-sm text-muted-foreground mt-1">Recent enrollments — search by name, college, or reference.</p>
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">
@@ -124,15 +124,15 @@ export default function Students() {
               <FileXls size={16} className="mr-1.5" /> Export XLSX
             </Button>
             <DialogTrigger asChild>
-              <Button data-testid="add-student-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+              <Button data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
               </Button>
             </DialogTrigger>
           </div>
-          <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto">
+          <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">New student</DialogTitle>
-              <DialogDescription className="text-xs text-stone-500">Enrol a student and lock in the fee structure. Schedules are generated automatically.</DialogDescription>
+              <DialogDescription className="text-xs text-muted-foreground">Enrol a student and lock in the fee structure. Schedules are generated automatically.</DialogDescription>
             </DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div><Label>Student Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="st-name" /></div>
@@ -179,7 +179,7 @@ export default function Students() {
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="st-save">Add</Button>
+                <Button type="submit" className="btn-amber border-0" data-testid="st-save">Add</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -189,40 +189,40 @@ export default function Students() {
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="students-filters">
         <div className="relative">
-          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             value={qName}
             onChange={(e) => setQName(e.target.value)}
             placeholder="Student name"
-            className="pl-9 bg-white"
+            className="pl-9 bg-card"
             data-testid="filter-name"
           />
         </div>
         <div className="relative">
-          <Buildings size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <Buildings size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             value={qCollege}
             onChange={(e) => setQCollege(e.target.value)}
             placeholder="College"
-            className="pl-9 bg-white"
+            className="pl-9 bg-card"
             data-testid="filter-college"
           />
         </div>
         <div className="relative">
-          <UserCircle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <UserCircle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
             value={qRef}
             onChange={(e) => setQRef(e.target.value)}
             placeholder="Reference"
-            className="pl-9 bg-white"
+            className="pl-9 bg-card"
             data-testid="filter-reference"
           />
         </div>
       </div>
 
       {filtered.length === 0 ? (
-        <Card className="p-12 text-center text-sm text-stone-500 border border-stone-200 shadow-none" data-testid="empty-students">
-          <StudentIcon size={32} className="mx-auto text-stone-300 mb-3" />
+        <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none" data-testid="empty-students">
+          <StudentIcon size={32} className="mx-auto text-muted-foreground/50 mb-3" />
           {list.length === 0 ? "No students yet. Add one to start tracking fees." : "No students match these filters."}
         </Card>
       ) : (
@@ -236,37 +236,37 @@ export default function Students() {
                 data-testid={`st-card-${s.id}`}
                 className="group block"
               >
-                <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm hover:border-stone-400 transition-all h-full flex flex-col ${CARD_TINT[s.status] || "bg-white border-stone-200"}`}>
+                <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm hover:border-border transition-all h-full flex flex-col ${CARD_TINT[s.status] || "bg-card border-border"}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-md bg-white/70 text-stone-700 flex items-center justify-center font-medium shrink-0 border border-white">
+                      <div className="w-11 h-11 rounded-md bg-card/70 text-foreground flex items-center justify-center font-medium shrink-0 border border-border">
                         {(s.name || "?").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium truncate" data-testid={`st-card-name-${s.id}`}>{s.name}</p>
-                        {s.course && <p className="text-xs text-stone-500 flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {s.course}</p>}
+                        {s.course && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {s.course}</p>}
                       </div>
                     </div>
-                    <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${STATUS_STYLES[s.status] || "bg-stone-100 text-stone-700"}`}>
+                    <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${STATUS_STYLES[s.status] || "bg-muted text-foreground"}`}>
                       {STATUS_LABEL[s.status] || s.status}
                     </span>
                   </div>
 
-                  <div className="mt-4 space-y-1.5 text-sm text-stone-600 flex-1">
-                    <p className="flex items-center gap-2"><Buildings size={14} className="text-stone-400" /> <span className="truncate">{s.college || "—"}</span></p>
-                    <p className="flex items-center gap-2"><UserCircle size={14} className="text-stone-400" /> <span className="truncate">{s.reference || "—"}</span></p>
+                  <div className="mt-4 space-y-1.5 text-sm text-muted-foreground flex-1">
+                    <p className="flex items-center gap-2"><Buildings size={14} className="text-muted-foreground/70" /> <span className="truncate">{s.college || "—"}</span></p>
+                    <p className="flex items-center gap-2"><UserCircle size={14} className="text-muted-foreground/70" /> <span className="truncate">{s.reference || "—"}</span></p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-white/60 flex items-center justify-between text-xs">
-                    <span className="text-stone-500">Collected</span>
-                    <span className="tabular-nums font-medium text-emerald-700">{formatMoney(s.collected_total, currency)}</span>
+                  <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Collected</span>
+                    <span className="tabular-nums font-medium text-emerald-700 dark:text-emerald-400">{formatMoney(s.collected_total, currency)}</span>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-xs">
-                    <span className="text-stone-500">Balance</span>
-                    <span className={`tabular-nums font-medium ${s.balance_vs_sc > 0 ? "text-rose-700" : "text-stone-700"}`}>{formatMoney(s.balance_vs_sc, currency)}</span>
+                    <span className="text-muted-foreground">Balance</span>
+                    <span className={`tabular-nums font-medium ${s.balance_vs_sc > 0 ? "text-rose-700 dark:text-rose-400" : "text-foreground"}`}>{formatMoney(s.balance_vs_sc, currency)}</span>
                   </div>
 
-                  <div className="mt-3 inline-flex items-center gap-1 text-xs text-stone-700 group-hover:text-stone-900">
+                  <div className="mt-3 inline-flex items-center gap-1 text-xs text-foreground group-hover:text-foreground">
                     Open <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
                   </div>
                 </Card>

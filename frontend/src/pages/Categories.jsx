@@ -44,23 +44,23 @@ export default function Categories() {
   const expense = list.filter(c => c.type === "expense");
 
   const renderGroup = (title, items) => (
-    <Card className="border border-stone-200 bg-white rounded-lg shadow-none">
-      <div className="px-6 py-4 border-b border-stone-200">
+    <Card className="border border-border bg-card rounded-lg shadow-none">
+      <div className="px-6 py-4 border-b border-border">
         <p className="label-eyebrow">{title}</p>
       </div>
       {items.length === 0 ? (
-        <div className="p-8 text-center text-sm text-stone-500">No categories.</div>
+        <div className="p-8 text-center text-sm text-muted-foreground">No categories.</div>
       ) : (
-        <ul className="divide-y divide-stone-200">
+        <ul className="divide-y divide-border">
           {items.map(c => (
-            <li key={c.id} className="px-6 py-3 flex items-center justify-between hover:bg-stone-50" data-testid={`cat-row-${c.id}`}>
+            <li key={c.id} className="px-6 py-3 flex items-center justify-between hover:bg-muted/40" data-testid={`cat-row-${c.id}`}>
               <span className="flex items-center gap-3">
                 <span className="w-3 h-3 rounded-sm" style={{ background: c.color }} />
                 <span className="text-sm">{c.name}</span>
               </span>
               <span className="flex gap-1">
-                <button onClick={() => openEdit(c)} data-testid={`edit-cat-${c.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={16} /></button>
-                <button onClick={() => remove(c.id)} data-testid={`delete-cat-${c.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={16} /></button>
+                <button onClick={() => openEdit(c)} data-testid={`edit-cat-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                <button onClick={() => remove(c.id)} data-testid={`delete-cat-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
               </span>
             </li>
           ))}
@@ -78,11 +78,11 @@ export default function Categories() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openCreate} data-testid="add-category-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+            <Button onClick={openCreate} data-testid="add-category-btn" className="h-10 btn-amber border-0">
               <Plus size={16} className="mr-1.5" /> Add category
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-white">
+          <DialogContent className="bg-card">
             <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} category</DialogTitle></DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div><Label>Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="cat-name" /></div>
@@ -101,14 +101,14 @@ export default function Categories() {
                 <div className="flex flex-wrap gap-2 mt-1">
                   {COLORS.map(c => (
                     <button key={c} type="button" onClick={() => setForm({ ...form, color: c })}
-                      className={`w-7 h-7 rounded-md border-2 ${form.color === c ? 'border-stone-900' : 'border-transparent'}`}
+                      className={`w-7 h-7 rounded-md border-2 ${form.color === c ? 'border-foreground' : 'border-transparent'}`}
                       style={{ background: c }} />
                   ))}
                 </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="cat-save">{editing ? "Save" : "Add"}</Button>
+                <Button type="submit" className="btn-amber border-0" data-testid="cat-save">{editing ? "Save" : "Add"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>

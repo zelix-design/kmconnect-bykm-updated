@@ -23,12 +23,12 @@ const STATUS_OPTIONS = [
 ];
 
 const RECEIVED_IN = {
-  college: { label: "College Acc.", icon: Bank, color: "bg-sky-50 text-sky-700" },
-  cash: { label: "Cash", icon: Wallet, color: "bg-amber-50 text-amber-700" },
-  bank: { label: "Bank Acc.", icon: Bank, color: "bg-stone-100 text-stone-700" },
-  sub_agent: { label: "Sub Agent Acc.", icon: UsersThree, color: "bg-violet-50 text-violet-700" },
-  associate: { label: "Associate Acc.", icon: Briefcase, color: "bg-amber-50 text-amber-700" },
-  km: { label: "KM Acc.", icon: IdentificationBadge, color: "bg-emerald-50 text-emerald-700" },
+  college: { label: "College Acc.", icon: Bank, color: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400" },
+  cash: { label: "Cash", icon: Wallet, color: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  bank: { label: "Bank Acc.", icon: Bank, color: "bg-muted text-foreground" },
+  sub_agent: { label: "Sub Agent Acc.", icon: UsersThree, color: "bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  associate: { label: "Associate Acc.", icon: Briefcase, color: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  km: { label: "KM Acc.", icon: IdentificationBadge, color: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
 };
 
 const FEE_TYPE_LABELS = {
@@ -87,7 +87,7 @@ export default function StudentDetail() {
   }, [id, nav]);
   useEffect(() => { load(); }, [load]);
 
-  if (!s) return <div className="p-8 text-sm text-stone-500" data-testid="loading">Loading…</div>;
+  if (!s) return <div className="p-8 text-sm text-muted-foreground" data-testid="loading">Loading…</div>;
 
   const saveHeader = async () => {
     try {
@@ -304,12 +304,12 @@ export default function StudentDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="student-detail">
-      <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900" data-testid="back-to-list">
+      <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" data-testid="back-to-list">
         <ArrowLeft size={14} /> All students
       </Link>
 
       {/* Header card */}
-      <Card className="p-6 border border-stone-200 bg-white rounded-lg shadow-none">
+      <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
         {editHeader ? (
           <div className="space-y-4" data-testid="header-edit">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -352,7 +352,7 @@ export default function StudentDetail() {
             <div><Label>Notes</Label><Textarea rows={2} value={header.notes} onChange={(e) => setHeader({ ...header, notes: e.target.value })} /></div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditHeader(false)}>Cancel</Button>
-              <Button onClick={saveHeader} className="bg-stone-900 hover:bg-stone-800" data-testid="header-save">Save</Button>
+              <Button onClick={saveHeader} className="btn-amber border-0" data-testid="header-save">Save</Button>
             </div>
           </div>
         ) : (
@@ -360,21 +360,21 @@ export default function StudentDetail() {
             <div className="flex-1">
               <p className="label-eyebrow">Student</p>
               <h1 className="font-display text-3xl tracking-tight mt-1.5">{s.name}</h1>
-              <div className="mt-2 text-sm text-stone-600 space-x-2">
+              <div className="mt-2 text-sm text-muted-foreground space-x-2">
                 {s.course && <span>{s.course}</span>}
                 {s.college && <span>· {s.college}</span>}
                 {s.reference && <span>· Referred by {s.reference}</span>}
               </div>
               <div className="mt-3 flex items-center gap-2 text-xs">
-                <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${s.status === "enrolled" ? "bg-emerald-50 text-emerald-700" : s.status === "cancelled" ? "bg-rose-50 text-rose-700" : s.status === "completed" ? "bg-sky-50 text-sky-700" : "bg-stone-100 text-stone-700"}`}>{s.status}</span>
-                {s.enrollment_date && <span className="text-stone-500">Enrolled {formatDate(s.enrollment_date)}</span>}
+                <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${s.status === "enrolled" ? "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : s.status === "cancelled" ? "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400" : s.status === "completed" ? "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-muted text-foreground"}`}>{s.status}</span>
+                {s.enrollment_date && <span className="text-muted-foreground">Enrolled {formatDate(s.enrollment_date)}</span>}
               </div>
-              {s.notes && <p className="mt-3 text-sm text-stone-600">{s.notes}</p>}
+              {s.notes && <p className="mt-3 text-sm text-muted-foreground">{s.notes}</p>}
             </div>
             <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={openEntryAdd}
-                className="bg-stone-900 hover:bg-stone-800 text-stone-50"
+                className="btn-amber border-0"
                 data-testid="add-entry-btn"
               >
                 <Plus size={14} className="mr-1.5" /> Add entry
@@ -395,7 +395,7 @@ export default function StudentDetail() {
                 <FilePdf size={14} className="mr-1.5" /> PDF
               </Button>
               <Button variant="outline" onClick={() => setEditHeader(true)} data-testid="edit-header"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>
-              <Button variant="outline" className="text-rose-700 hover:text-rose-800" onClick={removeStudent} data-testid="delete-student"><Trash size={14} className="mr-1.5" /> Delete</Button>
+              <Button variant="outline" className="text-rose-700 dark:text-rose-400 hover:text-rose-800" onClick={removeStudent} data-testid="delete-student"><Trash size={14} className="mr-1.5" /> Delete</Button>
             </div>
           </div>
         )}
@@ -409,17 +409,17 @@ export default function StudentDetail() {
       </div>
 
       {/* Schedules */}
-      <Card className="border border-stone-200 bg-white rounded-lg shadow-none overflow-hidden">
-        <div className="px-6 py-4 flex items-center justify-between border-b border-stone-200">
+      <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
+        <div className="px-6 py-4 flex items-center justify-between border-b border-border">
           <div>
             <p className="label-eyebrow">Payment schedule</p>
             <h3 className="font-display text-lg mt-0.5">Planned installments</h3>
           </div>
           <Dialog open={schDlg.open} onOpenChange={(v) => setSchDlg({ ...schDlg, open: v })}>
-            <DialogContent className="bg-white">
+            <DialogContent className="bg-card">
               <DialogHeader>
                 <DialogTitle className="font-display">{schDlg.editing ? "Edit" : "Add"} schedule</DialogTitle>
-                <DialogDescription className="text-xs text-stone-500">Define a planned payment installment.</DialogDescription>
+                <DialogDescription className="text-xs text-muted-foreground">Define a planned payment installment.</DialogDescription>
               </DialogHeader>
               <form onSubmit={submitSch} className="space-y-3">
                 <div>
@@ -440,18 +440,18 @@ export default function StudentDetail() {
                 <div><Label>Due date</Label><Input type="date" value={schDlg.form.due_date} onChange={(e) => setSchDlg({ ...schDlg, form: { ...schDlg.form, due_date: e.target.value } })} /></div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setSchDlg({ ...schDlg, open: false })}>Cancel</Button>
-                  <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="sch-save">Save</Button>
+                  <Button type="submit" className="btn-amber border-0" data-testid="sch-save">Save</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
         {(!s.schedules || s.schedules.length === 0) ? (
-          <div className="p-10 text-center text-sm text-stone-500" data-testid="empty-schedules">No schedules yet.</div>
+          <div className="p-10 text-center text-sm text-muted-foreground" data-testid="empty-schedules">No schedules yet.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left bg-stone-50 border-b border-stone-200">
+              <tr className="text-left bg-muted/40 border-b border-border">
                 <th className="px-6 py-3 label-eyebrow">Schedule</th>
                 <th className="px-6 py-3 label-eyebrow text-right">Amount</th>
                 <th className="px-6 py-3 label-eyebrow">Remarks</th>
@@ -459,21 +459,21 @@ export default function StudentDetail() {
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200">
+            <tbody className="divide-y divide-border">
               {s.schedules.map(sc => (
-                <tr key={sc.id} className="hover:bg-stone-50" data-testid={`sch-row-${sc.id}`}>
+                <tr key={sc.id} className="hover:bg-muted/40" data-testid={`sch-row-${sc.id}`}>
                   <td className="px-6 py-3 font-medium">{sc.label}</td>
                   <td className="px-6 py-3 text-right tabular-nums">{formatMoney(sc.amount, currency)}</td>
-                  <td className="px-6 py-3 text-stone-600">{sc.remarks || "—"}</td>
-                  <td className="px-6 py-3 text-stone-600">{sc.due_date ? formatDate(sc.due_date) : "—"}</td>
+                  <td className="px-6 py-3 text-muted-foreground">{sc.remarks || "—"}</td>
+                  <td className="px-6 py-3 text-muted-foreground">{sc.due_date ? formatDate(sc.due_date) : "—"}</td>
                   <td className="px-6 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => openSchEdit(sc)} data-testid={`sch-edit-${sc.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={14} /></button>
-                    <button onClick={() => removeSch(sc.id)} data-testid={`sch-del-${sc.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={14} /></button>
+                    <button onClick={() => openSchEdit(sc)} data-testid={`sch-edit-${sc.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={14} /></button>
+                    <button onClick={() => removeSch(sc.id)} data-testid={`sch-del-${sc.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={14} /></button>
                   </td>
                 </tr>
               ))}
-              <tr className="bg-stone-50 font-medium">
-                <td className="px-6 py-3 text-stone-600 label-eyebrow">Total</td>
+              <tr className="bg-muted/40 font-medium">
+                <td className="px-6 py-3 text-muted-foreground label-eyebrow">Total</td>
                 <td className="px-6 py-3 text-right tabular-nums" data-testid="sch-total">{formatMoney(s.scheduled_total, currency)}</td>
                 <td colSpan={3}></td>
               </tr>
@@ -483,17 +483,17 @@ export default function StudentDetail() {
       </Card>
 
       {/* Payments */}
-      <Card className="border border-stone-200 bg-white rounded-lg shadow-none overflow-hidden">
-        <div className="px-6 py-4 flex items-center justify-between border-b border-stone-200">
+      <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
+        <div className="px-6 py-4 flex items-center justify-between border-b border-border">
           <div>
             <p className="label-eyebrow">Payments received</p>
             <h3 className="font-display text-lg mt-0.5">Money trail</h3>
           </div>
           <Dialog open={payDlg.open} onOpenChange={(v) => setPayDlg({ ...payDlg, open: v })}>
-            <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto">
+            <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-display">{payDlg.editing ? "Edit" : "Log"} payment</DialogTitle>
-                <DialogDescription className="text-xs text-stone-500">Record an installment received from this student.</DialogDescription>
+                <DialogDescription className="text-xs text-muted-foreground">Record an installment received from this student.</DialogDescription>
               </DialogHeader>
               <form onSubmit={submitPay} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -525,7 +525,7 @@ export default function StudentDetail() {
                   <div><Label>Amount</Label><Input type="number" step="0.01" required value={payDlg.form.amount} onChange={(e) => setPayDlg({ ...payDlg, form: { ...payDlg.form, amount: e.target.value } })} data-testid="pay-amount" /></div>
                 </div>
 
-                <div className="rounded-md border border-stone-200 p-4 space-y-3" data-testid="received-in-block">
+                <div className="rounded-md border border-border p-4 space-y-3" data-testid="received-in-block">
                   <Label>Received in</Label>
                   <div className="grid grid-cols-2 gap-3">
                     <Select value={payDlg.form.received_in.type} onValueChange={(v) => setPayDlg({ ...payDlg, form: { ...payDlg.form, received_in: { ...payDlg.form.received_in, type: v } } })}>
@@ -560,7 +560,7 @@ export default function StudentDetail() {
                   </div>
                 </div>
 
-                <div className="rounded-md border border-stone-200 p-4 space-y-3">
+                <div className="rounded-md border border-border p-4 space-y-3">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <Checkbox
                       checked={!!payDlg.form.has_adjustment}
@@ -570,14 +570,14 @@ export default function StudentDetail() {
                     />
                     <div className="flex-1">
                       <p className="text-sm font-medium">This payment has an adjustment</p>
-                      <p className="text-xs text-stone-600 mt-0.5">Split the amount across "Paid to College" and "SC Adjusted with Sub/KM" (specify type).</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Split the amount across "Paid to College" and "SC Adjusted with Sub/KM" (specify type).</p>
                     </div>
                   </label>
 
                   {payDlg.form.has_adjustment && (
-                    <div className="space-y-3 pt-2 border-t border-stone-200" data-testid="adjustments-block">
+                    <div className="space-y-3 pt-2 border-t border-border" data-testid="adjustments-block">
                       {payDlg.form.adjustments.map((adj, idx) => (
-                        <div key={idx} className="rounded-md bg-stone-50 p-3 space-y-2" data-testid={`adj-row-${idx}`}>
+                        <div key={idx} className="rounded-md bg-muted/40 p-3 space-y-2" data-testid={`adj-row-${idx}`}>
                           <div className="grid grid-cols-12 gap-2 items-start">
                             <Select value={adj.kind} onValueChange={(v) => updateAdj(idx, "kind", v)}>
                               <SelectTrigger className="col-span-5" data-testid={`adj-kind-${idx}`}><SelectValue /></SelectTrigger>
@@ -587,7 +587,7 @@ export default function StudentDetail() {
                               </SelectContent>
                             </Select>
                             <Input className="col-span-6" type="number" step="0.01" placeholder="Amount" value={adj.amount} onChange={(e) => updateAdj(idx, "amount", e.target.value)} data-testid={`adj-amount-${idx}`} />
-                            <button type="button" onClick={() => removeAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-stone-400 hover:text-rose-700" data-testid={`adj-remove-${idx}`}><X size={14} /></button>
+                            <button type="button" onClick={() => removeAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-muted-foreground/70 hover:text-rose-700 dark:text-rose-400" data-testid={`adj-remove-${idx}`}><X size={14} /></button>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
                             <Input type="date" value={adj.payment_date} onChange={(e) => updateAdj(idx, "payment_date", e.target.value)} data-testid={`adj-date-${idx}`} />
@@ -610,7 +610,7 @@ export default function StudentDetail() {
                       ))}
                       <div className="flex items-center justify-between">
                         <Button type="button" size="sm" variant="outline" onClick={addAdj} data-testid="adj-add"><Plus size={14} className="mr-1" /> Add adjustment row</Button>
-                        <span className={`text-xs tabular-nums ${Math.abs(adjBalance) < 0.01 ? "text-emerald-700" : "text-rose-700"}`} data-testid="adj-balance">
+                        <span className={`text-xs tabular-nums ${Math.abs(adjBalance) < 0.01 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`} data-testid="adj-balance">
                           Adjustments {formatMoney(fAdjTotal, currency)} of {formatMoney(fAmount, currency)} · Δ {formatMoney(adjBalance, currency)}
                         </span>
                       </div>
@@ -622,18 +622,18 @@ export default function StudentDetail() {
 
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setPayDlg({ ...payDlg, open: false })}>Cancel</Button>
-                  <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="pay-save">Save</Button>
+                  <Button type="submit" className="btn-amber border-0" data-testid="pay-save">Save</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
           </Dialog>
         </div>
         {(!s.payments || s.payments.length === 0) ? (
-          <div className="p-10 text-center text-sm text-stone-500" data-testid="empty-payments">No payments logged yet.</div>
+          <div className="p-10 text-center text-sm text-muted-foreground" data-testid="empty-payments">No payments logged yet.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left bg-stone-50 border-b border-stone-200">
+              <tr className="text-left bg-muted/40 border-b border-border">
                 <th className="px-6 py-3 label-eyebrow w-8"></th>
                 <th className="px-6 py-3 label-eyebrow">Date credited</th>
                 <th className="px-6 py-3 label-eyebrow">Schedule / Fee</th>
@@ -643,7 +643,7 @@ export default function StudentDetail() {
                 <th className="px-6 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200">
+            <tbody className="divide-y divide-border">
               {s.payments.map(p => {
                 const ri = RECEIVED_IN[p.received_in?.type] || RECEIVED_IN.cash;
                 const Icon = ri.icon;
@@ -652,48 +652,48 @@ export default function StudentDetail() {
                 const hasAdj = p.has_adjustment && (p.adjustments || []).length > 0;
                 return (
                   <React.Fragment key={p.id}>
-                    <tr className="hover:bg-stone-50" data-testid={`pay-row-${p.id}`}>
+                    <tr className="hover:bg-muted/40" data-testid={`pay-row-${p.id}`}>
                       <td className="px-6 py-3">
                         {hasAdj && (
-                          <button onClick={() => setExpanded({ ...expanded, [p.id]: !isExp })} className="text-stone-400 hover:text-stone-900" data-testid={`pay-expand-${p.id}`}>
+                          <button onClick={() => setExpanded({ ...expanded, [p.id]: !isExp })} className="text-muted-foreground/70 hover:text-foreground" data-testid={`pay-expand-${p.id}`}>
                             {isExp ? <CaretUp size={14} /> : <CaretDown size={14} />}
                           </button>
                         )}
                       </td>
-                      <td className="px-6 py-3 tabular-nums text-stone-600">{formatDate(p.date)}</td>
+                      <td className="px-6 py-3 tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
                       <td className="px-6 py-3">
                         <div className="font-medium">{sch ? sch.label : "Unscheduled"}</div>
-                        <div className="text-xs text-stone-500">{FEE_TYPE_LABELS[p.fee_type] || "Other Fees"}</div>
+                        <div className="text-xs text-muted-foreground">{FEE_TYPE_LABELS[p.fee_type] || "Other Fees"}</div>
                       </td>
                       <td className="px-6 py-3">
                         <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded ${ri.color}`}>
                           <Icon size={12} /> {ri.label}
                         </span>
-                        {p.received_in?.name && <div className="text-xs text-stone-500 mt-1">{p.received_in.name}</div>}
+                        {p.received_in?.name && <div className="text-xs text-muted-foreground mt-1">{p.received_in.name}</div>}
                       </td>
-                      <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700">{formatMoney(p.amount, currency)}</td>
-                      <td className="px-6 py-3 text-stone-600">{p.remarks || "—"}</td>
+                      <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">{formatMoney(p.amount, currency)}</td>
+                      <td className="px-6 py-3 text-muted-foreground">{p.remarks || "—"}</td>
                       <td className="px-6 py-3 text-right whitespace-nowrap">
-                        <button onClick={() => openPayEdit(p)} data-testid={`pay-edit-${p.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={14} /></button>
-                        <button onClick={() => removePay(p.id)} data-testid={`pay-del-${p.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={14} /></button>
+                        <button onClick={() => openPayEdit(p)} data-testid={`pay-edit-${p.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={14} /></button>
+                        <button onClick={() => removePay(p.id)} data-testid={`pay-del-${p.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={14} /></button>
                       </td>
                     </tr>
                     {hasAdj && isExp && (
-                      <tr className="bg-stone-50">
+                      <tr className="bg-muted/40">
                         <td colSpan={7} className="px-6 py-3">
                           <p className="label-eyebrow mb-2">Adjustments</p>
                           <div className="space-y-1.5">
                             {p.adjustments.map((a, idx) => (
-                              <div key={a.id || idx} className="flex items-center gap-2 text-xs text-stone-700">
-                                <span className={`px-1.5 py-0.5 rounded ${a.kind === "paid_to_college" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700"}`}>
+                              <div key={a.id || idx} className="flex items-center gap-2 text-xs text-foreground">
+                                <span className={`px-1.5 py-0.5 rounded ${a.kind === "paid_to_college" ? "bg-sky-100 text-sky-700 dark:text-sky-400" : "bg-emerald-100 text-emerald-700 dark:text-emerald-400"}`}>
                                   {a.kind === "paid_to_college" ? "Paid to College" : "SC Adjusted"}
                                 </span>
                                 <span className="tabular-nums font-medium">{formatMoney(a.amount, currency)}</span>
-                                <span className="text-stone-500">on {formatDate(a.payment_date)} · {PAYMENT_MODES.find(m => m.value === a.payment_mode)?.label}</span>
+                                <span className="text-muted-foreground">on {formatDate(a.payment_date)} · {PAYMENT_MODES.find(m => m.value === a.payment_mode)?.label}</span>
                                 {a.kind === "sc_adjusted" && a.sub_agent_name && (
-                                  <span className="text-stone-500">· with {SUB_AGENT_TYPES.find(t => t.value === a.sub_agent_type)?.label} {a.sub_agent_name}</span>
+                                  <span className="text-muted-foreground">· with {SUB_AGENT_TYPES.find(t => t.value === a.sub_agent_type)?.label} {a.sub_agent_name}</span>
                                 )}
-                                {a.remarks && <span className="text-stone-500">· {a.remarks}</span>}
+                                {a.remarks && <span className="text-muted-foreground">· {a.remarks}</span>}
                               </div>
                             ))}
                           </div>
@@ -703,9 +703,9 @@ export default function StudentDetail() {
                   </React.Fragment>
                 );
               })}
-              <tr className="bg-stone-50 font-medium">
-                <td colSpan={4} className="px-6 py-3 text-stone-600 label-eyebrow">Total collected</td>
-                <td className="px-6 py-3 text-right tabular-nums text-emerald-700" data-testid="pay-total">{formatMoney(s.collected_total, currency)}</td>
+              <tr className="bg-muted/40 font-medium">
+                <td colSpan={4} className="px-6 py-3 text-muted-foreground label-eyebrow">Total collected</td>
+                <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="pay-total">{formatMoney(s.collected_total, currency)}</td>
                 <td colSpan={2}></td>
               </tr>
             </tbody>
@@ -715,16 +715,16 @@ export default function StudentDetail() {
 
       {/* Combined Add entry dialog */}
       <Dialog open={entryDlg.open} onOpenChange={(v) => setEntryDlg({ ...entryDlg, open: v })}>
-        <DialogContent className="bg-white max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="entry-dialog">
+        <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="entry-dialog">
           <DialogHeader>
             <DialogTitle className="font-display">Add entry</DialogTitle>
-            <DialogDescription className="text-xs text-stone-500">
+            <DialogDescription className="text-xs text-muted-foreground">
               Add a planned schedule and / or record a payment received — both in one step.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={submitEntry} className="space-y-5">
             {/* Schedule section */}
-            <div className="rounded-md border border-stone-200 p-4 space-y-3">
+            <div className="rounded-md border border-border p-4 space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
                   checked={!!entryDlg.form.create_schedule}
@@ -775,7 +775,7 @@ export default function StudentDetail() {
             </div>
 
             {/* Payment section */}
-            <div className="rounded-md border border-stone-200 p-4 space-y-3">
+            <div className="rounded-md border border-border p-4 space-y-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <Checkbox
                   checked={!!entryDlg.form.log_payment}
@@ -810,9 +810,9 @@ export default function StudentDetail() {
                       onChange={(e) => updateEntryPay({ amount: e.target.value })}
                       data-testid="entry-pay-amount"
                     />
-                    <p className="text-xs text-stone-500 mt-1">Leave blank to use the schedule amount.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Leave blank to use the schedule amount.</p>
                   </div>
-                  <div className="rounded-md border border-stone-200 p-3 space-y-2">
+                  <div className="rounded-md border border-border p-3 space-y-2">
                     <Label>Received in</Label>
                     <div className="grid grid-cols-2 gap-2">
                       <Select value={entryDlg.form.payment.received_in.type} onValueChange={(v) => updateEntryPayRecv({ type: v })}>
@@ -846,7 +846,7 @@ export default function StudentDetail() {
                       </Select>
                     </div>
                   </div>
-                  <div className="rounded-md border border-stone-200 p-3 space-y-2">
+                  <div className="rounded-md border border-border p-3 space-y-2">
                     <label className="flex items-start gap-2 cursor-pointer">
                       <Checkbox
                         checked={!!entryDlg.form.payment.has_adjustment}
@@ -863,7 +863,7 @@ export default function StudentDetail() {
                     {entryDlg.form.payment.has_adjustment && (
                       <div className="space-y-2 pt-1">
                         {entryDlg.form.payment.adjustments.map((adj, idx) => (
-                          <div key={idx} className="rounded-md bg-stone-50 p-3 space-y-2">
+                          <div key={idx} className="rounded-md bg-muted/40 p-3 space-y-2">
                             <div className="grid grid-cols-12 gap-2 items-start">
                               <Select value={adj.kind} onValueChange={(v) => updateEntryAdj(idx, "kind", v)}>
                                 <SelectTrigger className="col-span-5"><SelectValue /></SelectTrigger>
@@ -873,7 +873,7 @@ export default function StudentDetail() {
                                 </SelectContent>
                               </Select>
                               <Input className="col-span-6" type="number" step="0.01" placeholder="Amount" value={adj.amount} onChange={(e) => updateEntryAdj(idx, "amount", e.target.value)} />
-                              <button type="button" onClick={() => removeEntryAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-stone-400 hover:text-rose-700"><X size={14} /></button>
+                              <button type="button" onClick={() => removeEntryAdj(idx)} className="col-span-1 h-10 flex items-center justify-center text-muted-foreground/70 hover:text-rose-700 dark:text-rose-400"><X size={14} /></button>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <Input type="date" value={adj.payment_date} onChange={(e) => updateEntryAdj(idx, "payment_date", e.target.value)} />
@@ -896,7 +896,7 @@ export default function StudentDetail() {
                         ))}
                         <div className="flex items-center justify-between">
                           <Button type="button" size="sm" variant="outline" onClick={addEntryAdj}><Plus size={14} className="mr-1" /> Add adjustment</Button>
-                          <span className={`text-xs tabular-nums ${Math.abs(eAdjBalance) < 0.01 ? "text-emerald-700" : "text-rose-700"}`}>
+                          <span className={`text-xs tabular-nums ${Math.abs(eAdjBalance) < 0.01 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
                             Adjustments {formatMoney(eAdjTotal, currency)} of {formatMoney(eAmount, currency)} · Δ {formatMoney(eAdjBalance, currency)}
                           </span>
                         </div>
@@ -910,7 +910,7 @@ export default function StudentDetail() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEntryDlg({ ...entryDlg, open: false })}>Cancel</Button>
-              <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="entry-save">Save entry</Button>
+              <Button type="submit" className="btn-amber border-0" data-testid="entry-save">Save entry</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -921,9 +921,9 @@ export default function StudentDetail() {
 
 function Tile({ label, value, tone }) {
   return (
-    <Card className="p-4 border border-stone-200 bg-white rounded-lg shadow-none">
+    <Card className="p-4 border border-border bg-card rounded-lg shadow-none">
       <p className="label-eyebrow">{label}</p>
-      <p className={`font-display text-2xl mt-2 tabular-nums ${tone === "success" ? "text-emerald-700" : tone === "danger" ? "text-rose-700" : "text-stone-900"}`}>{value}</p>
+      <p className={`font-display text-2xl mt-2 tabular-nums ${tone === "success" ? "text-emerald-700 dark:text-emerald-400" : tone === "danger" ? "text-rose-700 dark:text-rose-400" : "text-foreground"}`}>{value}</p>
     </Card>
   );
 }

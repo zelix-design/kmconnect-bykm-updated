@@ -73,13 +73,13 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
           type="button"
           onClick={() => switchType("campus_visit")}
           data-testid="type-campus"
-          className={`p-3 rounded-md border text-left lift ${form.invoice_type === "campus_visit" ? "border-stone-900 bg-stone-50 ring-2 ring-stone-200" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+          className={`p-3 rounded-md border text-left lift ${form.invoice_type === "campus_visit" ? "border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30" : "border-border bg-card hover:bg-muted/40"}`}
         >
           <div className="flex items-center gap-2">
-            <Car size={18} weight="regular" className="text-stone-700" />
+            <Car size={18} weight="regular" className="text-foreground" />
             <div>
               <p className="text-sm font-medium">Campus Visit Invoice</p>
-              <p className="text-xs text-stone-500">Travel particulars · auto-logs expenses</p>
+              <p className="text-xs text-muted-foreground">Travel particulars · auto-logs expenses</p>
             </div>
           </div>
         </button>
@@ -87,13 +87,13 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
           type="button"
           onClick={() => switchType("service_charge")}
           data-testid="type-service"
-          className={`p-3 rounded-md border text-left lift ${form.invoice_type === "service_charge" ? "border-stone-900 bg-stone-50 ring-2 ring-stone-200" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+          className={`p-3 rounded-md border text-left lift ${form.invoice_type === "service_charge" ? "border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/30" : "border-border bg-card hover:bg-muted/40"}`}
         >
           <div className="flex items-center gap-2">
-            <Receipt size={18} weight="regular" className="text-stone-700" />
+            <Receipt size={18} weight="regular" className="text-foreground" />
             <div>
               <p className="text-sm font-medium">Service Charge Invoice</p>
-              <p className="text-xs text-stone-500">Single fee · academic year</p>
+              <p className="text-xs text-muted-foreground">Single fee · academic year</p>
             </div>
           </div>
         </button>
@@ -119,7 +119,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
 
       {/* Variant-specific meta */}
       {isService ? (
-        <div className="rounded-md border border-stone-200 p-4 space-y-3" data-testid="service-meta">
+        <div className="rounded-md border border-border p-4 space-y-3" data-testid="service-meta">
           <p className="label-eyebrow">Service Charge towards</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><Label>Student Name</Label><Input value={form.student_name} onChange={(e) => setForm({ ...form, student_name: e.target.value })} placeholder="Full name" data-testid="inv-student" /></div>
@@ -129,10 +129,10 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
           </div>
 
           {/* Link to a prior campus visit (auto-fills credit) */}
-          <div className="border-t border-stone-200 pt-3 mt-2">
+          <div className="border-t border-border pt-3 mt-2">
             <Label className="flex items-center gap-1.5"><LinkIcon size={14} /> Link to a campus visit (optional)</Label>
             {openCredits.length === 0 ? (
-              <p className="text-xs text-stone-500 mt-1.5" data-testid="no-open-credits">
+              <p className="text-xs text-muted-foreground mt-1.5" data-testid="no-open-credits">
                 {form.client_id ? "No campus-visit invoices with open balance for this client." : "Pick a client to see their open campus visits."}
               </p>
             ) : (
@@ -166,7 +166,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
                   </SelectContent>
                 </Select>
                 {linkedVisit && (
-                  <p className="text-xs text-stone-500 mt-1.5" data-testid="linked-visit-hint">
+                  <p className="text-xs text-muted-foreground mt-1.5" data-testid="linked-visit-hint">
                     {linkedVisit.invoice_number} · {formatDate(linkedVisit.issue_date)} · pending {formatMoney(linkedVisit.remaining_credit, currency)} of {formatMoney(linkedVisit.total, currency)}
                   </p>
                 )}
@@ -196,7 +196,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
         {isService ? (
           <div className="grid grid-cols-12 gap-2 items-center">
             <Input
-              className="col-span-5 bg-stone-50"
+              className="col-span-5 bg-muted/40"
               value="Service Charge"
               readOnly
               data-testid="inv-service-label"
@@ -245,7 +245,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
                   type="button"
                   onClick={() => removePart(idx)}
                   disabled={form.particulars.length === 1}
-                  className="col-span-1 text-stone-400 hover:text-rose-700 disabled:opacity-30 h-10 flex items-center justify-center"
+                  className="col-span-1 text-muted-foreground/70 hover:text-rose-700 dark:text-rose-400 disabled:opacity-30 h-10 flex items-center justify-center"
                   data-testid={`inv-part-remove-${idx}`}
                 >
                   <X size={16} />
@@ -258,7 +258,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
 
       {/* Auto-log toggle (only for campus visit type) */}
       {!isService && (
-        <div className="rounded-md border border-stone-200 bg-stone-50 p-4 space-y-3" data-testid="auto-log-block">
+        <div className="rounded-md border border-border bg-muted/40 p-4 space-y-3" data-testid="auto-log-block">
           <label className="flex items-start gap-3 cursor-pointer">
             <Checkbox
               checked={!!form.auto_log_expenses}
@@ -268,7 +268,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
             />
             <div className="flex-1">
               <p className="text-sm font-medium">Also log particulars as expense transactions</p>
-              <p className="text-xs text-stone-600 mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Each row is recorded as an expense in your ledger, mapped to its category. Updating the invoice re-syncs the transactions.
               </p>
             </div>
@@ -277,7 +277,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
             <div className="pl-7">
               <Label className="text-xs">Expense account</Label>
               <Select value={form.expense_account_id || (accounts[0]?.id ?? "")} onValueChange={(v) => setForm({ ...form, expense_account_id: v })}>
-                <SelectTrigger className="h-9 bg-white" data-testid="inv-expense-account"><SelectValue placeholder="Select account" /></SelectTrigger>
+                <SelectTrigger className="h-9 bg-card" data-testid="inv-expense-account"><SelectValue placeholder="Select account" /></SelectTrigger>
                 <SelectContent>
                   {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
@@ -292,7 +292,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
         <div>
           <Label>{isService ? "Expense Credit of Campus Visit" : "Credit toward expense"}</Label>
           <Input type="number" step="0.01" value={form.credit_amount} onChange={(e) => setForm({ ...form, credit_amount: e.target.value })} data-testid="inv-credit" />
-          {isService && <p className="text-[11px] text-stone-500 mt-1">Pending / clear from a previous campus visit</p>}
+          {isService && <p className="text-[11px] text-muted-foreground mt-1">Pending / clear from a previous campus visit</p>}
         </div>
         <div>
           <Label>Tax rate %</Label>
@@ -316,7 +316,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
 
       {/* Previous payment towards SC (service charge only) */}
       {isService && (
-        <div className="rounded-md border border-stone-200 p-4 space-y-3" data-testid="prev-sc-block">
+        <div className="rounded-md border border-border p-4 space-y-3" data-testid="prev-sc-block">
           <label className="flex items-start gap-2 cursor-pointer">
             <Checkbox
               checked={!!psp.has}
@@ -334,7 +334,7 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
             />
             <div>
               <p className="text-sm font-medium">Previous payment towards SC</p>
-              <p className="text-xs text-stone-500 mt-0.5">A prior part-payment already received against this service charge. Logged as income and subtracted from the balance.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">A prior part-payment already received against this service charge. Logged as income and subtracted from the balance.</p>
             </div>
           </label>
           {psp.has && (
@@ -392,23 +392,23 @@ export default function InvoiceForm({ form, setForm, clients, accounts, currency
       )}
 
       {/* Live totals */}
-      <div className="border-t border-stone-200 pt-4 space-y-1.5 text-sm bg-stone-50 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
-        <div className="flex justify-between"><span className="text-stone-600">{isService ? "Total Amount" : "Total Expense"}</span><span className="tabular-nums font-medium" data-testid="inv-subtotal">{formatMoney(totalAmount, currency)}</span></div>
+      <div className="border-t border-border pt-4 space-y-1.5 text-sm bg-muted/40 -mx-6 -mb-6 px-6 py-4 rounded-b-lg">
+        <div className="flex justify-between"><span className="text-muted-foreground">{isService ? "Total Amount" : "Total Expense"}</span><span className="tabular-nums font-medium" data-testid="inv-subtotal">{formatMoney(totalAmount, currency)}</span></div>
         {parseFloat(form.tax_rate) > 0 && (
-          <div className="flex justify-between"><span className="text-stone-600">Tax</span><span className="tabular-nums">{formatMoney(taxAmount, currency)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span className="tabular-nums">{formatMoney(taxAmount, currency)}</span></div>
         )}
         {credit > 0 && (
-          <div className="flex justify-between"><span className="text-stone-600">{isService ? "Expense Credit of Campus Visit" : "Credit toward expense"}</span><span className="tabular-nums text-rose-700">− {formatMoney(credit, currency)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">{isService ? "Expense Credit of Campus Visit" : "Credit toward expense"}</span><span className="tabular-nums text-rose-700 dark:text-rose-400">− {formatMoney(credit, currency)}</span></div>
         )}
         {prevPay > 0 && (
-          <div className="flex justify-between" data-testid="totals-prev-sc"><span className="text-stone-600">Previous payment towards SC</span><span className="tabular-nums text-rose-700">− {formatMoney(prevPay, currency)}</span></div>
+          <div className="flex justify-between" data-testid="totals-prev-sc"><span className="text-muted-foreground">Previous payment towards SC</span><span className="tabular-nums text-rose-700 dark:text-rose-400">− {formatMoney(prevPay, currency)}</span></div>
         )}
-        <div className="flex justify-between border-t border-stone-200 mt-2 pt-2 text-base font-semibold"><span>Total</span><span className="tabular-nums" data-testid="inv-total">{formatMoney(grandTotal, currency)}</span></div>
+        <div className="flex justify-between border-t border-border mt-2 pt-2 text-base font-semibold"><span>Total</span><span className="tabular-nums" data-testid="inv-total">{formatMoney(grandTotal, currency)}</span></div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="inv-save">{editing ? "Save" : "Create"}</Button>
+        <Button type="submit" className="btn-amber border-0" data-testid="inv-save">{editing ? "Save" : "Create"}</Button>
       </div>
     </form>
   );

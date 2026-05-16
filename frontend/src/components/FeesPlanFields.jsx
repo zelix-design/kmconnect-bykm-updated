@@ -75,7 +75,7 @@ export default function FeesPlanFields({ fp, onChange, currency = "USD" }) {
   const total = computeTotalFees(fp);
 
   return (
-    <div className="rounded-md border border-stone-200 p-4 space-y-4 bg-stone-50/60" data-testid="fees-plan-block">
+    <div className="rounded-md border border-border p-4 space-y-4 bg-muted/40/60" data-testid="fees-plan-block">
       <div className="flex items-center justify-between gap-3">
         <p className="label-eyebrow">Fees fixed at admission</p>
         <div className="w-44">
@@ -164,7 +164,7 @@ export default function FeesPlanFields({ fp, onChange, currency = "USD" }) {
         </Select>
       </div>
 
-      <div className="flex items-center justify-between pt-2 border-t border-stone-200">
+      <div className="flex items-center justify-between pt-2 border-t border-border">
         <span className="label-eyebrow">Total Fees</span>
         <span className="font-display text-xl tabular-nums" data-testid="fp-total-fees">{formatMoney(total, currency)}</span>
       </div>

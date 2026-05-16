@@ -40,12 +40,12 @@ function rangeFor(preset) {
 }
 
 const PALETTES = {
-  amber: { bg: "bg-amber-50", icon: "bg-amber-100 text-amber-700" },
-  violet: { bg: "bg-violet-50", icon: "bg-violet-100 text-violet-700" },
-  emerald: { bg: "bg-emerald-50", icon: "bg-emerald-100 text-emerald-700" },
-  rose: { bg: "bg-rose-50", icon: "bg-rose-100 text-rose-700" },
-  sky: { bg: "bg-sky-50", icon: "bg-sky-100 text-sky-700" },
-  stone: { bg: "bg-stone-100", icon: "bg-stone-200 text-stone-700" },
+  amber: { bg: "bg-amber-50 dark:bg-amber-500/15", icon: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400" },
+  violet: { bg: "bg-violet-50 dark:bg-violet-500/15", icon: "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400" },
+  emerald: { bg: "bg-emerald-50 dark:bg-emerald-500/15", icon: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" },
+  rose: { bg: "bg-rose-50 dark:bg-rose-500/15", icon: "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400" },
+  sky: { bg: "bg-sky-50 dark:bg-sky-500/15", icon: "bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400" },
+  stone: { bg: "bg-muted", icon: "bg-muted text-foreground" },
 };
 
 function StatCard({ eyebrow, value, trend, hint, palette, icon: Icon, testId }) {
@@ -58,15 +58,15 @@ function StatCard({ eyebrow, value, trend, hint, palette, icon: Icon, testId }) 
           {Icon && <Icon size={18} weight="duotone" />}
         </div>
         {trend != null && (
-          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${positive ? "text-emerald-700" : "text-rose-700"}`}>
+          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
             {positive ? <CaretUp size={12} weight="fill" /> : <CaretDown size={12} weight="fill" />}
             {Math.abs(trend).toFixed(0)}%
           </span>
         )}
       </div>
-      <p className="font-display text-2xl mt-4 text-stone-900 tabular-nums">{value}</p>
-      <p className="text-xs text-stone-600 mt-1">{eyebrow}</p>
-      {hint && <p className="text-[10px] text-stone-500 mt-0.5">{hint}</p>}
+      <p className="font-display text-2xl mt-4 text-foreground tabular-nums">{value}</p>
+      <p className="text-xs text-muted-foreground mt-1">{eyebrow}</p>
+      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
     </Card>
   );
 }
@@ -240,10 +240,10 @@ export default function Dashboard() {
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/quick-entry" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-md bg-stone-900 text-stone-50 text-sm hover:bg-stone-800 lift">
+          <Link to="/quick-entry" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg btn-amber text-sm font-medium">
             <Receipt size={16} /> Quick entry
           </Link>
-          <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-md border border-stone-300 bg-white text-sm hover:bg-stone-100 lift">
+          <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm hover:bg-muted lift">
             <FileText size={16} /> New invoice
           </Link>
         </div>
@@ -262,18 +262,18 @@ export default function Dashboard() {
               data-testid={`tile-${t.key}`}
               className={`group flex items-center gap-3 p-4 rounded-xl text-left transition-all lift ${
                 active
-                  ? "bg-stone-900 text-stone-50 border border-stone-900"
-                  : "bg-white border border-stone-200 hover:border-stone-400"
+                  ? "bg-amber-gradient text-white border border-orange-500"
+                  : "bg-card border border-border hover:border-border"
               }`}
             >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-stone-800 text-emerald-300" : p.icon}`}>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-white/20 text-white" : p.icon}`}>
                 <t.icon size={18} weight={active ? "fill" : "duotone"} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${active ? "text-stone-50" : "text-stone-900"}`}>{t.label}</p>
-                <p className={`text-xs ${active ? "text-stone-400" : "text-stone-500"}`}>{active ? "Selected" : "Open"}</p>
+                <p className={`text-sm font-medium ${active ? "text-white" : "text-foreground"}`}>{t.label}</p>
+                <p className={`text-xs ${active ? "text-white/80" : "text-muted-foreground"}`}>{active ? "Selected" : "Open"}</p>
               </div>
-              <ArrowUpRight size={14} className={active ? "text-stone-300" : "text-stone-400 group-hover:text-stone-900"} />
+              <ArrowUpRight size={14} className={active ? "text-white/80" : "text-muted-foreground/70 group-hover:text-foreground"} />
             </button>
           );
         })}
@@ -281,12 +281,12 @@ export default function Dashboard() {
 
       {/* Date range filter */}
       <div className="flex flex-wrap items-center gap-3" data-testid="date-range-filter">
-        <div className="flex items-center gap-2 text-stone-600">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <CalendarBlank size={16} />
           <span className="label-eyebrow">Period</span>
         </div>
         <Select value={preset} onValueChange={setPreset}>
-          <SelectTrigger className="w-44 h-9 bg-white" data-testid="range-preset"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-44 h-9 bg-card" data-testid="range-preset"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="this_month">This month</SelectItem>
             <SelectItem value="last_30">Last 30 days</SelectItem>
@@ -297,9 +297,9 @@ export default function Dashboard() {
         </Select>
         {preset === "custom" && (
           <>
-            <Input type="date" value={custom.start} onChange={(e) => setCustom({ ...custom, start: e.target.value })} className="h-9 w-44 bg-white" data-testid="range-start" />
-            <span className="text-stone-400 text-sm">→</span>
-            <Input type="date" value={custom.end} onChange={(e) => setCustom({ ...custom, end: e.target.value })} className="h-9 w-44 bg-white" data-testid="range-end" />
+            <Input type="date" value={custom.start} onChange={(e) => setCustom({ ...custom, start: e.target.value })} className="h-9 w-44 bg-card" data-testid="range-start" />
+            <span className="text-muted-foreground/70 text-sm">→</span>
+            <Input type="date" value={custom.end} onChange={(e) => setCustom({ ...custom, end: e.target.value })} className="h-9 w-44 bg-card" data-testid="range-end" />
           </>
         )}
       </div>
@@ -322,8 +322,8 @@ export default function Dashboard() {
 
       {/* Inline list driven by active tile */}
       <section data-testid="active-tile-section">
-        <Card className="border border-stone-200 bg-white rounded-xl shadow-none">
-          <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-stone-100">
+        <Card className="border border-border bg-card rounded-xl shadow-none">
+          <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60">
             <div>
               <p className="label-eyebrow">{TILES.find(t => t.key === activeTile)?.label}</p>
               <h3 className="font-display text-xl mt-1">
@@ -335,7 +335,7 @@ export default function Dashboard() {
             </div>
             <div className="flex items-center gap-2">
               {activeTile !== "ledger" && (
-                <div className="inline-flex rounded-md bg-stone-100 p-0.5" data-testid="list-filter-tabs">
+                <div className="inline-flex rounded-md bg-muted p-0.5" data-testid="list-filter-tabs">
                   {FILTER_OPTIONS.map((f) => (
                     <button
                       key={f.value}
@@ -343,7 +343,7 @@ export default function Dashboard() {
                       onClick={() => setListFilter(f.value)}
                       data-testid={`filter-${f.value}`}
                       className={`px-3 py-1.5 text-xs rounded transition-colors ${
-                        listFilter === f.value ? "bg-white text-stone-900 shadow-sm" : "text-stone-600 hover:text-stone-900"
+                        listFilter === f.value ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {f.label}
@@ -353,7 +353,7 @@ export default function Dashboard() {
               )}
               <Link
                 to={activeTile === "ledger" ? "/agents" : `/${activeTile}`}
-                className="text-sm text-stone-700 hover:text-stone-900 underline underline-offset-4"
+                className="text-sm text-foreground hover:text-foreground underline underline-offset-4"
                 data-testid="view-all-link"
               >View all →</Link>
             </div>
@@ -396,9 +396,9 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
         <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
+        <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
           <ChartHeader eyebrow="Activity" title="Last 6 months" right={
-            <div className="flex items-center gap-3 text-xs text-stone-600">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Income</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-600 inline-block" />Expense</span>
             </div>
@@ -410,18 +410,18 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                   <linearGradient id="grad-inc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
                   <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="100%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
                 <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
                 <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Latest spendings" title="By category" right={<span className="text-xs text-stone-500">{formatMoney(totalSpendings, currency)}</span>} />
+        <Card className="p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Latest spendings" title="By category" right={<span className="text-xs text-muted-foreground">{formatMoney(totalSpendings, currency)}</span>} />
           {byCat.length === 0 ? (
             <Empty label="No expenses in this period." />
           ) : (
@@ -430,9 +430,9 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {byCat.map((entry, i) => (<Cell key={i} fill={entry.color || "#78716c"} />))}
+                      {byCat.map((entry, i) => (<Cell key={i} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -443,7 +443,7 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                       <span className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: `${c.color}1A`, color: c.color }}><ChartPie size={14} weight="duotone" /></span>
                       <span className="truncate">{c.name}</span>
                     </span>
-                    <span className="font-medium tabular-nums text-stone-700">{formatMoney(c.total, currency)}</span>
+                    <span className="font-medium tabular-nums text-foreground">{formatMoney(c.total, currency)}</span>
                   </li>
                 ))}
               </ul>
@@ -528,23 +528,23 @@ function StudentsOverview({ students, currency, range }) {
         <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Activity" title="Enrollments · last 6 months" right={<span className="text-xs text-stone-500">{stats.total} total</span>} />
+        <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Enrollments · last 6 months" right={<span className="text-xs text-muted-foreground">{stats.total} total</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-enroll" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                 <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Pipeline" title="By status" right={<span className="text-xs text-stone-500">{stats.total} students</span>} />
+        <Card className="p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Pipeline" title="By status" right={<span className="text-xs text-muted-foreground">{stats.total} students</span>} />
           {statusPie.length === 0 ? <Empty label="No students yet." /> : (
             <>
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
@@ -553,7 +553,7 @@ function StudentsOverview({ students, currency, range }) {
                     <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {statusPie.map((e, i) => (<Cell key={i} fill={e.color} />))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -564,31 +564,31 @@ function StudentsOverview({ students, currency, range }) {
                       <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
                       <span>{s.name}</span>
                     </span>
-                    <span className="font-medium tabular-nums text-stone-700">{s.value}</span>
+                    <span className="font-medium tabular-nums text-foreground">{s.value}</span>
                   </li>
                 ))}
               </ul>
               {topReferences.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="top-references">
+                <div className="mt-5 pt-4 border-t border-border/60" data-testid="top-references">
                   <p className="label-eyebrow mb-2">Top references</p>
                   <ul className="space-y-1.5">
                     {topReferences.map((r) => (
                       <li key={r.name} className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 min-w-0 truncate"><IdentificationBadge size={12} className="text-stone-400 shrink-0" /> <span className="truncate">{r.name}</span></span>
-                        <span className="font-medium tabular-nums text-stone-700">{r.count}</span>
+                        <span className="flex items-center gap-1.5 min-w-0 truncate"><IdentificationBadge size={12} className="text-muted-foreground/70 shrink-0" /> <span className="truncate">{r.name}</span></span>
+                        <span className="font-medium tabular-nums text-foreground">{r.count}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
               {enrolledColleges.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="enrolled-colleges">
+                <div className="mt-5 pt-4 border-t border-border/60" data-testid="enrolled-colleges">
                   <p className="label-eyebrow mb-2">Enrolled colleges</p>
                   <ul className="space-y-1.5">
                     {enrolledColleges.map((c) => (
                       <li key={c.name} className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 min-w-0 truncate"><Buildings size={12} className="text-stone-400 shrink-0" /> <span className="truncate">{c.name}</span></span>
-                        <span className="font-medium tabular-nums text-stone-700">{c.count}</span>
+                        <span className="flex items-center gap-1.5 min-w-0 truncate"><Buildings size={12} className="text-muted-foreground/70 shrink-0" /> <span className="truncate">{c.name}</span></span>
+                        <span className="font-medium tabular-nums text-foreground">{c.count}</span>
                       </li>
                     ))}
                   </ul>
@@ -653,23 +653,23 @@ function ClientsOverview({ clients, students }) {
         <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={String(stats.kmTotal)} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined" />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Activity" title="Clients added · last 6 months" right={<span className="text-xs text-stone-500">{stats.total} total</span>} />
+        <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Clients added · last 6 months" right={<span className="text-xs text-muted-foreground">{stats.total} total</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-client" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.35} /><stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                 <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Mix" title="By client type" right={<span className="text-xs text-stone-500">{stats.total} clients</span>} />
+        <Card className="p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Mix" title="By client type" right={<span className="text-xs text-muted-foreground">{stats.total} clients</span>} />
           {typePie.length === 0 ? <Empty label="No clients yet." /> : (
             <>
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
@@ -678,7 +678,7 @@ function ClientsOverview({ clients, students }) {
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -686,13 +686,13 @@ function ClientsOverview({ clients, students }) {
                 {CLIENT_TYPES.map((t) => (
                   <li key={t.value} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2 min-w-0"><span className="w-2 h-2 rounded-sm shrink-0" style={{ background: t.color }} /><span className="truncate">{t.short}</span></span>
-                    <span className="font-medium tabular-nums text-stone-700">{stats.counts[t.value] || 0}</span>
+                    <span className="font-medium tabular-nums text-foreground">{stats.counts[t.value] || 0}</span>
                   </li>
                 ))}
               </ul>
 
               {/* KM offices breakdown */}
-              <div className="mt-5 pt-4 border-t border-stone-100" data-testid="km-breakdown">
+              <div className="mt-5 pt-4 border-t border-border/60" data-testid="km-breakdown">
                 <p className="label-eyebrow mb-2">KM offices</p>
                 <div className="grid grid-cols-3 gap-2">
                   {[
@@ -700,8 +700,8 @@ function ClientsOverview({ clients, students }) {
                     { label: "TCR", value: stats.counts.km_tcr_office, color: "#0284c7" },
                     { label: "KMLY", value: stats.counts.km_kmly_office, color: "#e11d48" },
                   ].map((k) => (
-                    <div key={k.label} className="rounded-md bg-stone-50 p-2 text-center" data-testid={`km-${k.label.toLowerCase()}`}>
-                      <p className="text-[10px] uppercase tracking-wider text-stone-500">{k.label}</p>
+                    <div key={k.label} className="rounded-md bg-muted/40 p-2 text-center" data-testid={`km-${k.label.toLowerCase()}`}>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{k.label}</p>
                       <p className="font-display text-base tabular-nums" style={{ color: k.color }}>{k.value}</p>
                     </div>
                   ))}
@@ -710,18 +710,18 @@ function ClientsOverview({ clients, students }) {
 
               {/* Top referrers (clients who referred students) */}
               {topReferrers.length > 0 && (
-                <div className="mt-5 pt-4 border-t border-stone-100" data-testid="top-referrers">
+                <div className="mt-5 pt-4 border-t border-border/60" data-testid="top-referrers">
                   <p className="label-eyebrow mb-2">Top referrers</p>
                   <ul className="space-y-1.5">
                     {topReferrers.map((r) => (
                       <li key={r.name} className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 min-w-0 truncate">
-                          <IdentificationBadge size={12} className="text-stone-400 shrink-0" />
+                          <IdentificationBadge size={12} className="text-muted-foreground/70 shrink-0" />
                           <span className="truncate">{r.name}</span>
                         </span>
-                        <span className="text-stone-700 tabular-nums">
+                        <span className="text-foreground tabular-nums">
                           <span className="font-medium">{r.count}</span>
-                          <span className="text-stone-400 ml-1">student{r.count === 1 ? "" : "s"}</span>
+                          <span className="text-muted-foreground/70 ml-1">student{r.count === 1 ? "" : "s"}</span>
                         </span>
                       </li>
                     ))}
@@ -806,16 +806,16 @@ function LedgerOverview({ ledger, students, currency }) {
         </div>
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Activity" title="Amount routed · all time, monthly" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
+        <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Activity" title="Amount routed · all time, monthly" right={<span className="text-xs text-muted-foreground">{formatMoney(stats.totalReceived, currency)}</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-ledger" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35} /><stop offset="100%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#78716c", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
                 <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -826,10 +826,10 @@ function LedgerOverview({ ledger, students, currency }) {
               <div className="h-44 -ml-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart layout="vertical" data={topAgents} margin={{ left: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: "#78716c", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
-                    <YAxis dataKey="name" type="category" tick={{ fill: "#44403c", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
-                    <Tooltip contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} formatter={(v) => formatMoney(v, currency)} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
+                    <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {topAgents.map((a, i) => (<Cell key={i} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
                     </Bar>
@@ -839,8 +839,8 @@ function LedgerOverview({ ledger, students, currency }) {
             </div>
           )}
         </Card>
-        <Card className="p-6 border border-stone-200 bg-white rounded-xl shadow-none">
-          <ChartHeader eyebrow="Mix" title="By contact type" right={<span className="text-xs text-stone-500">{formatMoney(stats.totalReceived, currency)}</span>} />
+        <Card className="p-6 border border-border bg-card rounded-xl shadow-none">
+          <ChartHeader eyebrow="Mix" title="By contact type" right={<span className="text-xs text-muted-foreground">{formatMoney(stats.totalReceived, currency)}</span>} />
           {typePie.length === 0 ? <Empty label="No ledger activity yet." /> : (
             <>
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
@@ -849,7 +849,7 @@ function LedgerOverview({ ledger, students, currency }) {
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "#fff", border: "1px solid #e7e5e4", borderRadius: 6, fontSize: 12 }} />
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -858,9 +858,9 @@ function LedgerOverview({ ledger, students, currency }) {
                   <li key={s.type} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2 min-w-0">
                       <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />
-                      <span className="truncate">{s.name} <span className="text-stone-400">· {stats.countByType[s.type]}</span></span>
+                      <span className="truncate">{s.name} <span className="text-muted-foreground/70">· {stats.countByType[s.type]}</span></span>
                     </span>
-                    <span className="font-medium tabular-nums text-stone-700">{formatMoney(s.value, currency)}</span>
+                    <span className="font-medium tabular-nums text-foreground">{formatMoney(s.value, currency)}</span>
                   </li>
                 ))}
               </ul>
@@ -889,19 +889,19 @@ function ChartHeader({ eyebrow, title, right }) {
 function TxList({ items, currency }) {
   if (!items.length) return <Empty label="No transactions in this window." />;
   return (
-    <ul className="divide-y divide-stone-100" data-testid="tx-list">
+    <ul className="divide-y divide-border/60" data-testid="tx-list">
       {items.slice(0, 10).map((t) => (
-        <li key={t.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-stone-50">
+        <li key={t.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400'}`}>
               {t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
             </div>
             <div>
               <p className="text-sm font-medium">{t.description || (t.type === 'income' ? 'Income' : 'Expense')}</p>
-              <p className="text-xs text-stone-500">{formatDate(t.date)}</p>
+              <p className="text-xs text-muted-foreground">{formatDate(t.date)}</p>
             </div>
           </div>
-          <span className={`tabular-nums text-sm font-medium ${t.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
+          <span className={`tabular-nums text-sm font-medium ${t.type === 'income' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
             {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, currency)}
           </span>
         </li>
@@ -911,31 +911,31 @@ function TxList({ items, currency }) {
 }
 
 const STATUS_BADGE = {
-  inquiry: "bg-stone-100 text-stone-700",
-  enrolled: "bg-emerald-50 text-emerald-700",
-  cancelled: "bg-rose-50 text-rose-700",
-  completed: "bg-sky-50 text-sky-700",
+  inquiry: "bg-muted text-foreground",
+  enrolled: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  cancelled: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
+  completed: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
 };
 
 function StudentList({ items, currency }) {
   if (!items.length) return <Empty label="No enrollments in this window." />;
   return (
-    <ul className="divide-y divide-stone-100" data-testid="student-list">
+    <ul className="divide-y divide-border/60" data-testid="student-list">
       {items.slice(0, 10).map((s) => (
         <li key={s.id}>
-          <Link to={`/students/${s.id}`} className="flex items-center justify-between px-6 py-3.5 hover:bg-stone-50">
+          <Link to={`/students/${s.id}`} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center text-xs font-medium shrink-0">
+              <div className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center text-xs font-medium shrink-0">
                 {(s.name || "?").slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{s.name}</p>
-                <p className="text-xs text-stone-500 truncate flex items-center gap-1.5"><GraduationCap size={12} /> {[s.course, s.college, s.reference].filter(Boolean).join(" · ") || "—"}</p>
+                <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5"><GraduationCap size={12} /> {[s.course, s.college, s.reference].filter(Boolean).join(" · ") || "—"}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_BADGE[s.status] || "bg-stone-100 text-stone-700"}`}>{s.status}</span>
-              <span className="tabular-nums text-sm text-stone-700 hidden sm:inline">{formatMoney(s.collected_total, currency)}</span>
+              <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_BADGE[s.status] || "bg-muted text-foreground"}`}>{s.status}</span>
+              <span className="tabular-nums text-sm text-foreground hidden sm:inline">{formatMoney(s.collected_total, currency)}</span>
             </div>
           </Link>
         </li>
@@ -955,19 +955,19 @@ const CLIENT_TYPE_LABEL = {
 function ClientList({ items }) {
   if (!items.length) return <Empty label="No clients added in this window." />;
   return (
-    <ul className="divide-y divide-stone-100" data-testid="client-list">
+    <ul className="divide-y divide-border/60" data-testid="client-list">
       {items.slice(0, 10).map((c) => (
-        <li key={c.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-stone-50">
+        <li key={c.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center text-xs font-medium shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center text-xs font-medium shrink-0">
               {(c.name || "?").slice(0, 2).toUpperCase()}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{c.name}</p>
-              <p className="text-xs text-stone-500 truncate">{[c.email, c.phone].filter(Boolean).join(" · ") || "—"}</p>
+              <p className="text-xs text-muted-foreground truncate">{[c.email, c.phone].filter(Boolean).join(" · ") || "—"}</p>
             </div>
           </div>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-stone-100 text-stone-700">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-foreground">
             {CLIENT_TYPE_LABEL[c.client_type] || "—"}
           </span>
         </li>
@@ -979,12 +979,12 @@ function ClientList({ items }) {
 function LedgerList({ items, currency }) {
   if (!items?.length) return <Empty label="No sub-agent activity yet." />;
   return (
-    <ul className="divide-y divide-stone-100" data-testid="ledger-list">
+    <ul className="divide-y divide-border/60" data-testid="ledger-list">
       {items.slice(0, 10).map((row, i) => (
         <li key={`${row.type}-${row.name}-${i}`}>
           <Link
             to={`/agents/detail?type=${encodeURIComponent(row.type)}&name=${encodeURIComponent(row.name)}`}
-            className="flex items-center justify-between px-6 py-3.5 hover:bg-stone-50"
+            className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40"
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${LEDGER_TYPE_COLOR[row.type] || "#7c3aed"}1A`, color: LEDGER_TYPE_COLOR[row.type] || "#7c3aed" }}>
@@ -992,10 +992,10 @@ function LedgerList({ items, currency }) {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium truncate">{row.name}</p>
-                <p className="text-xs text-stone-500 truncate">{LEDGER_TYPE_LABEL[row.type] || row.type}</p>
+                <p className="text-xs text-muted-foreground truncate">{LEDGER_TYPE_LABEL[row.type] || row.type}</p>
               </div>
             </div>
-            <span className="tabular-nums text-sm font-medium text-stone-700">{formatMoney(row.total_received ?? 0, currency)}</span>
+            <span className="tabular-nums text-sm font-medium text-foreground">{formatMoney(row.total_received ?? 0, currency)}</span>
           </Link>
         </li>
       ))}
@@ -1004,5 +1004,5 @@ function LedgerList({ items, currency }) {
 }
 
 function Empty({ label }) {
-  return <div className="p-10 text-center text-sm text-stone-500" data-testid="tile-empty">{label}</div>;
+  return <div className="p-10 text-center text-sm text-muted-foreground" data-testid="tile-empty">{label}</div>;
 }

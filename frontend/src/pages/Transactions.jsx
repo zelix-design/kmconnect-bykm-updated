@@ -87,8 +87,8 @@ export default function Transactions() {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Transactions</h1>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-white border border-stone-300 rounded-md px-3 h-10">
-            <Funnel size={16} className="text-stone-500" />
+          <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 h-10">
+            <Funnel size={16} className="text-muted-foreground" />
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
@@ -102,11 +102,11 @@ export default function Transactions() {
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button onClick={openCreate} data-testid="add-transaction-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+              <Button onClick={openCreate} data-testid="add-transaction-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add transaction
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-white" data-testid="transaction-dialog">
+            <DialogContent className="bg-card" data-testid="transaction-dialog">
               <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} transaction</DialogTitle></DialogHeader>
               <form onSubmit={submit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -156,7 +156,7 @@ export default function Transactions() {
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)} data-testid="tx-cancel">Cancel</Button>
-                  <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="tx-save">{editing ? "Save" : "Add"}</Button>
+                  <Button type="submit" className="btn-amber border-0" data-testid="tx-save">{editing ? "Save" : "Add"}</Button>
                 </DialogFooter>
               </form>
             </DialogContent>
@@ -164,14 +164,14 @@ export default function Transactions() {
         </div>
       </header>
 
-      <Card className="border border-stone-200 bg-white rounded-lg shadow-none overflow-hidden">
+      <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
         {list.length === 0 ? (
-          <div className="p-12 text-center text-sm text-stone-500" data-testid="empty-state">No transactions yet. Click "Add transaction" to get started.</div>
+          <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-state">No transactions yet. Click "Add transaction" to get started.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left bg-stone-50 border-b border-stone-200">
+                <tr className="text-left bg-muted/40 border-b border-border">
                   <th className="px-6 py-3 label-eyebrow">Date</th>
                   <th className="px-6 py-3 label-eyebrow">Description</th>
                   <th className="px-6 py-3 label-eyebrow">Account</th>
@@ -180,26 +180,26 @@ export default function Transactions() {
                   <th className="px-6 py-3 label-eyebrow"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200">
+              <tbody className="divide-y divide-border">
                 {list.map(t => (
-                  <tr key={t.id} className="hover:bg-stone-50" data-testid={`tx-row-${t.id}`}>
-                    <td className="px-6 py-3.5 tabular-nums text-stone-600">{t.date}</td>
+                  <tr key={t.id} className="hover:bg-muted/40" data-testid={`tx-row-${t.id}`}>
+                    <td className="px-6 py-3.5 tabular-nums text-muted-foreground">{t.date}</td>
                     <td className="px-6 py-3.5">{t.description || "—"}</td>
-                    <td className="px-6 py-3.5 text-stone-600">{accountMap[t.account_id]?.name || "—"}</td>
+                    <td className="px-6 py-3.5 text-muted-foreground">{accountMap[t.account_id]?.name || "—"}</td>
                     <td className="px-6 py-3.5">
                       {categoryMap[t.category_id] ? (
                         <span className="inline-flex items-center gap-2">
                           <span className="w-2 h-2 rounded-sm" style={{ background: categoryMap[t.category_id].color }} />
                           {categoryMap[t.category_id].name}
                         </span>
-                      ) : <span className="text-stone-400">—</span>}
+                      ) : <span className="text-muted-foreground/70">—</span>}
                     </td>
-                    <td className={`px-6 py-3.5 text-right tabular-nums font-medium ${t.type === 'income' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                    <td className={`px-6 py-3.5 text-right tabular-nums font-medium ${t.type === 'income' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                       {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, currency)}
                     </td>
                     <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(t)} data-testid={`edit-${t.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={16} /></button>
-                      <button onClick={() => remove(t.id)} data-testid={`delete-${t.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={16} /></button>
+                      <button onClick={() => openEdit(t)} data-testid={`edit-${t.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                      <button onClick={() => remove(t.id)} data-testid={`delete-${t.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
                     </td>
                   </tr>
                 ))}

@@ -36,7 +36,7 @@ export default function Settings() {
         <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Settings</h1>
       </header>
 
-      <Card className="p-6 border border-stone-200 bg-white rounded-lg shadow-none">
+      <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
         <form onSubmit={submit} className="space-y-5">
           <div>
             <Label>Your name</Label>
@@ -59,9 +59,9 @@ export default function Settings() {
           <div>
             <Label>Email</Label>
             <Input value={user?.email || ""} disabled />
-            <p className="text-xs text-stone-500 mt-1">Email cannot be changed.</p>
+            <p className="text-xs text-muted-foreground mt-1">Email cannot be changed.</p>
           </div>
-          <Button type="submit" disabled={saving} className="bg-stone-900 hover:bg-stone-800 lift" data-testid="settings-save">
+          <Button type="submit" disabled={saving} className="btn-amber border-0 lift" data-testid="settings-save">
             {saving ? "Saving…" : "Save changes"}
           </Button>
         </form>

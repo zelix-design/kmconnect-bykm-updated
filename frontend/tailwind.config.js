@@ -6,7 +6,7 @@ module.exports = {
         extend: {
             fontFamily: {
                 display: ['Outfit', 'system-ui', 'sans-serif'],
-                sans: ['IBM Plex Sans', 'system-ui', 'sans-serif'],
+                sans: ['DM Sans', 'system-ui', 'sans-serif'],
             },
             borderRadius: {
                 lg: 'var(--radius)',

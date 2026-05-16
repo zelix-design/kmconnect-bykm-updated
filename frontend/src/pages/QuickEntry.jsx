@@ -81,15 +81,15 @@ export default function QuickEntry() {
   };
 
   const tone = mode === "debit"
-    ? { bg: "bg-rose-700 hover:bg-rose-800", soft: "bg-rose-50 text-rose-700", ring: "ring-rose-300" }
-    : { bg: "bg-emerald-700 hover:bg-emerald-800", soft: "bg-emerald-50 text-emerald-700", ring: "ring-emerald-300" };
+    ? { bg: "bg-rose-700 hover:bg-rose-800", soft: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400", ring: "ring-rose-300" }
+    : { bg: "bg-emerald-700 hover:bg-emerald-800", soft: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-300" };
 
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl" data-testid="quick-entry-page">
       <header>
         <p className="label-eyebrow">Quick entry</p>
         <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Log debit or credit</h1>
-        <p className="text-sm text-stone-600 mt-1">Fast money-in / money-out logging. Tap the keypad, pick a category, save.</p>
+        <p className="text-sm text-muted-foreground mt-1">Fast money-in / money-out logging. Tap the keypad, pick a category, save.</p>
       </header>
 
       {/* Mode toggle */}
@@ -97,41 +97,41 @@ export default function QuickEntry() {
         <button
           onClick={() => setMode("debit")}
           data-testid="mode-debit"
-          className={`p-5 rounded-lg border lift text-left ${mode === "debit" ? "border-rose-700 bg-rose-50 ring-2 ring-rose-200" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+          className={`p-5 rounded-lg border lift text-left ${mode === "debit" ? "border-rose-500 bg-rose-100/50 dark:bg-rose-500/10 ring-2 ring-rose-200 dark:ring-rose-500/30" : "border-border bg-card hover:bg-muted/40"}`}
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-rose-100 text-rose-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-md bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 flex items-center justify-center">
               <ArrowDownRight size={20} weight="bold" />
             </div>
             <div>
               <p className="font-medium">Debit</p>
-              <p className="text-xs text-stone-600">Money out · expense</p>
+              <p className="text-xs text-muted-foreground">Money out · expense</p>
             </div>
           </div>
         </button>
         <button
           onClick={() => setMode("credit")}
           data-testid="mode-credit"
-          className={`p-5 rounded-lg border lift text-left ${mode === "credit" ? "border-emerald-700 bg-emerald-50 ring-2 ring-emerald-200" : "border-stone-200 bg-white hover:bg-stone-50"}`}
+          className={`p-5 rounded-lg border lift text-left ${mode === "credit" ? "border-emerald-500 bg-emerald-100/50 dark:bg-emerald-500/10 ring-2 ring-emerald-200 dark:ring-emerald-500/30" : "border-border bg-card hover:bg-muted/40"}`}
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
               <ArrowUpRight size={20} weight="bold" />
             </div>
             <div>
               <p className="font-medium">Credit</p>
-              <p className="text-xs text-stone-600">Money in · income</p>
+              <p className="text-xs text-muted-foreground">Money in · income</p>
             </div>
           </div>
         </button>
       </div>
 
-      <Card className="p-6 border border-stone-200 bg-white rounded-lg shadow-none">
+      <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
         {/* Big amount display */}
-        <div className="text-center pb-6 border-b border-stone-200">
+        <div className="text-center pb-6 border-b border-border">
           <p className="label-eyebrow">{mode === "debit" ? "Amount to deduct" : "Amount to credit"}</p>
           <div className="mt-3 font-display text-5xl sm:text-6xl tracking-tight tabular-nums" data-testid="amount-display">
-            <span className="text-stone-400 mr-1">{mode === "debit" ? "−" : "+"}</span>
+            <span className="text-muted-foreground/70 mr-1">{mode === "debit" ? "−" : "+"}</span>
             {formatMoney(parseFloat(amount) || 0, currency)}
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function QuickEntry() {
                 key={k}
                 onClick={() => tap(k)}
                 data-testid={`key-${k === "⌫" ? "back" : k === "." ? "dot" : k}`}
-                className="h-14 rounded-md bg-stone-50 hover:bg-stone-100 border border-stone-200 text-xl font-display lift"
+                className="h-14 rounded-md bg-muted/40 hover:bg-muted border border-border text-xl font-display lift"
               >
                 {k}
               </button>
@@ -187,8 +187,8 @@ export default function QuickEntry() {
                   data-testid={`chip-${c.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
                   className={`px-3 h-9 rounded-full text-sm border flex items-center gap-2 lift ${
                     active
-                      ? "border-stone-900 bg-stone-900 text-stone-50"
-                      : "border-stone-200 bg-white hover:bg-stone-50 text-stone-700"
+                      ? "border-orange-500 bg-amber-gradient text-white"
+                      : "border-border bg-card hover:bg-muted/40 text-foreground"
                   }`}
                 >
                   <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
@@ -217,7 +217,7 @@ export default function QuickEntry() {
             onClick={save}
             disabled={saving || !amount || !accountId}
             data-testid="qe-save"
-            className={`flex-1 h-12 text-stone-50 lift ${tone.bg}`}
+            className={`flex-1 h-12 text-background lift ${tone.bg}`}
           >
             <Plus size={18} className="mr-1.5" />
             {saving ? "Saving…" : `Save ${mode === "debit" ? "debit" : "credit"} entry`}

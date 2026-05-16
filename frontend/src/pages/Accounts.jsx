@@ -63,11 +63,11 @@ export default function Accounts() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button onClick={openCreate} data-testid="add-account-btn" className="h-10 bg-stone-900 hover:bg-stone-800 text-stone-50 lift">
+            <Button onClick={openCreate} data-testid="add-account-btn" className="h-10 btn-amber border-0">
               <Plus size={16} className="mr-1.5" /> Add account
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-white">
+          <DialogContent className="bg-card">
             <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} account</DialogTitle></DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div>
@@ -92,14 +92,14 @@ export default function Accounts() {
                 <div className="flex gap-2 mt-1">
                   {COLORS.map(c => (
                     <button key={c} type="button" onClick={() => setForm({ ...form, color: c })}
-                      className={`w-7 h-7 rounded-md border-2 ${form.color === c ? 'border-stone-900' : 'border-transparent'}`}
+                      className={`w-7 h-7 rounded-md border-2 ${form.color === c ? 'border-foreground' : 'border-transparent'}`}
                       style={{ background: c }} data-testid={`acc-color-${c}`} />
                   ))}
                 </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" className="bg-stone-900 hover:bg-stone-800" data-testid="acc-save">{editing ? "Save" : "Add"}</Button>
+                <Button type="submit" className="btn-amber border-0" data-testid="acc-save">{editing ? "Save" : "Add"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -107,13 +107,13 @@ export default function Accounts() {
       </header>
 
       {list.length === 0 ? (
-        <Card className="p-12 text-center text-sm text-stone-500 border border-stone-200 shadow-none">No accounts yet.</Card>
+        <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none">No accounts yet.</Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {list.map((a) => {
             const TypeIcon = TYPES.find(t => t.value === a.type)?.icon || Bank;
             return (
-              <Card key={a.id} className="p-6 border border-stone-200 bg-white rounded-lg shadow-none lift" data-testid={`account-card-${a.id}`}>
+              <Card key={a.id} className="p-6 border border-border bg-card rounded-lg shadow-none lift" data-testid={`account-card-${a.id}`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ background: `${a.color}1a`, color: a.color }}>
@@ -121,12 +121,12 @@ export default function Accounts() {
                     </div>
                     <div>
                       <p className="font-medium">{a.name}</p>
-                      <p className="text-xs text-stone-500 capitalize">{a.type.replace("_", " ")}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{a.type.replace("_", " ")}</p>
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => openEdit(a)} data-testid={`edit-acc-${a.id}`} className="text-stone-500 hover:text-stone-900 p-1.5"><PencilSimple size={16} /></button>
-                    <button onClick={() => remove(a.id)} data-testid={`delete-acc-${a.id}`} className="text-stone-500 hover:text-rose-700 p-1.5"><Trash size={16} /></button>
+                    <button onClick={() => openEdit(a)} data-testid={`edit-acc-${a.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                    <button onClick={() => remove(a.id)} data-testid={`delete-acc-${a.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
                   </div>
                 </div>
                 <div className="mt-5">
