@@ -126,6 +126,36 @@
 - [x] **Favicon** + apple-touch-icon → `/km-mark.png`
 - [x] Verified visually on /login (hero), Dashboard (sidebar), both themes
 
+## Implementation status — 2026-02-17 (iteration 13: 2-tier role system · Phase 1)
+- [x] **Roles** — Dropped middle "Admin" tier; only `super_admin` (admin@finflow.com) + `office_admin` (per-office).
+- [x] **OfficeCode** — `KM_BLR` / `KM_TCR` / `KM_KMLY` on User & Client (staff).
+- [x] **Self-registration → pending → approved** flow:
+  - `POST /api/auth/register` requires `office`; creates user with `approval_status='pending'`. No auth cookie set.
+  - `POST /api/auth/login` returns 403 for pending/rejected.
+  - `GET /api/users?status=pending|approved|rejected` (super_admin only).
+  - `PATCH /api/users/{id}/approval {status, note?}` flips approval.
+  - `DELETE /api/users/{id}` (super_admin only; no self-delete; no super→super delete).
+- [x] **Expense requests** (Office Admin → Super Admin):
+  - `POST /api/expense-requests` (office_admin) — kind=expense|salary, urgency=normal|urgent.
+  - `GET /api/expense-requests` — own for office_admin; all (with requester enrichment) for super_admin.
+  - `POST /api/expense-requests/{id}/approve {account_id, note?}` (super_admin) — **auto-creates the real expense transaction** on the requester's books with `linked_expense_request_id` and stores `linked_transaction_id` on the request.
+  - `POST /api/expense-requests/{id}/reject {note?}` (super_admin).
+  - `DELETE /api/expense-requests/{id}` (office_admin: own pending only; super: any).
+- [x] **Staff client_type** — `staff` added to `ClientType` with `office`, `eligible_incentive`, `date_of_birth` fields (backward-compatible).
+- [x] **Frontend role-aware AppShell** — `ALL_NAV` filtered by `roles`. Office Admin sidebar shows 7 items (Overview, Quick Entry, Transactions, Clients, Students, Office expenses, Settings); Super Admin shows 12 (incl. Accounts, Invoices, Ledger, Approvals, Team, Categories).
+- [x] **New pages**: `/users` (Team & approvals) and `/expense-requests` (one component, role-aware view — Office Admin sees own + can create; Super Admin sees all + approve/reject).
+- [x] **AuthPage** updated — Office dropdown on register, "Awaiting approval" pending screen.
+- [x] **Clients.jsx** — when role=office_admin: title="Our Staff", type locked to staff, filter hidden, staff-only list, staff fields surfaced.
+- [x] **Students.jsx** — Reference dropdown filtered to client_type='staff'.
+- [x] **Accounts list** — `GET /api/accounts?for_user_id=X` works for super_admin only (used in approval dialog).
+- [x] **100% regression** — iteration_12.json: backend 20/20 pytest pass; frontend all 7 acceptance flows pass.
+
+## Phase 2 (next iteration) — Office Admin dashboard + incentive logic
+- [ ] Office Admin dashboard: Staff admission count · Incentive earned · Upcoming birthdays · weekly/monthly/yearly toggle
+- [ ] Quick Entry → popup with 3 buttons (Add Transaction · Add Student · Log Payment) → opens corresponding form
+- [ ] Incentive rule: 3+ admissions/staff/month → eligible → previous 2 admissions retroactively eligible → "Mark incentive paid" action
+- [ ] Salary-request payout view on staff cards
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
