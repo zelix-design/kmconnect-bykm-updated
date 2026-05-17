@@ -211,45 +211,121 @@ export default function Clients() {
         <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none" data-testid="empty-clients">
           {list.length === 0 ? (isOfficeAdmin ? "No staff yet. Add your first." : "No clients yet.") : "No entries match this filter."}
         </Card>
+      ) : isOfficeAdmin ? (
+        // Office-admin: flat grid (staff only)
+        <ClientGrid clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((c) => (
-            <Card key={c.id} className="p-6 border border-border bg-card rounded-lg shadow-none" data-testid={`client-card-${c.id}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium">
-                    {c.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-medium">{c.name}</p>
-                    {c.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.company}</p>}
-                    {c.client_type === "staff" && c.office && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.office.replace("KM_", "KM ")}</p>}
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  {allowEdit && <button onClick={() => openEdit(c)} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
-                  {allowEdit && <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${TYPE_BADGE[c.client_type] || "bg-muted text-foreground"}`}>
-                  {clientTypeLabel(c.client_type)}
-                </span>
-              </div>
-              <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
-                {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}
-                {c.phone && <p className="flex items-center gap-2"><Phone size={14} /> {c.phone}</p>}
-                {c.client_type === "staff" && c.date_of_birth && (
-                  <p className="flex items-center gap-2"><Cake size={14} /> {new Date(c.date_of_birth).toLocaleDateString()}</p>
-                )}
-                {c.client_type === "staff" && c.eligible_incentive != null && (
-                  <p className="flex items-center gap-2"><CurrencyInr size={14} /> ₹{c.eligible_incentive}/admission</p>
-                )}
-              </div>
-            </Card>
-          ))}
-        </div>
+        // Super-admin: group by category, with Staff further sub-grouped by office
+        <GroupedClients filter={filter} clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
       )}
+    </div>
+  );
+}
+
+// ---- Helpers ----
+
+const OFFICE_OPTIONS = [
+  { value: "KM_BLR", label: "KM BLR" },
+  { value: "KM_TCR", label: "KM TCR" },
+  { value: "KM_KMLY", label: "KM KMLY" },
+  { value: "_none", label: "No office set" },
+];
+
+function ClientCard({ c, allowEdit, openEdit, remove }) {
+  return (
+    <Card key={c.id} className="p-6 border border-border bg-card rounded-lg shadow-none" data-testid={`client-card-${c.id}`}>
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium">
+            {c.name.slice(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <p className="font-medium">{c.name}</p>
+            {c.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.company}</p>}
+            {c.client_type === "staff" && c.office && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.office.replace("KM_", "KM ")}</p>}
+          </div>
+        </div>
+        <div className="flex gap-1">
+          {allowEdit && <button onClick={() => openEdit(c)} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
+          {allowEdit && <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
+        </div>
+      </div>
+      <div className="mt-3">
+        <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${TYPE_BADGE[c.client_type] || "bg-muted text-foreground"}`}>
+          {clientTypeLabel(c.client_type)}
+        </span>
+      </div>
+      <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
+        {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}
+        {c.phone && <p className="flex items-center gap-2"><Phone size={14} /> {c.phone}</p>}
+        {c.client_type === "staff" && c.date_of_birth && (
+          <p className="flex items-center gap-2"><Cake size={14} /> {new Date(c.date_of_birth).toLocaleDateString()}</p>
+        )}
+        {c.client_type === "staff" && c.eligible_incentive != null && (
+          <p className="flex items-center gap-2"><CurrencyInr size={14} /> ₹{c.eligible_incentive}/admission</p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ClientGrid({ clients, allowEdit, openEdit, remove }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {clients.map((c) => (
+        <ClientCard key={c.id} c={c} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+      ))}
+    </div>
+  );
+}
+
+function CategoryHeader({ label, count }) {
+  return (
+    <div className="flex items-center gap-3 mt-2" data-testid={`cat-header-${label.replace(/\W+/g, "_").toLowerCase()}`}>
+      <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">{label}</h2>
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-foreground text-[11px] font-medium">{count}</span>
+      <span className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+function GroupedClients({ filter, clients, allowEdit, openEdit, remove }) {
+  // When a specific type filter is selected, just show that category (with Staff sub-grouping)
+  const groups = CLIENT_TYPES.map((t) => ({
+    ...t,
+    items: clients.filter((c) => c.client_type === t.value),
+  })).filter((g) => (filter === "all" ? g.items.length > 0 : g.value === filter));
+
+  return (
+    <div className="space-y-8">
+      {groups.map((g) => (
+        <section key={g.value} className="space-y-4" data-testid={`cat-section-${g.value}`}>
+          <CategoryHeader label={g.label} count={g.items.length} />
+          {g.value === "staff" ? (
+            // Sub-group staff by office
+            <div className="space-y-6">
+              {OFFICE_OPTIONS.map((o) => {
+                const sub = g.items.filter((c) =>
+                  (o.value === "_none" ? !c.office : c.office === o.value)
+                );
+                if (sub.length === 0) return null;
+                return (
+                  <div key={o.value} className="space-y-3" data-testid={`office-section-${o.value}`}>
+                    <div className="flex items-center gap-2 pl-1">
+                      <Buildings size={14} className="text-orange-600 dark:text-orange-400" />
+                      <span className="text-xs uppercase tracking-[0.16em] font-semibold text-muted-foreground">{o.label}</span>
+                      <span className="text-[10px] text-muted-foreground/70">· {sub.length}</span>
+                    </div>
+                    <ClientGrid clients={sub} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <ClientGrid clients={g.items} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+          )}
+        </section>
+      ))}
     </div>
   );
 }

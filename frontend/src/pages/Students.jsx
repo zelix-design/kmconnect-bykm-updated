@@ -10,10 +10,11 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, GraduationCap, Buildings, UserCircle } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, GraduationCap, Buildings, UserCircle, X } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
+import { CLIENT_TYPES, clientTypeLabel } from "@/pages/Clients";
 
 const STATUS_STYLES = {
   inquiry: "bg-muted text-foreground",
@@ -57,6 +58,7 @@ function recentRank(s) {
 export default function Students() {
   const { user } = useAuth();
   const allowEdit = canEdit(user, "students");
+  const isSuper = user?.role === "super_admin";
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
@@ -67,6 +69,47 @@ export default function Students() {
   const [qName, setQName] = useState("");
   const [qCollege, setQCollege] = useState("");
   const [qRef, setQRef] = useState("");
+
+  // Super admin: client picker dialog before opening the student form
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const openAddStudent = () => {
+    // Reset form to blank
+    setForm({ ...emptyForm(), reference: "" });
+    if (isSuper) {
+      setPickerSearch("");
+      setPickerOpen(true);
+    } else {
+      // Office admin (and others) open the form directly with whatever reference is pre-set
+      setOpen(true);
+    }
+  };
+  const pickClientAndEnrol = (client) => {
+    setForm((f) => ({ ...f, reference: client?.name || "" }));
+    setPickerOpen(false);
+    setOpen(true);
+  };
+  const skipPicker = () => {
+    setForm((f) => ({ ...f, reference: "" }));
+    setPickerOpen(false);
+    setOpen(true);
+  };
+
+  const filteredPickerClients = useMemo(() => {
+    if (!pickerSearch) return clients;
+    const q = pickerSearch.toLowerCase();
+    return clients.filter((c) =>
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.company || "").toLowerCase().includes(q) ||
+      (c.office || "").toLowerCase().includes(q)
+    );
+  }, [clients, pickerSearch]);
+
+  const pickerGroups = useMemo(() => {
+    return CLIENT_TYPES
+      .map((t) => ({ ...t, items: filteredPickerClients.filter((c) => c.client_type === t.value) }))
+      .filter((g) => g.items.length > 0);
+  }, [filteredPickerClients]);
 
   const load = async () => {
     const [s, c] = await Promise.all([api.get("/students"), api.get("/clients")]);
@@ -149,11 +192,9 @@ export default function Students() {
               <FileXls size={16} className="mr-1.5" /> Export XLSX
             </Button>
             {allowEdit && (
-            <DialogTrigger asChild>
-              <Button data-testid="add-student-btn" className="h-10 btn-amber border-0">
+              <Button onClick={openAddStudent} data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
               </Button>
-            </DialogTrigger>
             )}
           </div>
           <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -214,6 +255,81 @@ export default function Students() {
                 <Button type="submit" className="btn-amber border-0" data-testid="st-save">Add</Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Super-admin: client picker dialog (opens before the student form) */}
+        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+          <DialogContent className="max-w-lg p-0 overflow-hidden" data-testid="client-picker-dialog">
+            <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+              <DialogTitle className="flex items-center gap-2">
+                <UserCircle size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
+                Pick a reference
+              </DialogTitle>
+              <DialogDescription>
+                Select the client this admission should be attributed to. Skip to enrol without a reference.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-5 py-3 border-b border-border">
+              <div className="relative">
+                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, company or office…"
+                  value={pickerSearch}
+                  onChange={(e) => setPickerSearch(e.target.value)}
+                  className="pl-10 h-10"
+                  data-testid="client-picker-search"
+                />
+              </div>
+            </div>
+            <div className="max-h-[55vh] overflow-y-auto" data-testid="client-picker-list">
+              {pickerGroups.length === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground" data-testid="client-picker-empty">
+                  {clients.length === 0
+                    ? <>No clients yet. <Link to="/clients" onClick={() => setPickerOpen(false)} className="text-orange-600 dark:text-orange-400 underline">Add one</Link>.</>
+                    : "No clients matched your search."}
+                </div>
+              ) : (
+                pickerGroups.map((g) => (
+                  <div key={g.value} data-testid={`picker-group-${g.value}`}>
+                    <div className="px-5 py-2 bg-muted/40 border-b border-border flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground">{g.label}</span>
+                      <span className="text-[10px] text-muted-foreground/70">{g.items.length}</span>
+                    </div>
+                    {g.items.map((c) => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => pickClientAndEnrol(c)}
+                        data-testid={`picker-pick-${c.id}`}
+                        className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors border-b border-border/40"
+                      >
+                        <div className="w-9 h-9 rounded-md bg-muted text-foreground text-sm font-semibold flex items-center justify-center shrink-0">
+                          {(c.name || "?")[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {clientTypeLabel(c.client_type)}
+                            {c.client_type === "staff" && c.office ? ` · ${c.office.replace("KM_", "KM ")}` : ""}
+                            {c.company ? ` · ${c.company}` : ""}
+                          </p>
+                        </div>
+                        <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+            <DialogFooter className="px-5 py-3 border-t border-border">
+              <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
+                <X size={14} className="mr-1.5" /> Cancel
+              </Button>
+              <Button type="button" onClick={skipPicker} data-testid="picker-skip" className="bg-muted text-foreground hover:bg-muted/80">
+                Skip & enrol without reference
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </header>
