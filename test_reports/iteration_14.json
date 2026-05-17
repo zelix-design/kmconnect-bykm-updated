@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 14 — per-page permissions feature tested end-to-end. Backend: 14/14 pytest pass (test_iteration14.py): PATCH /api/users/{id}/permissions enforces super_admin-only (403 for office_admin), 400 on super_admin target, 400 on invalid level, persists via /auth/me. /auth/login + /auth/me responses include the `permissions` dict. require_edit dependency correctly returns 403 on POST/PATCH/DELETE for view/none and lets GET through for students, clients, transactions, expense_requests; PATCH /api/auth/me is gated by settings perm. Super admin bypasses all checks. Newly registered office_admin gets DEFAULT_PERMISSIONS (all-edit) and approval-handler also seeds defaults if missing. Frontend: super_admin → /users → Approved tab shows 16 cards each with [data-testid=permissions-<id>] (visible only on approved office-admins, not super-admin rows). Clicking opens [data-testid=permissions-dialog] with all 7 perm-row-* rows × 3 chip levels. After saving students=view + clients=none and re-logging in as blr1: nav-clients HIDDEN, nav-students visible, add-student-btn HIDDEN. After saving expense_requests=view + transactions=view: new-request-btn HIDDEN, add-transaction-btn HIDDEN, no edit-*/delete-* row buttons. FOUND + FIXED a critical crash bug in Transactions.jsx — `allowEdit` was referenced but never defined; added the missing `const allowEdit = canEdit(user, \"transactions\")` line. After fix, page renders for both super_admin (Add transaction + edit/delete row icons visible) and blr1-view (no write controls, no crash). blr1 permissions restored to all-edit at the end.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Transactions.jsx",
+        "issue": "FIXED by testing agent: `allowEdit` referenced on lines 105/204/205 but never declared, causing an uncaught ReferenceError that crashed the entire Transactions page for every user. Added `const allowEdit = canEdit(user, 'transactions');` near the other useState declarations to match the pattern used in Students/Clients/ExpenseRequests.",
+        "selector": "[data-testid=add-transaction-btn]",
+        "priority": "HIGH (now resolved)"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/test_reports/pytest/iteration14.xml"
+  ],
+  "action_items": [
+    "(none — testing agent already fixed the Transactions allowEdit crash. Main agent should review the one-line addition in Transactions.jsx.)"
+  ],
+  "critical_code_review_comments": [
+    "models.PERMISSION_PAGES is a tuple and DEFAULT_PERMISSIONS is built from it — clean, used consistently in auth.register, users.update_approval, users.update_permissions.",
+    "auth_lib.require_edit defaults a missing key to 'edit' which is the right back-compat behaviour for users created before the feature shipped. Super_admin role check happens BEFORE the perms lookup — correct.",
+    "users.update_permissions rebuilds the permissions map from PERMISSION_PAGES rather than blindly persisting the payload — prevents arbitrary keys from being stored and rejects unknown levels with 400. Good.",
+    "users.update_approval seeds DEFAULT_PERMISSIONS only when target.permissions is missing — does NOT clobber an admin who later re-approves a user whose permissions were previously customised. Correct behaviour.",
+    "Transactions.jsx had a missed change in iteration 14: `allowEdit` was referenced without being declared (Students/Clients/ExpenseRequests all declare it, only Transactions missed it). Fixed by testing agent. Recommend a lint rule (eslint no-undef) to catch this class of bug — react-app preset usually catches it; check whether the warning was being suppressed.",
+    "permissions feature is refreshed only on next login — documented in agent-to-agent context note. Users.jsx dialog description says 'Changes take effect on their next page load' which is slightly inaccurate (it's actually next login since useAuth caches user). Consider adding a refresh-me call or websocket push so changes apply immediately, OR update the wording to 'next sign-in'.",
+    "When clients=none is set, /clients nav hidden but the route still works if visited directly (no client-side route guard). Acceptable per spec but worth flagging — backend GET /api/clients is intentionally not gated and front-end relies on sidebar hiding only.",
+    "PermissionsUpdate model uses `permissions: dict` without Pydantic-level validation; route handler does the validation manually. Functional but a Literal-typed nested model would make the OpenAPI schema cleaner."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration14.py",
+    "/app/frontend/src/pages/Transactions.jsx"
+  ],
+  "success_rate": { "backend": "100% (14/14)", "frontend": "100% after the Transactions crash fix; the crash was found and resolved during this iteration" },
+  "test_credentials": "admin@finflow.com / Admin@123 (super_admin); blr1@finflow.com / Office@123 (office_admin, KM_BLR). blr1 permissions restored to all-edit at end of test run so prior iterations still work.",
+  "seed_data_creation": "Transient register/approve/delete of TEST_IT14_reg_<ts>@finflow.com to verify DEFAULT_PERMISSIONS seeding. Test cleans up after itself.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest backend/tests/test_iteration14.py -v (self-contained, loads frontend/.env). Testids added in iteration 14: permissions-<id> (per approved card), permissions-dialog, permissions-list, perm-row-{overview|quick_entry|transactions|clients|students|expense_requests|settings}, perm-{page}-{edit|view|none}, perm-reset, perm-save. Critical fix applied to Transactions.jsx (allowEdit declaration). The permissions list endpoint (GET /api/users?status=approved) currently returns 16 approved users in this env — be aware when filtering by email. Note that user.permissions is refreshed on next login (cached in useAuth), so toggling permissions for a user already in a session requires sign-out/sign-in.",
+  "rca of the issue": "Transactions.jsx crash: developer added perms-gating around the add-transaction button and per-row edit/delete buttons (`{allowEdit && ...}`) but forgot the corresponding `const allowEdit = canEdit(user, 'transactions');` declaration that the other three pages (Students, Clients, ExpenseRequests) all have. ReferenceError thrown during render → entire /transactions route crashes for ALL users (not just office_admins with restricted perms). Mitigation: added the missing declaration directly under `const currency = ...` line 20. Verified: super_admin and view-only blr1 both render without crash; blr1 sees no write controls."
+}

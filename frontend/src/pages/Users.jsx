@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
+import { PERMISSION_PAGES, PERMISSION_LEVELS, defaultPermissions } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass, Lock, ShieldCheck } from "@phosphor-icons/react";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -24,8 +25,11 @@ export default function Users() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [rejecting, setRejecting] = useState(null); // user obj or null
+  const [rejecting, setRejecting] = useState(null);
   const [note, setNote] = useState("");
+  const [permTarget, setPermTarget] = useState(null);     // user obj when permissions dialog is open
+  const [permDraft, setPermDraft] = useState({});         // working permission map
+  const [permSaving, setPermSaving] = useState(false);
 
   const load = async (status) => {
     setLoading(true);
@@ -72,6 +76,26 @@ export default function Users() {
       load(tab);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Delete failed");
+    }
+  };
+
+  const openPermissions = (u) => {
+    setPermTarget(u);
+    setPermDraft({ ...defaultPermissions(), ...(u.permissions || {}) });
+  };
+
+  const savePermissions = async () => {
+    if (!permTarget) return;
+    setPermSaving(true);
+    try {
+      await api.patch(`/users/${permTarget.id}/permissions`, { permissions: permDraft });
+      toast.success(`Permissions updated for ${permTarget.name}`);
+      setPermTarget(null);
+      load(tab);
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Save failed");
+    } finally {
+      setPermSaving(false);
     }
   };
 
@@ -169,6 +193,11 @@ export default function Users() {
                       <XCircle size={14} className="mr-1" /> Reject
                     </Button>
                   )}
+                  {u.approval_status === "approved" && (
+                    <Button size="sm" variant="outline" onClick={() => openPermissions(u)} data-testid={`permissions-${u.id}`} className="h-8">
+                      <Lock size={14} className="mr-1" /> Permissions
+                    </Button>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => remove(u)} data-testid={`delete-${u.id}`} className="h-8 text-muted-foreground hover:text-rose-600">
                     <Trash size={14} />
                   </Button>
@@ -193,6 +222,65 @@ export default function Users() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejecting(null)}>Cancel</Button>
             <Button onClick={reject} data-testid="reject-confirm" className="bg-rose-600 hover:bg-rose-700 text-white">Reject</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions dialog */}
+      <Dialog open={!!permTarget} onOpenChange={(o) => { if (!o) setPermTarget(null); }}>
+        <DialogContent className="max-w-lg" data-testid="permissions-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck size={20} weight="duotone" className="text-orange-600 dark:text-orange-400" />
+              {permTarget?.name} · permissions
+            </DialogTitle>
+            <DialogDescription>
+              Control what this office-admin can see and edit. Changes take effect on their next page load.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[55vh] overflow-y-auto py-2" data-testid="permissions-list">
+            {PERMISSION_PAGES.map((p) => (
+              <div key={p.key} className="rounded-lg border border-border bg-card p-3 flex flex-col sm:flex-row sm:items-center gap-3" data-testid={`perm-row-${p.key}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">{p.label}</p>
+                  <p className="text-[11px] text-muted-foreground">page key: <code>{p.key}</code></p>
+                </div>
+                <div className="flex gap-1 shrink-0 bg-muted/40 rounded-lg p-1">
+                  {PERMISSION_LEVELS.map((lv) => {
+                    const active = (permDraft[p.key] || "edit") === lv.value;
+                    return (
+                      <button
+                        key={lv.value}
+                        type="button"
+                        onClick={() => setPermDraft({ ...permDraft, [p.key]: lv.value })}
+                        data-testid={`perm-${p.key}-${lv.value}`}
+                        title={lv.hint}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${
+                          active
+                            ? lv.value === "edit"
+                              ? "bg-amber-gradient text-white shadow-sm"
+                              : lv.value === "view"
+                              ? "bg-sky-500 text-white shadow-sm"
+                              : "bg-rose-500 text-white shadow-sm"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {lv.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={() => setPermDraft(defaultPermissions())} data-testid="perm-reset" className="sm:mr-auto">
+              Reset to default (all edit)
+            </Button>
+            <Button variant="outline" onClick={() => setPermTarget(null)}>Cancel</Button>
+            <Button onClick={savePermissions} disabled={permSaving} data-testid="perm-save" className="btn-amber border-0">
+              {permSaving ? "Saving…" : "Save permissions"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

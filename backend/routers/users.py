@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
 from auth_lib import get_current_user
-from models import UserApprovalUpdate
+from models import UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -34,7 +34,31 @@ async def update_approval(user_id: str, payload: UserApprovalUpdate, user: dict 
     patch = {"approval_status": payload.status}
     if payload.note:
         patch["approval_note"] = payload.note
+    # When approving for the first time, seed default permissions if missing
+    if payload.status == "approved" and not target.get("permissions"):
+        patch["permissions"] = dict(DEFAULT_PERMISSIONS)
     await db.users.update_one({"id": user_id}, {"$set": patch})
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    return fresh
+
+
+@router.patch("/{user_id}/permissions")
+async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dict = Depends(get_current_user)):
+    """Super-admin only. Replaces the user's full permission map.
+    Permission keys must be in PERMISSION_PAGES; values must be one of edit/view/none."""
+    _require_super_admin(user)
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") == "super_admin":
+        raise HTTPException(status_code=400, detail="Super admin permissions cannot be changed")
+    cleaned: dict = {}
+    for page in PERMISSION_PAGES:
+        level = payload.permissions.get(page, "edit")
+        if level not in ("edit", "view", "none"):
+            raise HTTPException(status_code=400, detail=f"Invalid permission level for {page}: {level}")
+        cleaned[page] = level
+    await db.users.update_one({"id": user_id}, {"$set": {"permissions": cleaned}})
     fresh = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
     return fresh
 

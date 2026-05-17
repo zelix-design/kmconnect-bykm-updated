@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canEdit } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,7 @@ const empty = {
 export default function Clients() {
   const { user } = useAuth();
   const isOfficeAdmin = user?.role === "office_admin";
+  const allowEdit = canEdit(user, "clients");
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(isOfficeAdmin ? { ...empty, client_type: "staff", office: user?.office || "" } : empty);
@@ -136,11 +138,13 @@ export default function Clients() {
             </Select>
           )}
           <Dialog open={open} onOpenChange={setOpen}>
+            {allowEdit && (
             <DialogTrigger asChild>
               <Button onClick={openCreate} data-testid="add-client-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> {isOfficeAdmin ? "Add staff" : "Add client"}
               </Button>
             </DialogTrigger>
+            )}
             <DialogContent className="bg-card">
               <DialogHeader>
                 <DialogTitle className="font-display">{editing ? "Edit" : "Add"} {isStaff ? "staff" : "client"}</DialogTitle>
@@ -223,8 +227,8 @@ export default function Clients() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => openEdit(c)} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
-                  <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
+                  {allowEdit && <button onClick={() => openEdit(c)} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
+                  {allowEdit && <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
                 </div>
               </div>
               <div className="mt-3">

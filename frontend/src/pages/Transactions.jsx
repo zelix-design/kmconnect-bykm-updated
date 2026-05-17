@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canEdit } from "@/lib/perm";
 import { formatMoney, todayISO } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ const empty = { type: "expense", amount: "", account_id: "", category_id: "", da
 export default function Transactions() {
   const { user } = useAuth();
   const currency = user?.currency || "USD";
+  const allowEdit = canEdit(user, "transactions");
   const [list, setList] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -101,11 +103,13 @@ export default function Transactions() {
             </select>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
+            {allowEdit && (
             <DialogTrigger asChild>
               <Button onClick={openCreate} data-testid="add-transaction-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add transaction
               </Button>
             </DialogTrigger>
+            )}
             <DialogContent className="bg-card" data-testid="transaction-dialog">
               <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} transaction</DialogTitle></DialogHeader>
               <form onSubmit={submit} className="space-y-4">
@@ -198,8 +202,8 @@ export default function Transactions() {
                       {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, currency)}
                     </td>
                     <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                      <button onClick={() => openEdit(t)} data-testid={`edit-${t.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
-                      <button onClick={() => remove(t.id)} data-testid={`delete-${t.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
+                      {allowEdit && <button onClick={() => openEdit(t)} data-testid={`edit-${t.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
+                      {allowEdit && <button onClick={() => remove(t.id)} data-testid={`delete-${t.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
                     </td>
                   </tr>
                 ))}

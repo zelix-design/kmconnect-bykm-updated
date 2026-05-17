@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canEdit } from "@/lib/perm";
 import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ function recentRank(s) {
 
 export default function Students() {
   const { user } = useAuth();
+  const allowEdit = canEdit(user, "students");
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
@@ -142,11 +144,13 @@ export default function Students() {
             >
               <FileXls size={16} className="mr-1.5" /> Export XLSX
             </Button>
+            {allowEdit && (
             <DialogTrigger asChild>
               <Button data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
               </Button>
             </DialogTrigger>
+            )}
           </div>
           <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>

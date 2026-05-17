@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
-from auth_lib import get_current_user, gen_id, now_iso
+from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import TransactionIn
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
@@ -37,7 +37,7 @@ async def list_transactions(
 
 
 @router.post("")
-async def create_transaction(payload: TransactionIn, user: dict = Depends(get_current_user)):
+async def create_transaction(payload: TransactionIn, user: dict = Depends(require_edit("transactions"))):
     doc = {"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **payload.model_dump()}
     await db.transactions.insert_one(doc)
     doc.pop("_id", None)
@@ -45,7 +45,7 @@ async def create_transaction(payload: TransactionIn, user: dict = Depends(get_cu
 
 
 @router.patch("/{tx_id}")
-async def update_transaction(tx_id: str, payload: TransactionIn, user: dict = Depends(get_current_user)):
+async def update_transaction(tx_id: str, payload: TransactionIn, user: dict = Depends(require_edit("transactions"))):
     res = await db.transactions.update_one(
         {"id": tx_id, "user_id": user["id"]},
         {"$set": payload.model_dump()},
@@ -56,7 +56,7 @@ async def update_transaction(tx_id: str, payload: TransactionIn, user: dict = De
 
 
 @router.delete("/{tx_id}")
-async def delete_transaction(tx_id: str, user: dict = Depends(get_current_user)):
+async def delete_transaction(tx_id: str, user: dict = Depends(require_edit("transactions"))):
     res = await db.transactions.delete_one({"id": tx_id, "user_id": user["id"]})
     if res.deleted_count == 0:
         raise HTTPException(404, "Transaction not found")

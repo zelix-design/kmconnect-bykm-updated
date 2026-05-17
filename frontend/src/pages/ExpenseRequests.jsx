@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canEdit } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ function todayISO() {
 export default function ExpenseRequests() {
   const { user } = useAuth();
   const isSuper = user?.role === "super_admin";
+  const allowEdit = canEdit(user, "expense_requests");
   const currency = user?.currency || "INR";
 
   const [requests, setRequests] = useState([]);
@@ -180,7 +182,7 @@ export default function ExpenseRequests() {
               : "Raise an office expense or salary. A super admin will review and approve."}
           </p>
         </div>
-        {!isSuper && (
+        {!isSuper && allowEdit && (
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button data-testid="new-request-btn" className="btn-amber border-0">

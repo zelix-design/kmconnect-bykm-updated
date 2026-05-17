@@ -4,7 +4,7 @@ requester's books, debiting the chosen account."""
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
-from auth_lib import get_current_user, gen_id, now_iso
+from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import ExpenseRequestIn, ExpenseRequestApproval, ExpenseRequestRejection
 
 router = APIRouter(prefix="/api/expense-requests", tags=["expense-requests"])
@@ -39,7 +39,7 @@ async def list_requests(user: dict = Depends(get_current_user), status: str | No
 
 
 @router.post("")
-async def create_request(payload: ExpenseRequestIn, user: dict = Depends(get_current_user)):
+async def create_request(payload: ExpenseRequestIn, user: dict = Depends(require_edit("expense_requests"))):
     if user.get("role") != "office_admin":
         raise HTTPException(status_code=403, detail="Only office admins can submit expense requests")
     doc = {

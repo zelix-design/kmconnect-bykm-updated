@@ -6,7 +6,7 @@ import jwt
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Depends, HTTPException, Request, Response
 
 from db import db
 
@@ -78,3 +78,23 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+
+def require_edit(page: str):
+    """Dependency factory: ensures the current user has `edit` permission on a given page.
+    Super admins always pass. Office admins are checked against `user.permissions[page]`.
+    Missing permissions default to `edit` (backward-compatible with users created before
+    this feature shipped)."""
+    async def _checker(user: dict = Depends(get_current_user)) -> dict:
+        if user.get("role") == "super_admin":
+            return user
+        perms = user.get("permissions") or {}
+        level = perms.get(page) or "edit"
+        if level != "edit":
+            raise HTTPException(
+                status_code=403,
+                detail=f"You have {level}-only access to {page}",
+            )
+        return user
+    return _checker

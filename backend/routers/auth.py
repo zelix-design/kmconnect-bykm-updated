@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from db import db
 from auth_lib import (
     hash_password, verify_password, create_access_token,
-    set_auth_cookie, get_current_user, gen_id, now_iso,
+    set_auth_cookie, get_current_user, gen_id, now_iso, require_edit,
 )
-from models import RegisterIn, LoginIn, UserOut, SettingsUpdate
+from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISSIONS
 from seed import seed_user_defaults
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -34,6 +34,7 @@ async def register(payload: RegisterIn):
         "role": "office_admin",
         "office": payload.office,
         "approval_status": "pending",
+        "permissions": dict(DEFAULT_PERMISSIONS),
         "created_at": now_iso(),
     }
     await db.users.insert_one(doc)
@@ -76,7 +77,7 @@ async def me(user: dict = Depends(get_current_user)):
 
 
 @router.patch("/me", response_model=UserOut)
-async def update_settings(payload: SettingsUpdate, user: dict = Depends(get_current_user)):
+async def update_settings(payload: SettingsUpdate, user: dict = Depends(require_edit("settings"))):
     update = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})

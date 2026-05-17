@@ -8,6 +8,14 @@ OfficeCode = Literal["KM_BLR", "KM_TCR", "KM_KMLY"]
 UserRole = Literal["super_admin", "office_admin"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 
+# Page-level permission keys controllable by super_admin (office_admin only).
+PERMISSION_PAGES = (
+    "overview", "quick_entry", "transactions", "clients",
+    "students", "expense_requests", "settings",
+)
+PermissionLevel = Literal["edit", "view", "none"]
+DEFAULT_PERMISSIONS = {p: "edit" for p in PERMISSION_PAGES}
+
 
 class RegisterIn(BaseModel):
     email: EmailStr
@@ -31,12 +39,17 @@ class UserOut(BaseModel):
     role: UserRole = "office_admin"
     office: Optional[OfficeCode] = None
     approval_status: ApprovalStatus = "approved"
+    permissions: Optional[dict] = None
     created_at: str
 
 
 class UserApprovalUpdate(BaseModel):
     status: Literal["approved", "rejected"]
     note: Optional[str] = None
+
+
+class PermissionsUpdate(BaseModel):
+    permissions: dict  # validated in the route handler
 
 
 class SettingsUpdate(BaseModel):

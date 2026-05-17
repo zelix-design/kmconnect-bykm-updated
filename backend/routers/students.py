@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
 from db import db
-from auth_lib import get_current_user, gen_id, now_iso
+from auth_lib import get_current_user, gen_id, now_iso, require_edit
 
 
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -317,7 +317,7 @@ async def list_students(user: dict = Depends(get_current_user)):
 
 
 @router.post("")
-async def create_student(payload: StudentIn, user: dict = Depends(get_current_user)):
+async def create_student(payload: StudentIn, user: dict = Depends(require_edit("students"))):
     data = payload.model_dump()
     fees_plan = data.get("fees_plan")
     schedules = _merge_fees_plan_schedules([], fees_plan, set()) if fees_plan else []
@@ -476,7 +476,7 @@ async def agent_payments(
 
 
 @router.get("/{student_id}")
-async def get_student(student_id: str, user: dict = Depends(get_current_user)):
+async def get_student(student_id: str, user: dict = Depends(require_edit("students"))):
     s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
@@ -484,7 +484,7 @@ async def get_student(student_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.patch("/{student_id}")
-async def update_student(student_id: str, payload: StudentIn, user: dict = Depends(get_current_user)):
+async def update_student(student_id: str, payload: StudentIn, user: dict = Depends(require_edit("students"))):
     existing = await db.students.find_one(
         {"id": student_id, "user_id": user["id"]}, {"_id": 0}
     )
@@ -512,7 +512,7 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
 
 
 @router.delete("/{student_id}")
-async def delete_student(student_id: str, user: dict = Depends(get_current_user)):
+async def delete_student(student_id: str, user: dict = Depends(require_edit("students"))):
     # Cascade delete any auto-logged income transactions linked to this student.
     res = await db.students.delete_one({"id": student_id, "user_id": user["id"]})
     if res.deleted_count == 0:
@@ -524,7 +524,7 @@ async def delete_student(student_id: str, user: dict = Depends(get_current_user)
 
 
 @router.post("/{student_id}/incentive/mark-paid")
-async def mark_incentive_paid(student_id: str, user: dict = Depends(get_current_user)):
+async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit("students"))):
     """Mark the staff incentive earned on this admission as paid. Idempotent."""
     s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
     if not s:
@@ -537,7 +537,7 @@ async def mark_incentive_paid(student_id: str, user: dict = Depends(get_current_
 
 
 @router.post("/{student_id}/incentive/unmark-paid")
-async def unmark_incentive_paid(student_id: str, user: dict = Depends(get_current_user)):
+async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_edit("students"))):
     s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
@@ -557,7 +557,7 @@ async def _load_student_or_404(student_id: str, user_id: str) -> dict:
 
 
 @router.post("/{student_id}/schedules")
-async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = Depends(get_current_user)):
+async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = Depends(require_edit("students"))):
     await _load_student_or_404(student_id, user["id"])
     item = {"id": gen_id(), "created_at": now_iso(), **payload.model_dump()}
     await db.students.update_one(
@@ -569,7 +569,7 @@ async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = De
 
 
 @router.patch("/{student_id}/schedules/{schedule_id}")
-async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleItemIn, user: dict = Depends(get_current_user)):
+async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleItemIn, user: dict = Depends(require_edit("students"))):
     res = await db.students.update_one(
         {"id": student_id, "user_id": user["id"], "schedules.id": schedule_id},
         {"$set": {f"schedules.$.{k}": v for k, v in payload.model_dump().items()}},
@@ -581,7 +581,7 @@ async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleIt
 
 
 @router.delete("/{student_id}/schedules/{schedule_id}")
-async def delete_schedule(student_id: str, schedule_id: str, user: dict = Depends(get_current_user)):
+async def delete_schedule(student_id: str, schedule_id: str, user: dict = Depends(require_edit("students"))):
     res = await db.students.update_one(
         {"id": student_id, "user_id": user["id"]},
         {"$pull": {"schedules": {"id": schedule_id}}},
@@ -604,7 +604,7 @@ def _materialize_payment(payload: PaymentItemIn) -> dict:
 
 
 @router.post("/{student_id}/payments")
-async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depends(get_current_user)):
+async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depends(require_edit("students"))):
     student = await _load_student_or_404(student_id, user["id"])
     item = {"id": gen_id(), "created_at": now_iso(), **_materialize_payment(payload)}
     await db.students.update_one(
@@ -617,7 +617,7 @@ async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depe
 
 
 @router.patch("/{student_id}/payments/{payment_id}")
-async def update_payment(student_id: str, payment_id: str, payload: PaymentItemIn, user: dict = Depends(get_current_user)):
+async def update_payment(student_id: str, payment_id: str, payload: PaymentItemIn, user: dict = Depends(require_edit("students"))):
     data = _materialize_payment(payload)
     res = await db.students.update_one(
         {"id": student_id, "user_id": user["id"], "payments.id": payment_id},
@@ -634,7 +634,7 @@ async def update_payment(student_id: str, payment_id: str, payload: PaymentItemI
 
 
 @router.delete("/{student_id}/payments/{payment_id}")
-async def delete_payment(student_id: str, payment_id: str, user: dict = Depends(get_current_user)):
+async def delete_payment(student_id: str, payment_id: str, user: dict = Depends(require_edit("students"))):
     res = await db.students.update_one(
         {"id": student_id, "user_id": user["id"]},
         {"$pull": {"payments": {"id": payment_id}}},
