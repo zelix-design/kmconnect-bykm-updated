@@ -173,6 +173,34 @@
 - [ ] Payments timeline strip on invoice PDF · Date-range filter on student XLSX
 - [ ] Refactor Dashboard.jsx (>1000 lines) into smaller per-tile components
 
+## Implementation status — 2026-02-17 (iteration 15: Per-page Permissions · Super Admin gate)
+- [x] **PERMISSION_PAGES**: `overview`, `quick_entry`, `transactions`, `clients`, `students`, `expense_requests`, `settings` (7 controllable pages — matches the office_admin sidebar).
+- [x] **3 levels** per page: `edit` (full CRUD) · `view` (read-only) · `none` (page hidden from sidebar).
+- [x] **`PATCH /api/users/{id}/permissions`** — super_admin only. Validates each page key + level; rebuilds the map to prevent arbitrary fields. Super_admin targets rejected (400).
+- [x] **`auth_lib.require_edit(page)`** dependency — super_admin always passes; office_admin checked against `user.permissions[page]`. Missing key defaults to `edit` (back-compat). Returns 403 with clear message.
+- [x] **Write endpoints gated**:
+  - transactions: POST, PATCH, DELETE → `transactions`
+  - clients: POST, PATCH, DELETE → `clients`
+  - students: POST, PATCH, DELETE + schedule/payment/incentive endpoints → `students`
+  - expense-requests: POST → `expense_requests`
+  - settings: PATCH /auth/me → `settings`
+  - Reads (GET) always allowed — sidebar gating handles `none` visually.
+- [x] **Defaults**: new office_admin (register OR approval) gets `{all pages: edit}`. Super_admin permissions are never editable.
+- [x] **Frontend `lib/perm.js`**: `canEdit`, `canView`, `permFor`, `defaultPermissions`, `PERMISSION_PAGES`, `PERMISSION_LEVELS`.
+- [x] **AppShell sidebar** filters nav items by `canView(user, item.perm)`.
+- [x] **Page write-button gating**: Students (add-student-btn), Clients (add-client-btn + edit-cli/delete-cli per row), Transactions (add-transaction-btn + edit/delete per row), ExpenseRequests (new-request-btn) — all conditional on `canEdit(user, page)`.
+- [x] **Super Admin Permissions Dialog** on `/users` Approved tab — `data-testid=permissions-<id>` button per card → opens `permissions-dialog` with 7 rows × 3 chips (edit / view / none) + Reset to default + Save.
+- [x] **100% regression** — iteration_14.json: backend 14/14 pytest pass · frontend all flows pass.
+- [x] **Note**: permissions refresh on the office_admin's **next sign-in** (useAuth caches user). Backend always enforces fresh from DB on every API call, so cached UI is just visual.
+
+## Phase 4 (future) — Polish
+- [ ] Live-refresh permissions in office_admin's session (websocket or polling, or simple `refresh on focus`).
+- [ ] Add a client-side route guard so direct URL navigation to a `none` page redirects to /.
+- [ ] Auto-create salary expense_request when marking incentive paid.
+- [ ] Email notifications on register / approve / reject / new expense request.
+- [ ] Brute-force lockout on login (5-fail → 15 min).
+- [ ] Refactor Dashboard.jsx (>1000 lines) into smaller per-tile components.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

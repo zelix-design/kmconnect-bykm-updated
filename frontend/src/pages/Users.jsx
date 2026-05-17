@@ -235,7 +235,7 @@ export default function Users() {
               {permTarget?.name} · permissions
             </DialogTitle>
             <DialogDescription>
-              Control what this office-admin can see and edit. Changes take effect on their next page load.
+              Control what this office-admin can see and edit. Changes take effect on their next sign-in.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[55vh] overflow-y-auto py-2" data-testid="permissions-list">
