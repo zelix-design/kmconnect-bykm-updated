@@ -142,17 +142,20 @@ export default function Students() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Reference</Label>
+                  <Label>Reference (staff)</Label>
                   <Select
                     value={form.reference || "_none"}
                     onValueChange={(v) => setForm({ ...form, reference: v === "_none" ? "" : v })}
                   >
-                    <SelectTrigger data-testid="st-reference"><SelectValue placeholder="Select referring client" /></SelectTrigger>
+                    <SelectTrigger data-testid="st-reference"><SelectValue placeholder="Pick the referring staff" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_none">— None —</SelectItem>
-                      {clients.map((c) => (
+                      {clients.filter((c) => c.client_type === "staff").map((c) => (
                         <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                       ))}
+                      {clients.filter((c) => c.client_type === "staff").length === 0 && (
+                        <SelectItem value="_no_staff" disabled>No staff yet — add them in Clients</SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>

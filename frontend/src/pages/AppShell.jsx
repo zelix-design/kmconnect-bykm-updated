@@ -5,18 +5,24 @@ import { useTheme } from "@/lib/theme";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass, Bell,
+  ShieldCheck, ReceiptX,
 } from "@phosphor-icons/react";
 
-const navItems = [
+// Sidebar nav with role gating.
+//   roles: array of roles that can see this item. Omitting `roles` means all.
+const ALL_NAV = [
   { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview" },
   { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry" },
   { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions" },
-  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts" },
-  { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices" },
+  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", roles: ["super_admin"] },
+  { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices", roles: ["super_admin"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students" },
-  { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger" },
-  { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories" },
+  { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
+  { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
+  { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"] },
+  { to: "/users", label: "Team", icon: ShieldCheck, tid: "nav-users", roles: ["super_admin"] },
+  { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories", roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings" },
 ];
 
@@ -31,6 +37,8 @@ const PAGE_TITLES = {
   "/agents": "Sub-agent Ledger",
   "/categories": "Categories",
   "/settings": "Settings",
+  "/users": "Team & approvals",
+  "/expense-requests": "Expense requests",
 };
 
 function initialsOf(name) {
@@ -39,7 +47,8 @@ function initialsOf(name) {
   return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
 }
 
-function SidebarContent({ onItemClick }) {
+function SidebarContent({ onItemClick, role }) {
+  const navItems = ALL_NAV.filter((i) => !i.roles || i.roles.includes(role));
   return (
     <>
       {/* Brand */}
@@ -120,7 +129,7 @@ export default function AppShell() {
         className="hidden md:flex w-64 shrink-0 flex-col border-r bg-[hsl(var(--sidebar-bg))] border-[hsl(var(--sidebar-border))] sticky top-0 h-screen"
         data-testid="desktop-sidebar"
       >
-        <SidebarContent user={user} onLogout={handleLogout} />
+        <SidebarContent role={user?.role} />
       </aside>
 
       {/* Mobile Drawer */}
@@ -132,7 +141,7 @@ export default function AppShell() {
             data-testid="mobile-drawer-overlay"
           />
           <aside className="md:hidden fixed top-0 left-0 z-50 w-72 h-full bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] flex flex-col animate-fade-in" data-testid="mobile-drawer">
-            <SidebarContent user={user} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
+            <SidebarContent role={user?.role} onItemClick={() => setMobileOpen(false)} />
           </aside>
         </>
       )}

@@ -5,15 +5,23 @@ import { useTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet, ArrowRight, Sun, Moon, Sparkle, ShieldCheck, ChartBar } from "@phosphor-icons/react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Wallet, ArrowRight, Sun, Moon, Sparkle, ShieldCheck, ChartBar, ClockClockwise } from "@phosphor-icons/react";
+
+const OFFICES = [
+  { value: "KM_BLR", label: "KM Bengaluru (BLR)" },
+  { value: "KM_TCR", label: "KM Thrissur (TCR)" },
+  { value: "KM_KMLY", label: "KM Kumily (KMLY)" },
+];
 
 export default function AuthPage({ mode }) {
   const isLogin = mode === "login";
   const { login, register, error, setError } = useAuth();
   const { theme, toggle } = useTheme();
   const nav = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "", name: "", business_name: "" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", office: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [pendingMsg, setPendingMsg] = useState("");
 
   const handle = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -21,11 +29,22 @@ export default function AuthPage({ mode }) {
     e.preventDefault();
     setSubmitting(true);
     setError("");
-    const ok = isLogin
-      ? await login(form.email, form.password)
-      : await register({ email: form.email, password: form.password, name: form.name, business_name: form.business_name });
-    setSubmitting(false);
-    if (ok) nav("/");
+    if (isLogin) {
+      const ok = await login(form.email, form.password);
+      setSubmitting(false);
+      if (ok) nav("/");
+    } else {
+      if (!form.office) {
+        setError("Please select your office.");
+        setSubmitting(false);
+        return;
+      }
+      const res = await register({ email: form.email, password: form.password, name: form.name, office: form.office });
+      setSubmitting(false);
+      if (res.ok && res.pending) {
+        setPendingMsg(res.message || "Your account is awaiting super-admin approval.");
+      }
+    }
   };
 
   return (
@@ -93,15 +112,30 @@ export default function AuthPage({ mode }) {
                 <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">by KM Foundation</span>
               </div>
             </div>
-            <p className="label-eyebrow">{isLogin ? "Welcome back" : "Get started"}</p>
+            <p className="label-eyebrow">{isLogin ? "Welcome back" : (pendingMsg ? "Almost there" : "Get started")}</p>
             <h2 className="font-display text-3xl sm:text-4xl font-semibold text-foreground tracking-tight">
-              {isLogin ? "Sign in to your ledger" : "Create your workspace"}
+              {isLogin ? "Sign in to your ledger" : (pendingMsg ? "Awaiting approval" : "Request office access")}
             </h2>
             <p className="text-muted-foreground text-sm">
-              {isLogin ? "Pick up where you left off." : "Free during preview. No card required."}
+              {isLogin ? "Pick up where you left off." : (pendingMsg ? "A super admin will review your request shortly." : "Register your office and a super admin will activate your access.")}
             </p>
           </div>
 
+          {pendingMsg ? (
+            <div className="space-y-4" data-testid="auth-pending-screen">
+              <div className="rounded-xl border border-orange-500/30 bg-orange-500/5 dark:bg-orange-500/10 p-5 flex gap-4">
+                <ClockClockwise size={28} weight="duotone" className="text-orange-600 dark:text-orange-400 shrink-0" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Account created successfully</p>
+                  <p className="text-sm text-muted-foreground">{pendingMsg}</p>
+                  <p className="text-xs text-muted-foreground">We'll email you once approved. You can close this page.</p>
+                </div>
+              </div>
+              <Link to="/login" data-testid="back-to-login" className="inline-flex items-center gap-1.5 text-sm text-orange-600 dark:text-orange-400 font-medium hover:text-orange-700">
+                <ArrowRight size={14} className="rotate-180" /> Back to sign in
+              </Link>
+            </div>
+          ) : (
           <form onSubmit={submit} className="space-y-4" data-testid="auth-form">
             {!isLogin && (
               <>
@@ -110,8 +144,17 @@ export default function AuthPage({ mode }) {
                   <Input id="name" data-testid="register-name-input" value={form.name} onChange={handle("name")} required placeholder="Jane Doe" className="h-11" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="business_name">Business name (optional)</Label>
-                  <Input id="business_name" data-testid="register-business-input" value={form.business_name} onChange={handle("business_name")} placeholder="Acme Co." className="h-11" />
+                  <Label htmlFor="office">Office</Label>
+                  <Select value={form.office} onValueChange={(v) => setForm({ ...form, office: v })}>
+                    <SelectTrigger id="office" data-testid="register-office-select" className="h-11 bg-card">
+                      <SelectValue placeholder="Pick the office you manage" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OFFICES.map((o) => (
+                        <SelectItem key={o.value} value={o.value} data-testid={`office-opt-${o.value}`}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}
@@ -136,11 +179,13 @@ export default function AuthPage({ mode }) {
               data-testid="auth-submit-btn"
               className="w-full h-12 btn-amber border-0 font-medium text-base"
             >
-              {submitting ? "Please wait…" : (isLogin ? "Sign in" : "Create account")}
+              {submitting ? "Please wait…" : (isLogin ? "Sign in" : "Request access")}
               <ArrowRight size={16} className="ml-2" />
             </Button>
           </form>
+          )}
 
+          {!pendingMsg && (
           <div className="text-sm text-muted-foreground">
             {isLogin ? (
               <>New here?{" "}<Link to="/register" data-testid="link-register" className="text-orange-600 dark:text-orange-400 font-medium underline underline-offset-4 hover:text-orange-700">Create an account</Link></>
@@ -148,6 +193,7 @@ export default function AuthPage({ mode }) {
               <>Already have an account?{" "}<Link to="/login" data-testid="link-login" className="text-orange-600 dark:text-orange-400 font-medium underline underline-offset-4 hover:text-orange-700">Sign in</Link></>
             )}
           </div>
+          )}
 
           {isLogin && (
             <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3 border border-border">

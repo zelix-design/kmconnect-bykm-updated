@@ -60,19 +60,37 @@ async def seed_admin_and_backfill() -> None:
         await db.users.insert_one({
             "id": user_id,
             "email": admin_email,
-            "name": "Demo Admin",
-            "business_name": "FinFlow Demo Co.",
+            "name": "Super Admin",
+            "business_name": "FinFlow by KM Foundation",
             "password_hash": hash_password(admin_password),
-            "currency": "USD",
-            "role": "admin",
+            "currency": "INR",
+            "role": "super_admin",
+            "office": None,
+            "approval_status": "approved",
             "created_at": now_iso(),
         })
         await seed_user_defaults(user_id)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password)}},
-        )
+    else:
+        # Ensure role / approval_status are correct (idempotent backfill)
+        patch = {}
+        if existing.get("role") != "super_admin":
+            patch["role"] = "super_admin"
+        if existing.get("approval_status") != "approved":
+            patch["approval_status"] = "approved"
+        if not verify_password(admin_password, existing["password_hash"]):
+            patch["password_hash"] = hash_password(admin_password)
+        if patch:
+            await db.users.update_one({"email": admin_email}, {"$set": patch})
+
+    # Backfill role + approval_status for legacy users so they can still log in.
+    await db.users.update_many(
+        {"role": {"$nin": ["super_admin", "office_admin"]}},
+        {"$set": {"role": "office_admin"}},
+    )
+    await db.users.update_many(
+        {"approval_status": {"$exists": False}},
+        {"$set": {"approval_status": "approved"}},  # existing users remain logged in
+    )
 
     # Backfill missing default categories for existing users (idempotent)
     async for u in db.users.find({}, {"id": 1, "_id": 0}):

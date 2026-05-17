@@ -12,11 +12,17 @@ from seed import seed_user_defaults
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=UserOut)
-async def register(payload: RegisterIn, response: Response):
+@router.post("/register")
+async def register(payload: RegisterIn):
+    """Office-admin self-registration. Account is created with approval_status='pending'
+    and the user CANNOT log in until a super_admin approves them. We do NOT set the
+    auth cookie here — the user must wait."""
     email = payload.email.lower().strip()
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=400, detail="Email already registered")
+    if not payload.office:
+        raise HTTPException(status_code=400, detail="Office is required for registration")
+
     user_id = gen_id()
     doc = {
         "id": user_id,
@@ -24,17 +30,20 @@ async def register(payload: RegisterIn, response: Response):
         "name": payload.name,
         "business_name": payload.business_name,
         "password_hash": hash_password(payload.password),
-        "currency": "USD",
-        "role": "user",
+        "currency": "INR",
+        "role": "office_admin",
+        "office": payload.office,
+        "approval_status": "pending",
         "created_at": now_iso(),
     }
     await db.users.insert_one(doc)
+    # Seed defaults so the office admin has accounts/categories ready upon approval
     await seed_user_defaults(user_id)
-    token = create_access_token(user_id, email)
-    set_auth_cookie(response, token)
-    doc.pop("password_hash", None)
-    doc.pop("_id", None)
-    return doc
+    return {
+        "ok": True,
+        "approval_status": "pending",
+        "message": "Account created. A super admin will review and approve your access shortly.",
+    }
 
 
 @router.post("/login", response_model=UserOut)
@@ -43,6 +52,11 @@ async def login(payload: LoginIn, response: Response):
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    status = user.get("approval_status", "approved")
+    if status == "pending":
+        raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")
+    if status == "rejected":
+        raise HTTPException(status_code=403, detail="Your access request was rejected. Please contact the super admin.")
     token = create_access_token(user["id"], email)
     set_auth_cookie(response, token)
     user.pop("password_hash", None)

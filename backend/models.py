@@ -4,11 +4,17 @@ from pydantic import BaseModel, Field, EmailStr
 
 
 # ---------- Users ----------
+OfficeCode = Literal["KM_BLR", "KM_TCR", "KM_KMLY"]
+UserRole = Literal["super_admin", "office_admin"]
+ApprovalStatus = Literal["pending", "approved", "rejected"]
+
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str
     business_name: Optional[str] = None
+    office: Optional[OfficeCode] = None  # required for office_admin signups
 
 
 class LoginIn(BaseModel):
@@ -22,8 +28,15 @@ class UserOut(BaseModel):
     name: str
     business_name: Optional[str] = None
     currency: str = "USD"
-    role: str = "user"
+    role: UserRole = "office_admin"
+    office: Optional[OfficeCode] = None
+    approval_status: ApprovalStatus = "approved"
     created_at: str
+
+
+class UserApprovalUpdate(BaseModel):
+    status: Literal["approved", "rejected"]
+    note: Optional[str] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -47,6 +60,7 @@ ClientType = Literal[
     "km_blr_office",
     "km_tcr_office",
     "km_kmly_office",
+    "staff",
 ]
 
 
@@ -56,6 +70,30 @@ class ClientIn(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     company: Optional[str] = None
+    # Staff-specific fields (also usable for sub-agents/associates if desired)
+    office: Optional[OfficeCode] = None
+    eligible_incentive: Optional[float] = None  # ₹ per admission for staff
+    date_of_birth: Optional[str] = None  # ISO date
+
+
+# ---------- Expense Requests (Office Admin → Super Admin approval) ----------
+class ExpenseRequestIn(BaseModel):
+    amount: float = Field(gt=0)
+    category_id: Optional[str] = None
+    account_id: Optional[str] = None  # suggested account to debit; super admin can override on approval
+    date: str
+    description: Optional[str] = ""
+    urgency: Literal["normal", "urgent"] = "normal"
+    kind: Literal["expense", "salary"] = "expense"  # salary tagged separately for reporting
+
+
+class ExpenseRequestApproval(BaseModel):
+    account_id: str  # actual account to debit on approval
+    note: Optional[str] = None
+
+
+class ExpenseRequestRejection(BaseModel):
+    note: Optional[str] = None
 
 
 # ---------- Categories ----------

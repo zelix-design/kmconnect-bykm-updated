@@ -34,11 +34,11 @@ export function AuthProvider({ children }) {
     setError("");
     try {
       const { data } = await api.post("/auth/register", payload);
-      setUser(data);
-      return true;
+      // Backend returns {ok, approval_status, message} — user must be approved before login
+      return { ok: true, pending: data?.approval_status === "pending", message: data?.message };
     } catch (e) {
       setError(formatApiError(e.response?.data?.detail) || e.message);
-      return false;
+      return { ok: false };
     }
   };
 

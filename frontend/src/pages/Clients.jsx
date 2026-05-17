@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const CLIENT_TYPES = [
+  { value: "staff", label: "Our Staff" },
   { value: "sub_agent_associate", label: "Sub Agent / Associate" },
   { value: "associate_consultant", label: "Associate Consultant" },
   { value: "km_blr_office", label: "KM BLR Office" },
@@ -17,11 +19,18 @@ export const CLIENT_TYPES = [
   { value: "km_kmly_office", label: "KM KMLY Office" },
 ];
 
+const OFFICES = [
+  { value: "KM_BLR", label: "KM BLR" },
+  { value: "KM_TCR", label: "KM TCR" },
+  { value: "KM_KMLY", label: "KM KMLY" },
+];
+
 export function clientTypeLabel(v) {
   return CLIENT_TYPES.find((t) => t.value === v)?.label || "—";
 }
 
 const TYPE_BADGE = {
+  staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
   sub_agent_associate: "bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400",
   associate_consultant: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400",
   km_blr_office: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -29,32 +38,51 @@ const TYPE_BADGE = {
   km_kmly_office: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
 };
 
-const empty = { name: "", client_type: "sub_agent_associate", email: "", phone: "", company: "" };
+const empty = {
+  name: "", client_type: "sub_agent_associate", email: "", phone: "", company: "",
+  office: "", eligible_incentive: "", date_of_birth: "",
+};
 
 export default function Clients() {
+  const { user } = useAuth();
+  const isOfficeAdmin = user?.role === "office_admin";
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(isOfficeAdmin ? { ...empty, client_type: "staff", office: user?.office || "" } : empty);
   const [editing, setEditing] = useState(null);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState(isOfficeAdmin ? "staff" : "all");
 
   const load = async () => { setList((await api.get("/clients")).data); };
   useEffect(() => { load(); }, []);
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return list;
-    return list.filter((c) => c.client_type === filter);
-  }, [list, filter]);
+  // Office-admin only sees staff in their workspace
+  const visibleTypes = isOfficeAdmin ? CLIENT_TYPES.filter((t) => t.value === "staff") : CLIENT_TYPES;
 
-  const openCreate = () => { setEditing(null); setForm(empty); setOpen(true); };
+  const filtered = useMemo(() => {
+    let l = list;
+    if (isOfficeAdmin) l = l.filter((c) => c.client_type === "staff");
+    if (filter !== "all") l = l.filter((c) => c.client_type === filter);
+    return l;
+  }, [list, filter, isOfficeAdmin]);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(isOfficeAdmin
+      ? { ...empty, client_type: "staff", office: user?.office || "" }
+      : empty);
+    setOpen(true);
+  };
   const openEdit = (c) => {
     setEditing(c);
     setForm({
       name: c.name,
-      client_type: c.client_type || "sub_agent_associate",
+      client_type: c.client_type || (isOfficeAdmin ? "staff" : "sub_agent_associate"),
       email: c.email || "",
       phone: c.phone || "",
       company: c.company || "",
+      office: c.office || "",
+      eligible_incentive: c.eligible_incentive ?? "",
+      date_of_birth: c.date_of_birth || "",
     });
     setOpen(true);
   };
@@ -62,58 +90,72 @@ export default function Clients() {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.client_type) { toast.error("Client Type is required"); return; }
+    const payload = {
+      ...form,
+      office: form.office || null,
+      eligible_incentive: form.eligible_incentive === "" ? null : Number(form.eligible_incentive),
+      date_of_birth: form.date_of_birth || null,
+    };
     try {
-      if (editing) await api.patch(`/clients/${editing.id}`, form);
-      else await api.post("/clients", form);
-      toast.success(editing ? "Client updated" : "Client added");
+      if (editing) await api.patch(`/clients/${editing.id}`, payload);
+      else await api.post("/clients", payload);
+      toast.success(editing ? "Saved" : "Added");
       setOpen(false); load();
     } catch { toast.error("Failed"); }
   };
 
   const remove = async (id) => {
-    if (!confirm("Delete client?")) return;
+    if (!window.confirm("Delete this entry?")) return;
     await api.delete(`/clients/${id}`);
     toast.success("Deleted"); load();
   };
+
+  const isStaff = form.client_type === "staff";
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="clients-page">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="label-eyebrow">People</p>
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Clients</h1>
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">
+            {isOfficeAdmin ? "Our Staff" : "Clients"}
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="h-10 w-56" data-testid="cli-filter-type">
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {CLIENT_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!isOfficeAdmin && (
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="h-10 w-56" data-testid="cli-filter-type">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {CLIENT_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button onClick={openCreate} data-testid="add-client-btn" className="h-10 btn-amber border-0">
-                <Plus size={16} className="mr-1.5" /> Add client
+                <Plus size={16} className="mr-1.5" /> {isOfficeAdmin ? "Add staff" : "Add client"}
               </Button>
             </DialogTrigger>
             <DialogContent className="bg-card">
               <DialogHeader>
-                <DialogTitle className="font-display">{editing ? "Edit" : "Add"} client</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">Enrol a routing partner (sub-agent / associate / KM office).</DialogDescription>
+                <DialogTitle className="font-display">{editing ? "Edit" : "Add"} {isStaff ? "staff" : "client"}</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {isStaff ? "Onboard a staff member with their birthday and incentive eligibility." : "Enrol a routing partner."}
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={submit} className="space-y-4">
                 <div><Label>Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="cli-name" /></div>
                 <div>
-                  <Label>Client Type *</Label>
-                  <Select value={form.client_type} onValueChange={(v) => setForm({ ...form, client_type: v })}>
+                  <Label>Type *</Label>
+                  <Select value={form.client_type} onValueChange={(v) => setForm({ ...form, client_type: v })} disabled={isOfficeAdmin}>
                     <SelectTrigger data-testid="cli-type"><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
-                      {CLIENT_TYPES.map((t) => (
+                      {visibleTypes.map((t) => (
                         <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -123,7 +165,34 @@ export default function Clients() {
                   <div><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} data-testid="cli-email" /></div>
                   <div><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} data-testid="cli-phone" /></div>
                 </div>
-                <div><Label>Company</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="cli-company" /></div>
+                {isStaff ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Office</Label>
+                        <Select value={form.office || ""} onValueChange={(v) => setForm({ ...form, office: v })}>
+                          <SelectTrigger data-testid="cli-office"><SelectValue placeholder="Pick office" /></SelectTrigger>
+                          <SelectContent>
+                            {OFFICES.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Date of birth</Label>
+                        <Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} data-testid="cli-dob" />
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Eligible incentive (₹ per admission)</Label>
+                      <Input type="number" min="0" step="50" value={form.eligible_incentive} onChange={(e) => setForm({ ...form, eligible_incentive: e.target.value })} placeholder="e.g. 500" data-testid="cli-incentive" />
+                      <p className="text-[11px] text-muted-foreground mt-1">Paid out once the staff hits 3+ admissions in a month.</p>
+                    </div>
+                  </>
+                ) : (
+                  <div><Label>Company</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="cli-company" /></div>
+                )}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                   <Button type="submit" className="btn-amber border-0" data-testid="cli-save">{editing ? "Save" : "Add"}</Button>
@@ -136,7 +205,7 @@ export default function Clients() {
 
       {filtered.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none" data-testid="empty-clients">
-          {list.length === 0 ? "No clients yet." : "No clients match this filter."}
+          {list.length === 0 ? (isOfficeAdmin ? "No staff yet. Add your first." : "No clients yet.") : "No entries match this filter."}
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -150,6 +219,7 @@ export default function Clients() {
                   <div>
                     <p className="font-medium">{c.name}</p>
                     {c.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.company}</p>}
+                    {c.client_type === "staff" && c.office && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.office.replace("KM_", "KM ")}</p>}
                   </div>
                 </div>
                 <div className="flex gap-1">
@@ -165,6 +235,12 @@ export default function Clients() {
               <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
                 {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}
                 {c.phone && <p className="flex items-center gap-2"><Phone size={14} /> {c.phone}</p>}
+                {c.client_type === "staff" && c.date_of_birth && (
+                  <p className="flex items-center gap-2"><Cake size={14} /> {new Date(c.date_of_birth).toLocaleDateString()}</p>
+                )}
+                {c.client_type === "staff" && c.eligible_incentive != null && (
+                  <p className="flex items-center gap-2"><CurrencyInr size={14} /> ₹{c.eligible_incentive}/admission</p>
+                )}
               </div>
             </Card>
           ))}
