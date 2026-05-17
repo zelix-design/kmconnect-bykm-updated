@@ -93,14 +93,17 @@ export default function Students() {
   };
 
   const filteredPickerClients = useMemo(() => {
-    if (!pickerSearch) return clients;
+    // Defense-in-depth: office admins only ever pick from staff. Their /clients data
+    // is staff-only today, but if that invariant ever breaks the filter still holds.
+    let base = isSuper ? clients : clients.filter((c) => c.client_type === "staff");
+    if (!pickerSearch) return base;
     const q = pickerSearch.toLowerCase();
-    return clients.filter((c) =>
+    return base.filter((c) =>
       (c.name || "").toLowerCase().includes(q) ||
       (c.company || "").toLowerCase().includes(q) ||
       (c.office || "").toLowerCase().includes(q)
     );
-  }, [clients, pickerSearch]);
+  }, [clients, pickerSearch, isSuper]);
 
   const pickerGroups = useMemo(() => {
     return CLIENT_TYPES

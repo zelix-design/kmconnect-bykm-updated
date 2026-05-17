@@ -252,6 +252,20 @@
 - [x] **`emptyForm()` helper** used to reset the form on each picker open — guarantees no stale references leak between sessions.
 - [x] **100% regression** — iteration_17.json: 13/13 frontend checks pass, zero defects, all reviewed code paths clean.
 
+## Implementation status — 2026-02-17 (iteration 21: Super-admin aggregation across users + role-aware picker)
+- [x] **Backend cross-user aggregation** for super_admin:
+  - `GET /api/clients` — super_admin gets clients from ALL users; office_admin scope unchanged.
+  - `GET /api/students` — super_admin gets students from ALL users; aggregated `collected_total` + `balance_vs_sc` summaries preserved.
+  - Each office_admin-owned doc gets `_creator_name` + `_creator_office` for UI attribution. Super_admin's own docs have no creator fields. Stale/deleted users skipped silently.
+- [x] **Creator badges** in UI:
+  - Clients page: `cli-creator-<id>` orange chip with KM_BLR/TCR/KMLY office label
+  - Students page: `st-creator-<id>` orange chip with full "KM_BLR · BLR Office Admin"
+- [x] **Add Student picker now role-aware**:
+  - Super admin: picker title "Pick a reference", lists all clients grouped by category
+  - Office admin: picker title "Pick the referring staff", description guides skip option, only staff visible (with defense-in-depth `client_type === 'staff'` filter even if /clients ever returns non-staff)
+- [x] **Office admin's Quick Entry → Add Student** now navigates to `/students?new=1` which triggers the picker (was: opened form directly). Office Dashboard's "Add an admission" → `/students?new=1&staff=<name>` still skips the picker and goes straight to the form with reference pre-filled.
+- [x] **100% regression** — iteration_18.json: backend 8/8 pytest pass, frontend 15/15 acceptance checks pass.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
