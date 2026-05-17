@@ -193,13 +193,18 @@
 - [x] **100% regression** — iteration_14.json: backend 14/14 pytest pass · frontend all flows pass.
 - [x] **Note**: permissions refresh on the office_admin's **next sign-in** (useAuth caches user). Backend always enforces fresh from DB on every API call, so cached UI is just visual.
 
-## Phase 4 (future) — Polish
-- [ ] Live-refresh permissions in office_admin's session (websocket or polling, or simple `refresh on focus`).
-- [ ] Add a client-side route guard so direct URL navigation to a `none` page redirects to /.
-- [ ] Auto-create salary expense_request when marking incentive paid.
-- [ ] Email notifications on register / approve / reject / new expense request.
-- [ ] Brute-force lockout on login (5-fail → 15 min).
-- [ ] Refactor Dashboard.jsx (>1000 lines) into smaller per-tile components.
+## Implementation status — 2026-02-17 (iteration 16: Polish + Phase-4 partials)
+- [x] **Brute-force lockout** — 5 failed login attempts on the same email → HTTP 429 with 15-minute lock. Successful login clears the counter. Per-email scope (no IP). Unique index on `login_attempts.email` (with auto-dedupe fallback if legacy duplicates exist on first boot).
+- [x] **Live-refresh permissions** — `auth.jsx` listens to `visibilitychange` + `window.focus` and refetches `/auth/me`. Office admins see super-admin permission changes without logging out.
+- [x] **Client-side route guard** — `<PermGate page="…">` wraps `/`, `/quick-entry`, `/transactions`, `/clients`, `/students`, `/students/:id`, `/settings`, `/expense-requests`. Direct URL nav to a `none` page redirects to `/` with a toast. Super admin always bypasses.
+- [x] **`overview` cannot be set to `none`** — backend silently coerces it to `view` to prevent a redirect loop (the route guard's home target).
+- [x] **Salary auto-request on mark-paid** — office_admin's `POST /api/students/{id}/incentive/mark-paid` auto-creates a `kind='salary'` pending `expense_request` with `linked_student_id`, amount = staff.eligible_incentive, description = "Incentive payout · student NAME (ref: STAFF)". Idempotent. Super-admin path does NOT auto-create. `unmark-paid` deletes the pending request (skips already-approved ones).
+- [x] **UI toast text** clarifies the auto-request on mark-paid / unmark-paid.
+- [x] **100% regression** — iteration_15.json: backend 9/9 pytest pass, frontend live-refresh + route guard + super-admin bypass all verified. Zero defects, two minor code-review notes (redirect-loop & dedupe) ADDRESSED in this commit.
+
+## Phase 4 backlog still open
+- [ ] **Push notifications** — Web Push API (service worker + VAPID keys) for in-browser notifications on register / approve / new request / etc. Requires user confirmation on scope (in-app bell list vs browser push vs both).
+- [ ] **Split Dashboard.jsx** (>1000 lines) into smaller per-tile components (`OverviewTiles.jsx`, `EnrollmentList.jsx`, `LedgerOverview.jsx`, etc.) — pure refactor, no behavior change.
 
 ## Prioritized backlog
 **P1**

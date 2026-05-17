@@ -68,7 +68,18 @@ async def startup():
     await db.transactions.create_index("linked_expense_request_id")
     await db.expense_requests.create_index([("requested_by_user_id", 1), ("created_at", -1)])
     await db.expense_requests.create_index("status")
-    await db.login_attempts.create_index("email", unique=True)
+    # Harden against any legacy duplicates before declaring the unique index.
+    try:
+        await db.login_attempts.create_index("email", unique=True)
+    except Exception:
+        # If duplicates exist from older runs, dedupe + retry once.
+        seen = set()
+        async for d in db.login_attempts.find({}, {"_id": 1, "email": 1}):
+            if d.get("email") in seen:
+                await db.login_attempts.delete_one({"_id": d["_id"]})
+            else:
+                seen.add(d.get("email"))
+        await db.login_attempts.create_index("email", unique=True)
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},

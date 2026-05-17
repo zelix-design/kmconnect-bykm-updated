@@ -45,7 +45,9 @@ async def update_approval(user_id: str, payload: UserApprovalUpdate, user: dict 
 @router.patch("/{user_id}/permissions")
 async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dict = Depends(get_current_user)):
     """Super-admin only. Replaces the user's full permission map.
-    Permission keys must be in PERMISSION_PAGES; values must be one of edit/view/none."""
+    Permission keys must be in PERMISSION_PAGES; values must be one of edit/view/none.
+    Note: `overview` is the home redirect target, so we never allow `none` on it
+    (would cause a route-guard redirect loop)."""
     _require_super_admin(user)
     target = await db.users.find_one({"id": user_id})
     if not target:
@@ -57,6 +59,9 @@ async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dic
         level = payload.permissions.get(page, "edit")
         if level not in ("edit", "view", "none"):
             raise HTTPException(status_code=400, detail=f"Invalid permission level for {page}: {level}")
+        # Overview must remain at least viewable — it's the home/redirect target
+        if page == "overview" and level == "none":
+            level = "view"
         cleaned[page] = level
     await db.users.update_one({"id": user_id}, {"$set": {"permissions": cleaned}})
     fresh = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
