@@ -10,6 +10,24 @@ router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 @router.get("")
 async def list_clients(user: dict = Depends(get_current_user)):
+    """Office admin sees their own clients. Super admin sees clients from ALL users
+    (so staff onboarded by office admins are visible too). Each returned doc gets a
+    `_creator_name` / `_creator_office` for UI attribution."""
+    if user.get("role") == "super_admin":
+        docs = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+        if docs:
+            user_ids = list({d.get("user_id") for d in docs if d.get("user_id")})
+            users = await db.users.find(
+                {"id": {"$in": user_ids}},
+                {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1},
+            ).to_list(500)
+            umap = {u["id"]: u for u in users}
+            for d in docs:
+                u = umap.get(d.get("user_id"))
+                if u and u.get("role") == "office_admin":
+                    d["_creator_name"] = u.get("name")
+                    d["_creator_office"] = u.get("office")
+        return docs
     return await db.clients.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
 
 

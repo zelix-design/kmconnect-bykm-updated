@@ -76,13 +76,10 @@ export default function Students() {
   const openAddStudent = () => {
     // Reset form to blank
     setForm({ ...emptyForm(), reference: "" });
-    if (isSuper) {
-      setPickerSearch("");
-      setPickerOpen(true);
-    } else {
-      // Office admin (and others) open the form directly with whatever reference is pre-set
-      setOpen(true);
-    }
+    // Both super_admin (full client picker) AND office_admin (staff-only picker)
+    // pick a reference FIRST, then the student form opens with it pre-filled.
+    setPickerSearch("");
+    setPickerOpen(true);
   };
   const pickClientAndEnrol = (client) => {
     setForm((f) => ({ ...f, reference: client?.name || "" }));
@@ -124,9 +121,16 @@ export default function Students() {
   const action = searchParams.get("action");
   useEffect(() => {
     if (newFlag === "1") {
-      // Pre-fill reference if we arrived from the Add-an-admission staff picker
-      setForm((f) => ({ ...f, reference: staffParam ? decodeURIComponent(staffParam) : f.reference }));
-      setOpen(true);
+      if (staffParam) {
+        // Came from "Add an admission" with a pre-selected staff → open form direct
+        setForm((f) => ({ ...f, reference: decodeURIComponent(staffParam) }));
+        setOpen(true);
+      } else {
+        // Plain ?new=1 from Quick Entry → open the reference picker first
+        setForm((f) => ({ ...emptyForm(), reference: "" }));
+        setPickerSearch("");
+        setPickerOpen(true);
+      }
       const next = new URLSearchParams(searchParams);
       next.delete("new");
       next.delete("staff");
@@ -264,10 +268,12 @@ export default function Students() {
             <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
               <DialogTitle className="flex items-center gap-2">
                 <UserCircle size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
-                Pick a reference
+                {isSuper ? "Pick a reference" : "Pick the referring staff"}
               </DialogTitle>
               <DialogDescription>
-                Select the client this admission should be attributed to. Skip to enrol without a reference.
+                {isSuper
+                  ? "Select the client this admission should be attributed to. Skip to enrol without a reference."
+                  : "Select the staff this student is being enrolled under. Skip if there's no referrer."}
               </DialogDescription>
             </DialogHeader>
             <div className="px-5 py-3 border-b border-border">
@@ -399,6 +405,12 @@ export default function Students() {
                       {STATUS_LABEL[s.status] || s.status}
                     </span>
                   </div>
+
+                  {isSuper && s._creator_office && (
+                    <div className="mt-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400 self-start" data-testid={`st-creator-${s.id}`}>
+                      <Buildings size={11} weight="duotone" /> {s._creator_office.replace("KM_", "KM ")} · {s._creator_name}
+                    </div>
+                  )}
 
                   <div className="mt-4 space-y-1.5 text-sm text-muted-foreground flex-1">
                     <p className="flex items-center gap-2"><Buildings size={14} className="text-muted-foreground/70" /> <span className="truncate">{s.college || "—"}</span></p>

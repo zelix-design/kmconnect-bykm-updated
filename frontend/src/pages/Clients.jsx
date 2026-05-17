@@ -250,10 +250,15 @@ function ClientCard({ c, allowEdit, openEdit, remove }) {
           {allowEdit && <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
         </div>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
         <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${TYPE_BADGE[c.client_type] || "bg-muted text-foreground"}`}>
           {clientTypeLabel(c.client_type)}
         </span>
+        {c._creator_office && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400" data-testid={`cli-creator-${c.id}`}>
+            <Buildings size={11} weight="duotone" /> {c._creator_office.replace("KM_", "KM ")}
+          </span>
+        )}
       </div>
       <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
         {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}

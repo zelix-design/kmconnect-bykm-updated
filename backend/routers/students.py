@@ -312,6 +312,27 @@ async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
 # ---------- Student CRUD ----------
 @router.get("")
 async def list_students(user: dict = Depends(get_current_user)):
+    """Office admin sees own students. Super admin sees students from ALL users
+    so admissions enrolled by office admins surface on the central Students page."""
+    if user.get("role") == "super_admin":
+        items = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+        if items:
+            user_ids = list({s.get("user_id") for s in items if s.get("user_id")})
+            users = await db.users.find(
+                {"id": {"$in": user_ids}},
+                {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1},
+            ).to_list(500)
+            umap = {u["id"]: u for u in users}
+            out = []
+            for s in items:
+                summary = _summarize(s)
+                u = umap.get(s.get("user_id"))
+                if u and u.get("role") == "office_admin":
+                    summary["_creator_name"] = u.get("name")
+                    summary["_creator_office"] = u.get("office")
+                out.append(summary)
+            return out
+        return []
     items = await db.students.find(
         {"user_id": user["id"]}, {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
