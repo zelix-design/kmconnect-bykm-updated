@@ -1,42 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
-import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, GraduationCap, Buildings, UserCircle, X } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
-import { CLIENT_TYPES, clientTypeLabel } from "@/pages/Clients";
-
-const STATUS_STYLES = {
-  inquiry: "bg-muted text-foreground",
-  enrolled: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  cancelled: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
-  completed: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
-};
-
-const STATUS_LABEL = {
-  inquiry: "Inquiry",
-  enrolled: "Enrolled",
-  cancelled: "Cancelled",
-  completed: "Completed",
-};
-
-// Card tint per status — soft pastel background
-const CARD_TINT = {
-  inquiry: "bg-muted/40 border-border",
-  enrolled: "bg-emerald-100/40 dark:bg-emerald-500/10 border-emerald-200/70 dark:border-emerald-500/30",
-  cancelled: "bg-rose-100/40 dark:bg-rose-500/10 border-rose-200/70 dark:border-rose-500/30",
-  completed: "bg-sky-100/40 dark:bg-sky-500/10 border-sky-200/70 dark:border-sky-500/30",
-};
+import StudentCard from "@/components/students/StudentCard";
+import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -91,25 +69,6 @@ export default function Students() {
     setPickerOpen(false);
     setOpen(true);
   };
-
-  const filteredPickerClients = useMemo(() => {
-    // Defense-in-depth: office admins only ever pick from staff. Their /clients data
-    // is staff-only today, but if that invariant ever breaks the filter still holds.
-    let base = isSuper ? clients : clients.filter((c) => c.client_type === "staff");
-    if (!pickerSearch) return base;
-    const q = pickerSearch.toLowerCase();
-    return base.filter((c) =>
-      (c.name || "").toLowerCase().includes(q) ||
-      (c.company || "").toLowerCase().includes(q) ||
-      (c.office || "").toLowerCase().includes(q)
-    );
-  }, [clients, pickerSearch, isSuper]);
-
-  const pickerGroups = useMemo(() => {
-    return CLIENT_TYPES
-      .map((t) => ({ ...t, items: filteredPickerClients.filter((c) => c.client_type === t.value) }))
-      .filter((g) => g.items.length > 0);
-  }, [filteredPickerClients]);
 
   const load = async () => {
     const [s, c] = await Promise.all([api.get("/students"), api.get("/clients")]);
@@ -265,82 +224,17 @@ export default function Students() {
           </DialogContent>
         </Dialog>
 
-        {/* Super-admin: client picker dialog (opens before the student form) */}
-        <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-          <DialogContent className="max-w-lg p-0 overflow-hidden" data-testid="client-picker-dialog">
-            <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
-              <DialogTitle className="flex items-center gap-2">
-                <UserCircle size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
-                {isSuper ? "Pick a reference" : "Pick the referring staff"}
-              </DialogTitle>
-              <DialogDescription>
-                {isSuper
-                  ? "Select the client this admission should be attributed to. Skip to enrol without a reference."
-                  : "Select the staff this student is being enrolled under. Skip if there's no referrer."}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="px-5 py-3 border-b border-border">
-              <div className="relative">
-                <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, company or office…"
-                  value={pickerSearch}
-                  onChange={(e) => setPickerSearch(e.target.value)}
-                  className="pl-10 h-10"
-                  data-testid="client-picker-search"
-                />
-              </div>
-            </div>
-            <div className="max-h-[55vh] overflow-y-auto" data-testid="client-picker-list">
-              {pickerGroups.length === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-muted-foreground" data-testid="client-picker-empty">
-                  {clients.length === 0
-                    ? <>No clients yet. <Link to="/clients" onClick={() => setPickerOpen(false)} className="text-orange-600 dark:text-orange-400 underline">Add one</Link>.</>
-                    : "No clients matched your search."}
-                </div>
-              ) : (
-                pickerGroups.map((g) => (
-                  <div key={g.value} data-testid={`picker-group-${g.value}`}>
-                    <div className="px-5 py-2 bg-muted/40 border-b border-border flex items-center justify-between">
-                      <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground">{g.label}</span>
-                      <span className="text-[10px] text-muted-foreground/70">{g.items.length}</span>
-                    </div>
-                    {g.items.map((c) => (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => pickClientAndEnrol(c)}
-                        data-testid={`picker-pick-${c.id}`}
-                        className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors border-b border-border/40"
-                      >
-                        <div className="w-9 h-9 rounded-md bg-muted text-foreground text-sm font-semibold flex items-center justify-center shrink-0">
-                          {(c.name || "?")[0].toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {clientTypeLabel(c.client_type)}
-                            {c.client_type === "staff" && c.office ? ` · ${c.office.replace("KM_", "KM ")}` : ""}
-                            {c.company ? ` · ${c.company}` : ""}
-                          </p>
-                        </div>
-                        <ArrowRight size={14} className="text-muted-foreground shrink-0" />
-                      </button>
-                    ))}
-                  </div>
-                ))
-              )}
-            </div>
-            <DialogFooter className="px-5 py-3 border-t border-border">
-              <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
-                <X size={14} className="mr-1.5" /> Cancel
-              </Button>
-              <Button type="button" onClick={skipPicker} data-testid="picker-skip" className="bg-muted text-foreground hover:bg-muted/80">
-                Skip & enrol without reference
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {/* Reference picker dialog (opens before the student form) */}
+        <ClientPickerDialog
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+          search={pickerSearch}
+          onSearchChange={setPickerSearch}
+          clients={clients}
+          isSuper={isSuper}
+          onPick={pickClientAndEnrol}
+          onSkip={skipPicker}
+        />
       </header>
 
       {/* Filters */}
@@ -387,53 +281,7 @@ export default function Students() {
           <p className="label-eyebrow" data-testid="recent-eyebrow">Recent enrollments — {filtered.length}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="students-grid">
             {filtered.map((s) => (
-              <Link
-                key={s.id}
-                to={`/students/${s.id}`}
-                data-testid={`st-card-${s.id}`}
-                className="group block"
-              >
-                <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm hover:border-border transition-all h-full flex flex-col ${CARD_TINT[s.status] || "bg-card border-border"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-md bg-card/70 text-foreground flex items-center justify-center font-medium shrink-0 border border-border">
-                        {(s.name || "?").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium truncate" data-testid={`st-card-name-${s.id}`}>{s.name}</p>
-                        {s.course && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {s.course}</p>}
-                      </div>
-                    </div>
-                    <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${STATUS_STYLES[s.status] || "bg-muted text-foreground"}`}>
-                      {STATUS_LABEL[s.status] || s.status}
-                    </span>
-                  </div>
-
-                  {isSuper && s._creator_office && (
-                    <div className="mt-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400 self-start" data-testid={`st-creator-${s.id}`}>
-                      <Buildings size={11} weight="duotone" /> {s._creator_office.replace("KM_", "KM ")} · {s._creator_name}
-                    </div>
-                  )}
-
-                  <div className="mt-4 space-y-1.5 text-sm text-muted-foreground flex-1">
-                    <p className="flex items-center gap-2"><Buildings size={14} className="text-muted-foreground/70" /> <span className="truncate">{s.college || "—"}</span></p>
-                    <p className="flex items-center gap-2"><UserCircle size={14} className="text-muted-foreground/70" /> <span className="truncate">{s.reference || "—"}</span></p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-border/40 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Collected</span>
-                    <span className="tabular-nums font-medium text-emerald-700 dark:text-emerald-400">{formatMoney(s.collected_total, currency)}</span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Balance</span>
-                    <span className={`tabular-nums font-medium ${s.balance_vs_sc > 0 ? "text-rose-700 dark:text-rose-400" : "text-foreground"}`}>{formatMoney(s.balance_vs_sc, currency)}</span>
-                  </div>
-
-                  <div className="mt-3 inline-flex items-center gap-1 text-xs text-foreground group-hover:text-foreground">
-                    Open <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </Card>
-              </Link>
+              <StudentCard key={s.id} s={s} currency={currency} isSuper={isSuper} />
             ))}
           </div>
         </>

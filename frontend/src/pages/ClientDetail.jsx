@@ -5,9 +5,10 @@ import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check } from "@phosphor-icons/react";
+import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { clientTypeLabel } from "@/pages/Clients";
+import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
 
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
@@ -99,9 +100,18 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
-          <Button variant="outline" onClick={load} data-testid="refresh-client-detail" className="self-start">
-            <ArrowsClockwise size={14} className="mr-1.5" /> Refresh
-          </Button>
+          <div className="flex gap-2 self-start">
+            <Button
+              variant="outline"
+              onClick={() => downloadClientStatementPDF({ detail: data, user })}
+              data-testid="download-client-pdf"
+            >
+              <DownloadSimple size={14} className="mr-1.5" /> Download PDF
+            </Button>
+            <Button variant="outline" onClick={load} data-testid="refresh-client-detail">
+              <ArrowsClockwise size={14} className="mr-1.5" /> Refresh
+            </Button>
+          </div>
         </div>
       </Card>
 

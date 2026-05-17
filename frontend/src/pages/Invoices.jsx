@@ -300,7 +300,14 @@ export default function Invoices() {
                     </td>
                     <td className="px-6 py-3.5 text-right tabular-nums font-medium">{formatMoney(inv.total, currency)}</td>
                     <td className="px-6 py-3.5 text-right whitespace-nowrap">
-                      <button onClick={() => downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user })} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
+                      <button onClick={async () => {
+                        let payments = [];
+                        try {
+                          const { data } = await api.get(`/invoices/${inv.id}/payments`);
+                          payments = data?.payments || [];
+                        } catch { /* fall back to invoice.previous_sc_payment */ }
+                        downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user, payments });
+                      }} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
                       <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
                       <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
                     </td>

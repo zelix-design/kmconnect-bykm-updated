@@ -1,0 +1,80 @@
+{
+  "summary": "Iteration 20 — Dashboard/Students refactor + Invoice /payments endpoint + Payments-received mini-table on PDF + per-client PDF export. ALL 9 backend tests PASS; ALL frontend flows verified including PDF contents extracted and asserted.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard (overview)",
+        "issues": [
+          "Recharts emits repeated 'width(-1) and height(-1)' warnings on initial render before the container measures. Cosmetic — charts render once layout is computed. Consider adding minWidth/minHeight to ResponsiveContainer wrappers."
+        ]
+      },
+      {
+        "screen": "Dashboard students list",
+        "issues": [
+          "React warning: 'Encountered two children with the same key, Ravi Kumar'. Likely the StudentList in /app/frontend/src/components/dashboard/OverviewLists.jsx uses student name as key. Switch to a stable id."
+        ]
+      }
+    ]
+  },
+  "backend_results": {
+    "TestInvoicePayments::test_sc_invoice_with_psp_returns_one_payment": "PASS — 1 payment {amount:20000, source:'previous_sc_payment', date:'2026-01-05'}, total_paid=20000, balance_due=30000",
+    "TestInvoicePayments::test_invoice_without_payments_returns_empty": "PASS — payments=[], total_paid=0, balance_due=15000",
+    "TestInvoicePayments::test_auto_mirrored_tx_is_deduped": "PASS — mirrored income tx exists in /transactions but /payments still returns exactly 1 entry",
+    "TestInvoicePayments::test_404_on_invalid_invoice_id": "PASS — 404",
+    "TestInvoicePayments::test_office_admin_cannot_access_other_user_invoice": "PASS — office_admin gets 404 on admin-owned invoice id",
+    "TestRegression::test_list_invoices": "PASS",
+    "TestRegression::test_list_clients": "PASS",
+    "TestRegression::test_list_students": "PASS",
+    "TestRegression::test_client_detail_staff": "PASS"
+  },
+  "frontend_results": {
+    "login_super_admin": "PASS — credentials from /app/memory/test_credentials.md",
+    "dashboard_quick_nav_tiles_visible": "PASS — quick-nav-tiles + tile-transactions, tile-students, tile-clients, tile-ledger all present",
+    "dashboard_tile_transactions_click": "PASS — middle section swaps to tx-list",
+    "dashboard_tile_students_click": "PASS — middle section swaps to student-list",
+    "dashboard_tile_clients_click": "PASS — middle section swaps to client-list",
+    "dashboard_tile_ledger_click": "PASS (no bug) — UI shows 'Sub-agent ledger / No ledger activity yet' Empty state; data-testid=ledger-list only renders when items exist, this is correct per OverviewLists.jsx",
+    "no_PALETTES_runtime_error": "PASS — no 'PALETTES is not defined' in DOM or console; PALETTES is correctly re-exported from dashboardUtils.js and imported in Dashboard.jsx",
+    "students_grid_renders": "PASS — students-grid with 18 st-card-<id> cards",
+    "students_add_student_picker": "PASS — client-picker-dialog opens; search input present; Escape closes",
+    "invoices_pdf_button_download": "PASS — INV-2026-0002.pdf downloaded (7846B); extracted text confirms invoice content",
+    "invoices_pdf_payments_mini_table": "PASS — for SC invoice with previous_sc_payment, PDF text contains 'PAYMENTS RECEIVED' header, columns 'Date Mode Reference Amount', row 'Jan 05, 2026 Bank Transfer Previous payment towards SC ¹20,000.00', 'Total paid ¹20,000.00' footer, and final 'Balance due ¹30,000.00'",
+    "invoice_payments_balance_math": "PASS — total=50000, prev_payment=20000, balance_due=30000 — matches /api/invoices/{id}/payments response",
+    "client_detail_staff_download_pdf_button": "PASS — data-testid='download-client-pdf' present and triggers download",
+    "client_detail_staff_pdf_filename": "PASS — 'ABHISHEK P RAJ - Incentive - 2026-05-17.pdf' matches expected pattern '<name> - Incentive - YYYY-MM-DD.pdf'",
+    "client_detail_staff_pdf_content": "PASS — PDF title 'Incentive Payout Statement', subtitle 'Staff admissions & incentive earnings', shows STUDENTS ADMITTED/INCENTIVE EARNED/INCENTIVE PAID/INCENTIVE PENDING tiles",
+    "client_detail_nonstaff_pdf_filename": "PASS — 'VIJITH OFFICE - Statement - 2026-05-17.pdf' matches expected pattern '<name> - Statement - YYYY-MM-DD.pdf'",
+    "client_detail_nonstaff_pdf_content": "PASS — PDF title 'Client Statement', subtitle 'SC, credits & debits routed to this client', shows SC EARNED + TOTAL CREDITS + TOTAL DEBITS",
+    "client_detail_staff_three_tiles_no_sc_earned": "PASS — tile-students-admitted + tile-incentive-earned + tile-incentive-pending present; tile-sc-earned absent (per spec)"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20.py",
+    "/app/test_reports/pytest/iteration20.xml"
+  ],
+  "action_items": [
+    "(minor) StudentList in /app/frontend/src/components/dashboard/OverviewLists.jsx is using a non-unique key — duplicate-key React warning fires for 'Ravi Kumar'. Switch to a stable student id.",
+    "(minor) Recharts ResponsiveContainer warnings on initial render — add minWidth/minHeight or aspect to silence."
+  ],
+  "critical_code_review_comments": [
+    "routers/invoices.py invoice_payments (line ~278): de-dup logic compares (linked_sc_payment_invoice_id == invoice_id) AND amount AND date. If a user edits the previous_sc_payment.date or amount, the auto-mirrored tx is re-synced first via _sync_invoice_sc_payment_transaction so the comparison still holds. Verified via test_auto_mirrored_tx_is_deduped. Good.",
+    "routers/invoices.py invoice_payments: hard-codes mode='bank_transfer' for income transactions because mode isn't on the tx schema. Cosmetic — acceptable for now since auto-mirrored entry IS de-duped, but if users start logging income transactions manually, mode label won't reflect reality. Consider adding a 'mode' field to transactions when business rules need it.",
+    "Dashboard refactor: PALETTES re-export pattern (in dashboardUtils.js -> imported in Dashboard.jsx) works but adds coupling. If any future component depends on PALETTES through a tree-shaken import, ensure it stays exported.",
+    "OverviewLists.jsx StudentList uses non-unique key for list items (only name, not id). Triggers React duplicate-key warning. Two students with the same name will collapse visually — recommend keying by student.id.",
+    "invoicePdf.js falls back to previous_sc_payment when `payments` arg is empty for SC invoices — backend /payments endpoint already returns it, so primary flow is consistent. The fallback is a safety net for clients that haven't been updated to fetch payments first.",
+    "clientStatementPdf.js renders different layouts for staff vs non-staff based on a single is_staff flag. Filename construction in ClientDetail.jsx is good.",
+    "PDF filename uses YYYY-MM-DD of generation date (today), not statement period — this matches the spec but worth documenting in product copy."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration20.py"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% on all required deliverables (3 refactor regressions, 5 new feature flows)" },
+  "test_credentials": "admin@finflow.com/Admin@123 and blr1@finflow.com/Office@123 from /app/memory/test_credentials.md — both valid.",
+  "seed_data_creation": "Created and DELETED test invoice 'TEST-INV-PDF-IT20' via API to validate the end-to-end /payments + PDF mini-table flow. Also created/deleted 2 SC invoices in pytest fixtures (TEST-INV-IT20, TEST-INV-IT20-NOPSP). No persistent data left behind.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 5 deliverables verified on https://paymate-43.preview.emergentagent.com: (1) Dashboard refactor — quick-nav-tiles + tile-* + tx-list/student-list/client-list/ledger-list all render correctly (ledger-list only when items exist, by design); no PALETTES error. (2) Students refactor — students-grid + st-card-* + client-picker-dialog all work. (3) Backend GET /api/invoices/{id}/payments fully tested incl. de-dup, empty, 404, and per-user scope. (4) Invoice PDF — confirmed 'PAYMENTS RECEIVED' mini-table renders correctly with Date/Mode/Reference/Amount + Total paid + Balance due (verified by extracting PDF text via pypdf). (5) Client PDF export — staff filename '<name> - Incentive - YYYY-MM-DD.pdf' with 'Incentive Payout Statement' title; non-staff filename '<name> - Statement - YYYY-MM-DD.pdf' with 'Client Statement' title. Two minor non-blocking UI warnings noted in action_items. Iteration 19 regressions (3 tiles for staff, no SC Earned) still hold.",
+  "rca of the issue": "N/A — no bugs found."
+}

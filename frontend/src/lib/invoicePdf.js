@@ -2,11 +2,36 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatMoney, formatDate } from "@/lib/format";
 
-export function downloadInvoicePDF({ invoice, client, user }) {
+export function downloadInvoicePDF({ invoice, client, user, payments }) {
   const currency = user?.currency || "USD";
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 48;
+
+  const MODE_LABELS = {
+    cash: "Cash", bank_transfer: "Bank Transfer", upi: "UPI",
+    cheque: "Cheque", card: "Card", other: "Other",
+  };
+
+  // Build a normalized payments list. Falls back to `previous_sc_payment` on
+  // service-charge invoices so existing invoice rows keep working without a
+  // separate fetch.
+  const isService = invoice.invoice_type === "service_charge";
+  let normalizedPayments = Array.isArray(payments) ? payments.slice() : [];
+  if (!normalizedPayments.length && isService) {
+    const psp = invoice.previous_sc_payment;
+    if (psp?.has && (psp.amount || 0) > 0) {
+      normalizedPayments.push({
+        date: psp.date || invoice.issue_date,
+        mode: psp.mode || "bank_transfer",
+        amount: psp.amount || 0,
+        label: "Previous payment towards SC",
+      });
+    }
+  }
+  // Sort earliest first for the timeline strip
+  normalizedPayments.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const totalPaid = normalizedPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
   // Header
   doc.setFont("helvetica", "bold");
@@ -70,7 +95,6 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   if (client?.phone)   { doc.text(client.phone, margin, y); y += 12; }
 
   // Campus Visit meta block (if any present)
-  const isService = invoice.invoice_type === "service_charge";
   const meta = isService
     ? [
         ["Student Name", invoice.student_name],
@@ -164,19 +188,12 @@ export function downloadInvoicePDF({ invoice, client, user }) {
     doc.text(`- ${formatMoney(credit, currency)}`, rightX, endY, { align: "right" });
   }
 
-  const psp = invoice.previous_sc_payment;
-  const prevPay = isService && psp?.has ? (psp.amount || 0) : 0;
-  if (prevPay > 0) {
+  if (totalPaid > 0) {
     endY += 16;
     doc.setTextColor(120, 113, 108);
-    const modeLabel = {
-      cash: "Cash", bank_transfer: "Bank Transfer", upi: "UPI",
-      cheque: "Cheque", card: "Card", other: "Other",
-    }[psp.mode] || "";
-    const datePart = psp.date ? ` · ${formatDate(psp.date)}` : "";
-    doc.text(`Previous payment towards SC${modeLabel ? ` (${modeLabel})` : ""}${datePart}`, labelX, endY);
+    doc.text(normalizedPayments.length > 1 ? "Payments received" : "Previous payment received", labelX, endY);
     doc.setTextColor(190, 18, 60);
-    doc.text(`- ${formatMoney(prevPay, currency)}`, rightX, endY, { align: "right" });
+    doc.text(`- ${formatMoney(totalPaid, currency)}`, rightX, endY, { align: "right" });
   }
 
   endY += 10;
@@ -187,8 +204,54 @@ export function downloadInvoicePDF({ invoice, client, user }) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   doc.setTextColor(28, 25, 23);
-  doc.text(prevPay > 0 ? "Balance Due" : "Total", labelX, endY);
+  doc.text(totalPaid > 0 ? "Balance Due" : "Total", labelX, endY);
   doc.text(formatMoney(invoice.total, currency), rightX, endY, { align: "right" });
+
+  // -------- Payments Received mini-table (timeline strip) --------
+  if (normalizedPayments.length) {
+    endY += 36;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 113, 108);
+    doc.text("PAYMENTS RECEIVED", margin, endY);
+    endY += 8;
+
+    autoTable(doc, {
+      startY: endY,
+      head: [["Date", "Mode", "Reference", "Amount"]],
+      body: normalizedPayments.map((p) => [
+        p.date ? formatDate(p.date) : "—",
+        MODE_LABELS[p.mode] || p.mode || "—",
+        p.label || "Payment",
+        formatMoney(Number(p.amount) || 0, currency),
+      ]),
+      foot: [[
+        { content: "Total paid", colSpan: 3, styles: { halign: "right", fontStyle: "bold", textColor: [120, 113, 108] } },
+        { content: formatMoney(totalPaid, currency), styles: { halign: "right", fontStyle: "bold", textColor: [28, 25, 23] } },
+      ]],
+      theme: "plain",
+      styles: { fontSize: 9, textColor: [28, 25, 23], cellPadding: 6 },
+      headStyles: { fillColor: [245, 245, 244], textColor: [120, 113, 108], fontStyle: "bold", fontSize: 8 },
+      footStyles: { fillColor: [255, 251, 235] },
+      columnStyles: {
+        0: { cellWidth: 90 },
+        1: { cellWidth: 90 },
+        2: { cellWidth: "auto" },
+        3: { halign: "right", cellWidth: 100 },
+      },
+      margin: { left: margin, right: margin },
+    });
+
+    endY = doc.lastAutoTable.finalY + 14;
+
+    // Final "Balance due" recap right under the table
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(120, 113, 108);
+    doc.text("Balance due", labelX, endY);
+    doc.setTextColor(28, 25, 23);
+    doc.text(formatMoney(invoice.total, currency), rightX, endY, { align: "right" });
+  }
 
   // Notes
   if (invoice.notes) {

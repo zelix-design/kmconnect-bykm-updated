@@ -11,66 +11,17 @@ import {
 } from "recharts";
 import {
   ShoppingBag, ChartPie, UsersThree, Receipt, FileText, CalendarBlank,
-  Student, Notebook, ArrowUpRight, ArrowDownRight, CaretUp, CaretDown,
+  Student, Notebook, ArrowUpRight, ArrowDownRight,
   IdentificationBadge, Briefcase, Buildings, GraduationCap,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import OfficeDashboard from "./OfficeDashboard";
-
-function isoDate(d) { return d.toISOString().slice(0, 10); }
-
-function rangeFor(preset) {
-  const now = new Date();
-  if (preset === "this_month") {
-    const s = new Date(now.getFullYear(), now.getMonth(), 1);
-    return { start: isoDate(s), end: isoDate(now), label: "This month" };
-  }
-  if (preset === "last_30") {
-    const s = new Date(now); s.setDate(now.getDate() - 29);
-    return { start: isoDate(s), end: isoDate(now), label: "Last 30 days" };
-  }
-  if (preset === "last_90") {
-    const s = new Date(now); s.setDate(now.getDate() - 89);
-    return { start: isoDate(s), end: isoDate(now), label: "Last 90 days" };
-  }
-  if (preset === "ytd") {
-    const s = new Date(now.getFullYear(), 0, 1);
-    return { start: isoDate(s), end: isoDate(now), label: "Year to date" };
-  }
-  return null;
-}
-
-const PALETTES = {
-  amber: { bg: "bg-amber-50 dark:bg-amber-500/15", icon: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400" },
-  violet: { bg: "bg-violet-50 dark:bg-violet-500/15", icon: "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400" },
-  emerald: { bg: "bg-emerald-50 dark:bg-emerald-500/15", icon: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" },
-  rose: { bg: "bg-rose-50 dark:bg-rose-500/15", icon: "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400" },
-  sky: { bg: "bg-sky-50 dark:bg-sky-500/15", icon: "bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400" },
-  stone: { bg: "bg-muted", icon: "bg-muted text-foreground" },
-};
-
-function StatCard({ eyebrow, value, trend, hint, palette, icon: Icon, testId }) {
-  const p = PALETTES[palette] || PALETTES.amber;
-  const positive = trend != null && trend >= 0;
-  return (
-    <Card className={`p-5 rounded-xl shadow-none border-0 ${p.bg}`} data-testid={testId}>
-      <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.icon}`}>
-          {Icon && <Icon size={18} weight="duotone" />}
-        </div>
-        {trend != null && (
-          <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${positive ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
-            {positive ? <CaretUp size={12} weight="fill" /> : <CaretDown size={12} weight="fill" />}
-            {Math.abs(trend).toFixed(0)}%
-          </span>
-        )}
-      </div>
-      <p className="font-display text-2xl mt-4 text-foreground tabular-nums">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{eyebrow}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
-    </Card>
-  );
-}
+import {
+  rangeFor, withinFilter, monthlyBuckets, allTimeMonthlyBuckets, todayISO,
+  FILTER_OPTIONS, LEDGER_TYPE_LABEL, LEDGER_TYPE_COLOR, PALETTES,
+} from "@/lib/dashboardUtils";
+import { StatCard, ChartHeader, Empty } from "@/components/dashboard/StatCard";
+import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
 
 const TILES = [
   { key: "transactions", label: "Transactions", icon: Receipt, palette: "amber" },
@@ -78,96 +29,6 @@ const TILES = [
   { key: "clients", label: "Clients", icon: UsersThree, palette: "sky" },
   { key: "ledger", label: "Ledger", icon: Notebook, palette: "violet" },
 ];
-
-const FILTER_OPTIONS = [
-  { value: "today", label: "Today" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-];
-
-function withinFilter(dateStr, filter) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (filter === "today") return d >= startOfDay;
-  if (filter === "weekly") {
-    const s = new Date(startOfDay); s.setDate(s.getDate() - 6);
-    return d >= s;
-  }
-  if (filter === "monthly") {
-    const s = new Date(now.getFullYear(), now.getMonth(), 1);
-    return d >= s;
-  }
-  return true;
-}
-
-// Build N-month buckets ending at "now" given list of {date, value}.
-function monthlyBuckets(dates) {
-  const now = new Date();
-  const buckets = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    buckets.push({
-      key: `${d.getFullYear()}-${d.getMonth()}`,
-      month: d.toLocaleDateString("en-US", { month: "short" }),
-      count: 0,
-      value: 0,
-    });
-  }
-  const idx = Object.fromEntries(buckets.map((b, i) => [b.key, i]));
-  dates.forEach(({ date, value }) => {
-    if (!date) return;
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return;
-    const k = `${d.getFullYear()}-${d.getMonth()}`;
-    if (idx[k] !== undefined) {
-      buckets[idx[k]].count += 1;
-      buckets[idx[k]].value += value || 0;
-    }
-  });
-  return buckets;
-}
-
-// Build buckets across ALL months present in `dates`, padded to the current
-// month so the chart trails to "today". Caps at the latest 24 months.
-function allTimeMonthlyBuckets(dates) {
-  const valid = dates.map((d) => ({ ...d, _d: d.date ? new Date(d.date) : null }))
-    .filter((d) => d._d && !isNaN(d._d.getTime()));
-  if (!valid.length) return [];
-  const now = new Date();
-  let min = valid[0]._d;
-  valid.forEach((v) => { if (v._d < min) min = v._d; });
-  // Walk from min month to current month (inclusive)
-  const start = new Date(min.getFullYear(), min.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth(), 1);
-  const map = new Map();
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    const key = `${cursor.getFullYear()}-${cursor.getMonth()}`;
-    map.set(key, {
-      key,
-      month: cursor.toLocaleDateString("en-US", { month: "short", year: "2-digit" }),
-      count: 0,
-      value: 0,
-    });
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-  valid.forEach(({ _d, value }) => {
-    const k = `${_d.getFullYear()}-${_d.getMonth()}`;
-    if (map.has(k)) {
-      const b = map.get(k);
-      b.count += 1;
-      b.value += value || 0;
-    }
-  });
-  const out = Array.from(map.values());
-  return out.length > 24 ? out.slice(-24) : out;
-}
-
-function todayISO() { return new Date().toISOString().slice(0, 10); }
-
 export default function Dashboard() {
   const { user } = useAuth();
   // Office admins get their bespoke dashboard
@@ -746,9 +607,6 @@ function ClientsOverview({ clients, students }) {
   );
 }
 
-const LEDGER_TYPE_LABEL = { sub_agent: "Sub Agent", associate: "Associate", km: "KM" };
-const LEDGER_TYPE_COLOR = { sub_agent: "#7c3aed", associate: "#d97706", km: "#059669" };
-
 function LedgerOverview({ ledger, students, currency }) {
   const stats = useMemo(() => {
     let totalReceived = 0, paidToCollege = 0, scAdjusted = 0, holding = 0;
@@ -880,139 +738,4 @@ function LedgerOverview({ ledger, students, currency }) {
       </section>
     </>
   );
-}
-
-function ChartHeader({ eyebrow, title, right }) {
-  return (
-    <div className="flex items-start justify-between mb-3 gap-3">
-      <div>
-        <p className="label-eyebrow">{eyebrow}</p>
-        <h3 className="font-display text-xl mt-1">{title}</h3>
-      </div>
-      {right}
-    </div>
-  );
-}
-
-// -------- Bottom lists (unchanged from before) --------
-
-function TxList({ items, currency }) {
-  if (!items.length) return <Empty label="No transactions in this window." />;
-  return (
-    <ul className="divide-y divide-border/60" data-testid="tx-list">
-      {items.slice(0, 10).map((t) => (
-        <li key={t.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${t.type === 'income' ? 'bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400'}`}>
-              {t.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
-            </div>
-            <div>
-              <p className="text-sm font-medium">{t.description || (t.type === 'income' ? 'Income' : 'Expense')}</p>
-              <p className="text-xs text-muted-foreground">{formatDate(t.date)}</p>
-            </div>
-          </div>
-          <span className={`tabular-nums text-sm font-medium ${t.type === 'income' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
-            {t.type === 'income' ? '+' : '−'}{formatMoney(t.amount, currency)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-const STATUS_BADGE = {
-  inquiry: "bg-muted text-foreground",
-  enrolled: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  cancelled: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400",
-  completed: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
-};
-
-function StudentList({ items, currency }) {
-  if (!items.length) return <Empty label="No enrollments in this window." />;
-  return (
-    <ul className="divide-y divide-border/60" data-testid="student-list">
-      {items.slice(0, 10).map((s) => (
-        <li key={s.id}>
-          <Link to={`/students/${s.id}`} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center text-xs font-medium shrink-0">
-                {(s.name || "?").slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{s.name}</p>
-                <p className="text-xs text-muted-foreground truncate flex items-center gap-1.5"><GraduationCap size={12} /> {[s.course, s.college, s.reference].filter(Boolean).join(" · ") || "—"}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_BADGE[s.status] || "bg-muted text-foreground"}`}>{s.status}</span>
-              <span className="tabular-nums text-sm text-foreground hidden sm:inline">{formatMoney(s.collected_total, currency)}</span>
-            </div>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-const CLIENT_TYPE_LABEL = {
-  sub_agent_associate: "Sub Agent / Associate",
-  associate_consultant: "Associate Consultant",
-  km_blr_office: "KM BLR Office",
-  km_tcr_office: "KM TCR Office",
-  km_kmly_office: "KM KMLY Office",
-};
-
-function ClientList({ items }) {
-  if (!items.length) return <Empty label="No clients added in this window." />;
-  return (
-    <ul className="divide-y divide-border/60" data-testid="client-list">
-      {items.slice(0, 10).map((c) => (
-        <li key={c.id} className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-muted text-foreground flex items-center justify-center text-xs font-medium shrink-0">
-              {(c.name || "?").slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{c.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{[c.email, c.phone].filter(Boolean).join(" · ") || "—"}</p>
-            </div>
-          </div>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-foreground">
-            {CLIENT_TYPE_LABEL[c.client_type] || "—"}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function LedgerList({ items, currency }) {
-  if (!items?.length) return <Empty label="No sub-agent activity yet." />;
-  return (
-    <ul className="divide-y divide-border/60" data-testid="ledger-list">
-      {items.slice(0, 10).map((row, i) => (
-        <li key={`${row.type}-${row.name}-${i}`}>
-          <Link
-            to={`/agents/detail?type=${encodeURIComponent(row.type)}&name=${encodeURIComponent(row.name)}`}
-            className="flex items-center justify-between px-6 py-3.5 hover:bg-muted/40"
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${LEDGER_TYPE_COLOR[row.type] || "#7c3aed"}1A`, color: LEDGER_TYPE_COLOR[row.type] || "#7c3aed" }}>
-                <Notebook size={16} weight="duotone" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{row.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{LEDGER_TYPE_LABEL[row.type] || row.type}</p>
-              </div>
-            </div>
-            <span className="tabular-nums text-sm font-medium text-foreground">{formatMoney(row.total_received ?? 0, currency)}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Empty({ label }) {
-  return <div className="p-10 text-center text-sm text-muted-foreground" data-testid="tile-empty">{label}</div>;
 }

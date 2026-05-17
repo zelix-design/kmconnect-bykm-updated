@@ -273,3 +273,75 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
         {"user_id": user["id"], "linked_sc_payment_invoice_id": invoice_id}
     )
     return {"ok": True}
+
+
+@router.get("/{invoice_id}/payments")
+async def invoice_payments(invoice_id: str, user: dict = Depends(get_current_user)):
+    """Return all payments received against an invoice — for the PDF payments
+    timeline. Combines `previous_sc_payment` (SC invoices) with any auto-logged
+    income transactions linked to the invoice.
+    """
+    inv = await db.invoices.find_one(
+        {"id": invoice_id, "user_id": user["id"]}, {"_id": 0}
+    )
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+
+    payments: list = []
+    # 1) Previous SC payment recorded on the invoice itself
+    psp = inv.get("previous_sc_payment") or {}
+    psp_amount = 0.0
+    psp_date = None
+    if psp.get("has"):
+        try:
+            psp_amount = float(psp.get("amount") or 0)
+        except (TypeError, ValueError):
+            psp_amount = 0.0
+        psp_date = psp.get("date") or inv.get("issue_date")
+        if psp_amount > 0:
+            payments.append({
+                "date": psp_date,
+                "mode": psp.get("mode") or "bank_transfer",
+                "amount": round(psp_amount, 2),
+                "label": "Previous payment towards SC",
+                "source": "previous_sc_payment",
+            })
+
+    # 2) Any income transactions tied to this invoice
+    income_txs = await db.transactions.find(
+        {
+            "user_id": user["id"],
+            "type": "income",
+            "$or": [
+                {"linked_sc_payment_invoice_id": invoice_id},
+                {"linked_invoice_id": invoice_id},
+            ],
+        },
+        {"_id": 0},
+    ).sort("date", 1).to_list(200)
+
+    for tx in income_txs:
+        amount = round(float(tx.get("amount") or 0), 2)
+        # Skip the auto-mirrored psp transaction to avoid double-counting.
+        if (
+            tx.get("linked_sc_payment_invoice_id") == invoice_id
+            and abs(amount - round(psp_amount, 2)) < 0.01
+            and tx.get("date") == psp_date
+        ):
+            continue
+        payments.append({
+            "date": tx.get("date"),
+            "mode": "bank_transfer",  # mode isn't stored on tx; safe default
+            "amount": amount,
+            "label": tx.get("description") or "Payment received",
+            "source": "transaction",
+        })
+
+    payments.sort(key=lambda p: str(p.get("date") or ""))
+    total_paid = round(sum(p["amount"] for p in payments), 2)
+    return {
+        "payments": payments,
+        "total_paid": total_paid,
+        "balance_due": round(float(inv.get("total") or 0), 2),
+    }
+
