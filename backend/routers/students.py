@@ -5,6 +5,7 @@ Each student document embeds:
 - payments[]:  actual receipts, each with its own received_in + adjustments
 """
 from typing import List, Optional, Literal
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
@@ -525,15 +526,61 @@ async def delete_student(student_id: str, user: dict = Depends(require_edit("stu
 
 @router.post("/{student_id}/incentive/mark-paid")
 async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit("students"))):
-    """Mark the staff incentive earned on this admission as paid. Idempotent."""
+    """Mark the staff incentive earned on this admission as paid AND auto-create a
+    salary-style `expense_request` for super-admin approval so the actual cash flows
+    through the same approval pipeline as other office expenses. Idempotent."""
     s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
+    if s.get("incentive_paid"):
+        return {"ok": True, "student_id": student_id, "incentive_paid": True,
+                "expense_request_id": s.get("incentive_request_id")}
+
+    # Look up the referring staff to read their eligible_incentive
+    ref = (s.get("reference") or "").strip().lower()
+    staff = None
+    if ref:
+        all_staff = await db.clients.find(
+            {"user_id": user["id"], "client_type": "staff"}, {"_id": 0}
+        ).to_list(500)
+        staff = next((c for c in all_staff if (c.get("name") or "").strip().lower() == ref), None)
+    amount = float((staff or {}).get("eligible_incentive") or 0)
+
+    request_id = None
+    if amount > 0 and user.get("role") == "office_admin":
+        # Route the actual cash through super-admin approval
+        first_acc = await db.accounts.find_one({"user_id": user["id"]}, {"_id": 0, "id": 1})
+        request_id = gen_id()
+        await db.expense_requests.insert_one({
+            "id": request_id,
+            "requested_by_user_id": user["id"],
+            "requester_office": user.get("office"),
+            "status": "pending",
+            "created_at": now_iso(),
+            "amount": amount,
+            "account_id": (first_acc or {}).get("id"),
+            "category_id": None,
+            "date": datetime.now(timezone.utc).date().isoformat(),
+            "description": f"Incentive payout · student {s.get('name', '')} (ref: {(staff or {}).get('name', '—')})",
+            "urgency": "normal",
+            "kind": "salary",
+            "linked_student_id": student_id,
+        })
+
+    patch = {"incentive_paid": True, "incentive_paid_at": now_iso()}
+    if request_id:
+        patch["incentive_request_id"] = request_id
     await db.students.update_one(
         {"id": student_id, "user_id": user["id"]},
-        {"$set": {"incentive_paid": True, "incentive_paid_at": now_iso()}},
+        {"$set": patch},
     )
-    return {"ok": True, "student_id": student_id, "incentive_paid": True}
+    return {
+        "ok": True,
+        "student_id": student_id,
+        "incentive_paid": True,
+        "expense_request_id": request_id,
+        "amount": amount,
+    }
 
 
 @router.post("/{student_id}/incentive/unmark-paid")
@@ -541,9 +588,16 @@ async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_ed
     s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
+    # If a salary request was auto-created and is still pending, cancel it
+    req_id = s.get("incentive_request_id")
+    if req_id:
+        await db.expense_requests.delete_one(
+            {"id": req_id, "requested_by_user_id": user["id"], "status": "pending"}
+        )
     await db.students.update_one(
         {"id": student_id, "user_id": user["id"]},
-        {"$set": {"incentive_paid": False}, "$unset": {"incentive_paid_at": ""}},
+        {"$set": {"incentive_paid": False},
+         "$unset": {"incentive_paid_at": "", "incentive_request_id": ""}},
     )
     return {"ok": True, "student_id": student_id, "incentive_paid": False}
 

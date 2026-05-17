@@ -5,6 +5,7 @@ from db import db
 from auth_lib import (
     hash_password, verify_password, create_access_token,
     set_auth_cookie, get_current_user, gen_id, now_iso, require_edit,
+    check_lockout, record_failed_attempt, clear_failed_attempts,
 )
 from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISSIONS
 from seed import seed_user_defaults
@@ -50,14 +51,19 @@ async def register(payload: RegisterIn):
 @router.post("/login", response_model=UserOut)
 async def login(payload: LoginIn, response: Response):
     email = payload.email.lower().strip()
+    # Lockout check FIRST so bad actors can't keep guessing during a lock window
+    await check_lockout(email)
     user = await db.users.find_one({"email": email})
     if not user or not verify_password(payload.password, user["password_hash"]):
+        await record_failed_attempt(email)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     status = user.get("approval_status", "approved")
     if status == "pending":
         raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")
     if status == "rejected":
         raise HTTPException(status_code=403, detail="Your access request was rejected. Please contact the super admin.")
+    # Successful login → wipe the failed-attempt counter
+    await clear_failed_attempts(email)
     token = create_access_token(user["id"], email)
     set_auth_cookie(response, token)
     user.pop("password_hash", None)

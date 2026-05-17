@@ -21,6 +21,7 @@ import Agents from "@/pages/Agents";
 import AgentDetail from "@/pages/AgentDetail";
 import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
+import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -51,20 +52,20 @@ export default function App() {
           <Route path="/login" element={<PublicOnly><AuthPage mode="login" /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
           <Route element={<Protected><AppShell /></Protected>}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/quick-entry" element={<QuickEntry />} />
-            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/" element={<PermGate page="overview"><Dashboard /></PermGate>} />
+            <Route path="/quick-entry" element={<PermGate page="quick_entry"><QuickEntry /></PermGate>} />
+            <Route path="/transactions" element={<PermGate page="transactions"><Transactions /></PermGate>} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/invoices" element={<Invoices />} />
-            <Route path="/clients" element={<Clients />} />
-            <Route path="/students" element={<Students />} />
-            <Route path="/students/:id" element={<StudentDetail />} />
+            <Route path="/clients" element={<PermGate page="clients"><Clients /></PermGate>} />
+            <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
+            <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
             <Route path="/categories" element={<Categories />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<PermGate page="settings"><Settings /></PermGate>} />
             <Route path="/users" element={<Users />} />
-            <Route path="/expense-requests" element={<ExpenseRequests />} />
+            <Route path="/expense-requests" element={<PermGate page="expense_requests"><ExpenseRequests /></PermGate>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

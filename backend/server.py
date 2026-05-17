@@ -68,6 +68,7 @@ async def startup():
     await db.transactions.create_index("linked_expense_request_id")
     await db.expense_requests.create_index([("requested_by_user_id", 1), ("created_at", -1)])
     await db.expense_requests.create_index("status")
+    await db.login_attempts.create_index("email", unique=True)
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},

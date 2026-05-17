@@ -98,3 +98,46 @@ def require_edit(page: str):
             )
         return user
     return _checker
+
+
+
+# ---------- Brute-force lockout ----------
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_MINUTES = 15
+
+
+async def check_lockout(email: str) -> None:
+    """Raises 429 if the email is currently locked out. Idempotent."""
+    rec = await db.login_attempts.find_one({"email": email})
+    if not rec:
+        return
+    locked_until = rec.get("locked_until")
+    if locked_until:
+        try:
+            ts = datetime.fromisoformat(locked_until)
+        except (TypeError, ValueError):
+            ts = None
+        if ts and ts > datetime.now(timezone.utc):
+            remaining = int((ts - datetime.now(timezone.utc)).total_seconds() // 60) + 1
+            raise HTTPException(
+                status_code=429,
+                detail=f"Account temporarily locked. Try again in {remaining} minute(s).",
+            )
+
+
+async def record_failed_attempt(email: str) -> None:
+    """Increment failed counter; lock the account when threshold hit."""
+    now = datetime.now(timezone.utc)
+    rec = await db.login_attempts.find_one({"email": email})
+    fails = (rec.get("fails", 0) if rec else 0) + 1
+    patch = {"email": email, "fails": fails, "last_attempt": now.isoformat()}
+    if fails >= MAX_FAILED_ATTEMPTS:
+        patch["locked_until"] = (now + timedelta(minutes=LOCKOUT_MINUTES)).isoformat()
+    await db.login_attempts.update_one(
+        {"email": email}, {"$set": patch}, upsert=True
+    )
+
+
+async def clear_failed_attempts(email: str) -> None:
+    """Called on successful login — wipes the counter."""
+    await db.login_attempts.delete_one({"email": email})

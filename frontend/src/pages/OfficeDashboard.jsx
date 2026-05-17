@@ -63,8 +63,12 @@ export default function OfficeDashboard() {
 
   const markPaid = async (studentId) => {
     try {
-      await api.post(`/students/${studentId}/incentive/mark-paid`);
-      toast.success("Incentive marked paid");
+      const { data } = await api.post(`/students/${studentId}/incentive/mark-paid`);
+      if (data?.expense_request_id) {
+        toast.success("Incentive marked paid · salary request sent for approval");
+      } else {
+        toast.success("Incentive marked paid");
+      }
       load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
@@ -74,7 +78,7 @@ export default function OfficeDashboard() {
   const unmarkPaid = async (studentId) => {
     try {
       await api.post(`/students/${studentId}/incentive/unmark-paid`);
-      toast.success("Marked unpaid");
+      toast.success("Marked unpaid · any pending salary request cancelled");
       load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");

@@ -18,6 +18,22 @@ export function AuthProvider({ children }) {
 
   useEffect(() => { fetchMe(); }, [fetchMe]);
 
+  // Live-refresh: when the tab regains focus or visibility, pull fresh /auth/me so
+  // server-side permission changes pushed by a super-admin take effect without
+  // requiring the office-admin to sign out and back in. Only runs when logged in.
+  useEffect(() => {
+    if (!user || user === false) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchMe();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [user, fetchMe]);
+
   const login = async (email, password) => {
     setError("");
     try {
