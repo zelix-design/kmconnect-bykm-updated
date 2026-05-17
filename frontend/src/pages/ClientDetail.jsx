@@ -106,9 +106,8 @@ export default function ClientDetail() {
       </Card>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="client-tiles">
+      <div className={`grid grid-cols-2 gap-3 ${isStaff ? "lg:grid-cols-3" : "lg:grid-cols-4"}`} data-testid="client-tiles">
         <Tile label="Students admitted" value={t.students_count} data-testid="tile-students-admitted" />
-        <Tile label="SC Earned" value={formatMoney(t.sc_earned, currency)} tone="success" data-testid="tile-sc-earned" />
         {isStaff ? (
           <>
             <Tile label="Incentive earned" value={formatMoney(t.incentive_earned, currency)} tone="info" data-testid="tile-incentive-earned" />
@@ -116,6 +115,7 @@ export default function ClientDetail() {
           </>
         ) : (
           <>
+            <Tile label="SC Earned" value={formatMoney(t.sc_earned, currency)} tone="success" data-testid="tile-sc-earned" />
             <Tile label="Total credits" value={formatMoney(t.total_income, currency)} tone="success" data-testid="tile-total-credits" />
             <Tile label="Total debits" value={formatMoney(t.total_expense, currency)} tone="danger" data-testid="tile-total-debits" />
           </>
@@ -141,7 +141,7 @@ export default function ClientDetail() {
                 <th className="px-6 py-3 label-eyebrow">College</th>
                 <th className="px-6 py-3 label-eyebrow">Status</th>
                 <th className="px-6 py-3 label-eyebrow">Enrolled</th>
-                <th className="px-6 py-3 label-eyebrow text-right">SC Earned</th>
+                {!isStaff && <th className="px-6 py-3 label-eyebrow text-right">SC Earned</th>}
                 {isStaff && <th className="px-6 py-3 label-eyebrow text-right">Incentive</th>}
               </tr>
             </thead>
@@ -159,7 +159,9 @@ export default function ClientDetail() {
                     <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${STATUS_BADGE[st.status] || "bg-muted text-foreground"}`}>{st.status}</span>
                   </td>
                   <td className="px-6 py-3 tabular-nums text-muted-foreground">{st.enrollment_date ? formatDate(st.enrollment_date) : "—"}</td>
-                  <td className="px-6 py-3 text-right tabular-nums">{formatMoney(st.sc_out_fixed, currency)}</td>
+                  {!isStaff && (
+                    <td className="px-6 py-3 text-right tabular-nums">{formatMoney(st.sc_out_fixed, currency)}</td>
+                  )}
                   {isStaff && (
                     <td className="px-6 py-3 text-right">
                       {st.incentive_eligible ? (
@@ -184,7 +186,9 @@ export default function ClientDetail() {
               ))}
               <tr className="bg-muted/40 font-medium">
                 <td colSpan={5} className="px-6 py-3 text-muted-foreground label-eyebrow">Total</td>
-                <td className="px-6 py-3 text-right tabular-nums" data-testid="client-st-total-sc">{formatMoney(t.sc_earned, currency)}</td>
+                {!isStaff && (
+                  <td className="px-6 py-3 text-right tabular-nums" data-testid="client-st-total-sc">{formatMoney(t.sc_earned, currency)}</td>
+                )}
                 {isStaff && (
                   <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="client-st-total-incentive">
                     {formatMoney(t.incentive_earned, currency)}
