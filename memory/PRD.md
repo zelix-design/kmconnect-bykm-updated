@@ -266,6 +266,31 @@
 - [x] **Office admin's Quick Entry → Add Student** now navigates to `/students?new=1` which triggers the picker (was: opened form directly). Office Dashboard's "Add an admission" → `/students?new=1&staff=<name>` still skips the picker and goes straight to the form with reference pre-filled.
 - [x] **100% regression** — iteration_18.json: backend 8/8 pytest pass, frontend 15/15 acceptance checks pass.
 
+## Implementation status — 2026-02-17 (iteration 22: Client Detail page + Scholarship/SC-adjusted student math)
+- [x] **`/clients/:id` route** with new `ClientDetail.jsx` consuming existing `/api/clients/{id}/detail`. Every client card is now clickable; pencil/trash buttons keep working with `stopPropagation`. Role-aware:
+  - Non-staff clients (Sub Agent/Associate/KM Office): tiles `students-admitted`, `sc-earned`, `total-credits`, `total-debits`; admissions list + credit/debit transactions table.
+  - Staff clients: tiles `students-admitted`, `sc-earned`, `incentive-earned`, `incentive-pending`; admissions list with per-row incentive eligibility + paid badge.
+  - Office admin scoped to own staff (404 + redirect + toast on cross-user access).
+- [x] **Student math overhaul**:
+  - `_fees_plan_rows` reduces 1st Year row by scholarship (`max(0, year_1 - scholarship)`). Drops 1st Year row entirely when scholarship ≥ year_1 (unless referenced by a payment, in which case zeroed).
+  - `_summarize` exposes `scholarship_amount`, `sc_adjusted_total` (sum of `sc_adjusted` adjustments across all payments), `sc_earned_effective` = `max(0, sc_out_fixed - scholarship)`.
+  - **Balance vs SC Earned** formula (per latest spec) = `sc_earned_effective - sc_adjusted_total` (collected NOT subtracted).
+  - `_merge_fees_plan_schedules` writes a clarifying "Scholarship reduced (X)" remark on the auto-generated 1st Year row.
+- [x] **StudentDetail tiles** updated with `data-testid`s + contextual hints (`After scholarship · ₹X` / `₹X of ₹Y collected` / `After SC adjusted · ₹Z`).
+- [x] **100% regression** — iteration_19.json: backend 8/8 pytest pass · frontend 13/13 review checks pass.
+- [x] **Backend cross-user aggregation** for super_admin:
+  - `GET /api/clients` — super_admin gets clients from ALL users; office_admin scope unchanged.
+  - `GET /api/students` — super_admin gets students from ALL users; aggregated `collected_total` + `balance_vs_sc` summaries preserved.
+  - Each office_admin-owned doc gets `_creator_name` + `_creator_office` for UI attribution. Super_admin's own docs have no creator fields. Stale/deleted users skipped silently.
+- [x] **Creator badges** in UI:
+  - Clients page: `cli-creator-<id>` orange chip with KM_BLR/TCR/KMLY office label
+  - Students page: `st-creator-<id>` orange chip with full "KM_BLR · BLR Office Admin"
+- [x] **Add Student picker now role-aware**:
+  - Super admin: picker title "Pick a reference", lists all clients grouped by category
+  - Office admin: picker title "Pick the referring staff", description guides skip option, only staff visible (with defense-in-depth `client_type === 'staff'` filter even if /clients ever returns non-staff)
+- [x] **Office admin's Quick Entry → Add Student** now navigates to `/students?new=1` which triggers the picker (was: opened form directly). Office Dashboard's "Add an admission" → `/students?new=1&staff=<name>` still skips the picker and goes straight to the form with reference pre-filled.
+- [x] **100% regression** — iteration_18.json: backend 8/8 pytest pass, frontend 15/15 acceptance checks pass.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
