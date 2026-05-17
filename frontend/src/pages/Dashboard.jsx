@@ -443,8 +443,8 @@ function StudentsOverview({ students, currency, range }) {
                 <div className="mt-5 pt-4 border-t border-border/60" data-testid="top-references">
                   <p className="label-eyebrow mb-2">Top references</p>
                   <ul className="space-y-1.5">
-                    {topReferences.map((r) => (
-                      <li key={r.name} className="flex items-center justify-between text-xs">
+                    {topReferences.map((r, i) => (
+                      <li key={`${r.name}-${i}`} className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 min-w-0 truncate"><IdentificationBadge size={12} className="text-muted-foreground/70 shrink-0" /> <span className="truncate">{r.name}</span></span>
                         <span className="font-medium tabular-nums text-foreground">{r.count}</span>
                       </li>
@@ -456,8 +456,8 @@ function StudentsOverview({ students, currency, range }) {
                 <div className="mt-5 pt-4 border-t border-border/60" data-testid="enrolled-colleges">
                   <p className="label-eyebrow mb-2">Enrolled colleges</p>
                   <ul className="space-y-1.5">
-                    {enrolledColleges.map((c) => (
-                      <li key={c.name} className="flex items-center justify-between text-xs">
+                    {enrolledColleges.map((c, i) => (
+                      <li key={`${c.name}-${i}`} className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 min-w-0 truncate"><Buildings size={12} className="text-muted-foreground/70 shrink-0" /> <span className="truncate">{c.name}</span></span>
                         <span className="font-medium tabular-nums text-foreground">{c.count}</span>
                       </li>
@@ -584,8 +584,8 @@ function ClientsOverview({ clients, students }) {
                 <div className="mt-5 pt-4 border-t border-border/60" data-testid="top-referrers">
                   <p className="label-eyebrow mb-2">Top referrers</p>
                   <ul className="space-y-1.5">
-                    {topReferrers.map((r) => (
-                      <li key={r.name} className="flex items-center justify-between text-xs">
+                    {topReferrers.map((r, i) => (
+                      <li key={`${r.name}-${i}`} className="flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5 min-w-0 truncate">
                           <IdentificationBadge size={12} className="text-muted-foreground/70 shrink-0" />
                           <span className="truncate">{r.name}</span>

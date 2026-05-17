@@ -268,6 +268,35 @@
 
 ## Implementation status — 2026-02-17 (iteration 22: Client Detail page + Scholarship/SC-adjusted student math)
 - [x] **`/clients/:id` route** with new `ClientDetail.jsx` consuming existing `/api/clients/{id}/detail`. Every client card is now clickable; pencil/trash buttons keep working with `stopPropagation`. Role-aware:
+  - Non-staff clients: tiles `students-admitted`, `sc-earned`, `total-credits`, `total-debits`; admissions list + credit/debit transactions table.
+  - Staff clients: 3 tiles `students-admitted`, `incentive-earned`, `incentive-pending` (SC Earned tile removed per user request); admissions list with per-row incentive eligibility + paid badge.
+  - Office admin scoped to own staff (404 + redirect + toast on cross-user access).
+- [x] **Student math overhaul**:
+  - `_fees_plan_rows` reduces 1st Year row by scholarship (`max(0, year_1 - scholarship)`).
+  - `_summarize` exposes `scholarship_amount`, `sc_adjusted_total`, `sc_earned_effective` = `max(0, sc_out_fixed - scholarship)`.
+  - **Balance vs SC Earned** formula = `sc_earned_effective - sc_adjusted_total` (collected NOT subtracted, per user spec).
+  - `_merge_fees_plan_schedules` writes a clarifying "Scholarship reduced (X)" remark on the auto-generated 1st Year row.
+- [x] **StudentDetail tiles** updated with `data-testid`s + contextual hints ("After scholarship · ₹X" / "₹X of ₹Y collected" / "After SC adjusted · ₹Z").
+- [x] **100% regression** — iteration_19.json: backend 8/8 pytest pass · frontend 13/13 review checks pass.
+
+## Implementation status — 2026-02-18 (iteration 23: Light refactor + Invoice PDF payments timeline + Per-client PDF exports)
+- [x] **Light refactor (no behavior change)**:
+  - Extracted Dashboard helpers to **`/lib/dashboardUtils.js`** (`isoDate`, `rangeFor`, `withinFilter`, `monthlyBuckets`, `allTimeMonthlyBuckets`, `todayISO`, `PALETTES`, `FILTER_OPTIONS`, `STATUS_BADGE`, `CLIENT_TYPE_LABEL`, `LEDGER_TYPE_LABEL`, `LEDGER_TYPE_COLOR`).
+  - Extracted reusable components to **`/components/dashboard/StatCard.jsx`** (StatCard, ChartHeader, Empty) and **`/components/dashboard/OverviewLists.jsx`** (TxList, StudentList, ClientList, LedgerList).
+  - Extracted Students primitives to **`/components/students/StudentCard.jsx`** (status-tinted card) and **`/components/students/ClientPickerDialog.jsx`** (reusable reference picker).
+  - Dashboard.jsx 1018 → 741 lines (−27%); Students.jsx 444 → 291 lines (−34%).
+  - Fixed duplicate-key warning by suffixing index to references/colleges/referrers map keys.
+- [x] **Invoice PDF — Payments Received mini-table**:
+  - New backend endpoint **`GET /api/invoices/{id}/payments`** returns `{payments[], total_paid, balance_due}` combining `previous_sc_payment` (SC invoices) with any auto-logged income transactions (with `linked_invoice_id` or `linked_sc_payment_invoice_id` matching the invoice). Auto-mirrored entries are de-duped to avoid double-counting.
+  - `downloadInvoicePDF` accepts optional `payments` array; renders a Date · Mode · Reference · Amount mini-table with Total Paid footer and Balance Due recap. Falls back to deriving from `previous_sc_payment` if no payments array is passed (safety net).
+  - `Invoices.jsx` PDF button now fetches `/payments` first then calls the PDF generator.
+- [x] **Per-client PDF export from Client Detail**:
+  - New `/app/frontend/src/lib/clientStatementPdf.js` produces two formats:
+    - **Staff** → `<name> - Incentive - YYYY-MM-DD.pdf` titled "Incentive Payout Statement" with Students/Earned/Paid/Pending tiles and per-row Incentive column.
+    - **Non-staff** → `<name> - Statement - YYYY-MM-DD.pdf` titled "Client Statement" with SC Earned/Credits/Debits tiles, admissions + Money Trail table.
+  - Wired to Client Detail header via `data-testid="download-client-pdf"` button (sits next to Refresh).
+- [x] **100% testing** — iteration_20.json: backend 9/9 pytest pass · frontend 16/16 e2e flows pass (incl. PDF text extracted and asserted). Two minor design notes (Recharts initial-render warnings — cosmetic; key warning — fixed).
+- [x] **`/clients/:id` route** with new `ClientDetail.jsx` consuming existing `/api/clients/{id}/detail`. Every client card is now clickable; pencil/trash buttons keep working with `stopPropagation`. Role-aware:
   - Non-staff clients (Sub Agent/Associate/KM Office): tiles `students-admitted`, `sc-earned`, `total-credits`, `total-debits`; admissions list + credit/debit transactions table.
   - Staff clients: tiles `students-admitted`, `sc-earned`, `incentive-earned`, `incentive-pending`; admissions list with per-row incentive eligibility + paid badge.
   - Office admin scoped to own staff (404 + redirect + toast on cross-user access).
