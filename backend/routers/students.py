@@ -244,6 +244,16 @@ def _merge_fees_plan_schedules(
     return out
 
 
+def _student_filter(student_id: str, user: dict) -> dict:
+    """Compose the MongoDB filter so super_admin can find ANY student, while
+    office_admin remains scoped to their own user_id."""
+    q: dict = {"id": student_id}
+    if user.get("role") != "super_admin":
+        q["user_id"] = user["id"]
+    return q
+
+
+
 async def _auto_log_payment_transaction(user_id: str, student: dict, payment: dict) -> None:
     """Mirror of invoice auto-log: create an income transaction when the
     payment's received_in carries an account_id (or is plain cash routed to
@@ -519,8 +529,8 @@ async def agent_payments(
 
 
 @router.get("/{student_id}")
-async def get_student(student_id: str, user: dict = Depends(require_edit("students"))):
-    s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
+async def get_student(student_id: str, user: dict = Depends(get_current_user)):
+    s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
     return _summarize(s)
@@ -529,7 +539,7 @@ async def get_student(student_id: str, user: dict = Depends(require_edit("studen
 @router.patch("/{student_id}")
 async def update_student(student_id: str, payload: StudentIn, user: dict = Depends(require_edit("students"))):
     existing = await db.students.find_one(
-        {"id": student_id, "user_id": user["id"]}, {"_id": 0}
+        _student_filter(student_id, user), {"_id": 0}
     )
     if not existing:
         raise HTTPException(404, "Student not found")
@@ -547,7 +557,7 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
     data["schedules"] = new_schedules
 
     await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$set": data},
     )
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
@@ -557,12 +567,10 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
 @router.delete("/{student_id}")
 async def delete_student(student_id: str, user: dict = Depends(require_edit("students"))):
     # Cascade delete any auto-logged income transactions linked to this student.
-    res = await db.students.delete_one({"id": student_id, "user_id": user["id"]})
+    res = await db.students.delete_one(_student_filter(student_id, user))
     if res.deleted_count == 0:
         raise HTTPException(404, "Student not found")
-    await db.transactions.delete_many({
-        "user_id": user["id"], "linked_student_id": student_id,
-    })
+    await db.transactions.delete_many({"linked_student_id": student_id})
     return {"ok": True}
 
 
@@ -571,7 +579,7 @@ async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit
     """Mark the staff incentive earned on this admission as paid AND auto-create a
     salary-style `expense_request` for super-admin approval so the actual cash flows
     through the same approval pipeline as other office expenses. Idempotent."""
-    s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
+    s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
     if s.get("incentive_paid"):
@@ -613,7 +621,7 @@ async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit
     if request_id:
         patch["incentive_request_id"] = request_id
     await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$set": patch},
     )
     return {
@@ -627,7 +635,7 @@ async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit
 
 @router.post("/{student_id}/incentive/unmark-paid")
 async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_edit("students"))):
-    s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
+    s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
     # If a salary request was auto-created and is still pending, cancel it
@@ -637,7 +645,7 @@ async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_ed
             {"id": req_id, "requested_by_user_id": user["id"], "status": "pending"}
         )
     await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$set": {"incentive_paid": False},
          "$unset": {"incentive_paid_at": "", "incentive_request_id": ""}},
     )
@@ -657,7 +665,7 @@ async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = De
     await _load_student_or_404(student_id, user["id"])
     item = {"id": gen_id(), "created_at": now_iso(), **payload.model_dump()}
     await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$push": {"schedules": item}},
     )
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
@@ -679,7 +687,7 @@ async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleIt
 @router.delete("/{student_id}/schedules/{schedule_id}")
 async def delete_schedule(student_id: str, schedule_id: str, user: dict = Depends(require_edit("students"))):
     res = await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$pull": {"schedules": {"id": schedule_id}}},
     )
     if res.matched_count == 0:
@@ -704,10 +712,10 @@ async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depe
     student = await _load_student_or_404(student_id, user["id"])
     item = {"id": gen_id(), "created_at": now_iso(), **_materialize_payment(payload)}
     await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$push": {"payments": item}},
     )
-    await _auto_log_payment_transaction(user["id"], student, item)
+    await _auto_log_payment_transaction(student["user_id"], student, item)
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
     return _summarize(s)
 
@@ -725,14 +733,14 @@ async def update_payment(student_id: str, payment_id: str, payload: PaymentItemI
     # Re-fetch the freshly updated payment and re-sync transaction
     updated_payment = next((p for p in student.get("payments") or [] if p["id"] == payment_id), None)
     if updated_payment:
-        await _auto_log_payment_transaction(user["id"], student, updated_payment)
+        await _auto_log_payment_transaction(student["user_id"], student, updated_payment)
     return _summarize(student)
 
 
 @router.delete("/{student_id}/payments/{payment_id}")
 async def delete_payment(student_id: str, payment_id: str, user: dict = Depends(require_edit("students"))):
     res = await db.students.update_one(
-        {"id": student_id, "user_id": user["id"]},
+        _student_filter(student_id, user),
         {"$pull": {"payments": {"id": payment_id}}},
     )
     if res.matched_count == 0:
