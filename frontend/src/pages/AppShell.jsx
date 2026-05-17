@@ -3,9 +3,10 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
+import NotificationsBell from "@/components/NotificationsBell";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
-  Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass, Bell,
+  Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX,
 } from "@phosphor-icons/react";
 
@@ -185,15 +186,7 @@ export default function AppShell() {
                 data-testid="topbar-search"
               />
             </div>
-            <button
-              type="button"
-              data-testid="topbar-bell"
-              className="relative w-10 h-10 rounded-full bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors"
-              title="Notifications"
-            >
-              <Bell size={18} />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-background" />
-            </button>
+            <NotificationsBell />
             <ThemeToggle />
             <div className="flex items-center gap-2.5 pl-3 ml-1 border-l border-border h-8">
               <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0" data-testid="topbar-avatar">

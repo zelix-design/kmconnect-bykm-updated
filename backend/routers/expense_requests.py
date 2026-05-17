@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import ExpenseRequestIn, ExpenseRequestApproval, ExpenseRequestRejection
+from routers.notifications import notify_super_admins
 
 router = APIRouter(prefix="/api/expense-requests", tags=["expense-requests"])
 
@@ -52,6 +53,19 @@ async def create_request(payload: ExpenseRequestIn, user: dict = Depends(require
     }
     await db.expense_requests.insert_one(doc)
     doc.pop("_id", None)
+    # Notify super-admins
+    office_label = (user.get("office") or "").replace("KM_", "KM ")
+    kind_label = "Salary request" if payload.kind == "salary" else "Expense request"
+    await notify_super_admins(
+        type="expense_request",
+        title=f"{kind_label} · {user.get('name', 'Office admin')}",
+        message=f"₹{payload.amount:,.0f}{' · URGENT' if payload.urgency == 'urgent' else ''}"
+                f" · {payload.description or 'no description'}"
+                f"{' · ' + office_label if office_label else ''}",
+        link="/expense-requests",
+        actor_user_id=user["id"],
+        metadata={"request_id": doc["id"], "amount": payload.amount, "kind": payload.kind, "urgency": payload.urgency},
+    )
     return doc
 
 

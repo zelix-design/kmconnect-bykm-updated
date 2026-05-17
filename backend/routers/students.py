@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
+from routers.notifications import notify_super_admins
 
 
 router = APIRouter(prefix="/api/students", tags=["students"])
@@ -332,6 +333,26 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
     }
     await db.students.insert_one(doc)
     doc.pop("_id", None)
+    # Notify super-admins when an office admin enrols a student
+    if user.get("role") == "office_admin":
+        office_label = (user.get("office") or "").replace("KM_", "KM ")
+        bits = []
+        if data.get("college"):
+            bits.append(data["college"])
+        if data.get("course"):
+            bits.append(data["course"])
+        if data.get("reference"):
+            bits.append(f"ref: {data['reference']}")
+        await notify_super_admins(
+            type="student_enrolled",
+            title=f"New admission · {user.get('name', 'Office admin')}",
+            message=f"{data.get('name', 'Student')}"
+                    f"{' · ' + ' · '.join(bits) if bits else ''}"
+                    f"{' · ' + office_label if office_label else ''}",
+            link=f"/students/{doc['id']}",
+            actor_user_id=user["id"],
+            metadata={"student_id": doc["id"], "reference": data.get("reference"), "college": data.get("college")},
+        )
     return _summarize(doc)
 
 

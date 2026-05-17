@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications
 
 
 app = FastAPI(title="FinFlow API")
@@ -27,6 +27,7 @@ app.include_router(dashboard.router)
 app.include_router(students.router)
 app.include_router(users.router)
 app.include_router(expense_requests.router)
+app.include_router(notifications.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -68,6 +69,8 @@ async def startup():
     await db.transactions.create_index("linked_expense_request_id")
     await db.expense_requests.create_index([("requested_by_user_id", 1), ("created_at", -1)])
     await db.expense_requests.create_index("status")
+    await db.notifications.create_index([("recipient_user_id", 1), ("created_at", -1)])
+    await db.notifications.create_index([("recipient_user_id", 1), ("read", 1)])
     # Harden against any legacy duplicates before declaring the unique index.
     try:
         await db.login_attempts.create_index("email", unique=True)

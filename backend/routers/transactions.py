@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import TransactionIn
+from routers.notifications import notify_super_admins
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -41,6 +42,20 @@ async def create_transaction(payload: TransactionIn, user: dict = Depends(requir
     doc = {"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **payload.model_dump()}
     await db.transactions.insert_one(doc)
     doc.pop("_id", None)
+    # Notify super-admins when an office admin logs a transaction
+    if user.get("role") == "office_admin":
+        office_label = (user.get("office") or "").replace("KM_", "KM ")
+        type_label = "Income" if payload.type == "income" else "Expense"
+        await notify_super_admins(
+            type="transaction",
+            title=f"{type_label} · {user.get('name', 'Office admin')}",
+            message=f"₹{payload.amount:,.0f}"
+                    f" · {payload.description or 'no description'}"
+                    f"{' · ' + office_label if office_label else ''}",
+            link="/transactions",
+            actor_user_id=user["id"],
+            metadata={"transaction_id": doc["id"], "amount": payload.amount, "type": payload.type},
+        )
     return doc
 
 
