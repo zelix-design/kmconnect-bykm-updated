@@ -151,21 +151,44 @@ def _summarize(s: dict) -> dict:
     s["payments"] = payments
     scheduled_total = round(sum(x.get("amount", 0) for x in schedules), 2)
     collected_total = round(sum(x.get("amount", 0) for x in payments), 2)
-    sc_fixed = s.get("sc_out_fixed", 0) or 0
+    sc_fixed = float(s.get("sc_out_fixed", 0) or 0)
     fp = s.get("fees_plan") or {}
+    scholarship_amount = 0.0
+    if fp.get("has_scholarship"):
+        try:
+            scholarship_amount = max(0.0, float(fp.get("scholarship_amount") or 0))
+        except (TypeError, ValueError):
+            scholarship_amount = 0.0
     total_fees = round(
         (fp.get("year_1") or 0) + (fp.get("year_2") or 0)
         + (fp.get("year_3") or 0) + (fp.get("year_4") or 0)
-        - (fp.get("scholarship_amount", 0) or 0 if fp.get("has_scholarship") else 0),
+        - scholarship_amount,
         2,
     )
     if fp:
         fp["total_fees"] = total_fees
         s["fees_plan"] = fp
+    # Sum of SC adjustments routed elsewhere (Sub Agent / Associate / KM)
+    sc_adjusted_total = 0.0
+    for p in payments:
+        for adj in p.get("adjustments") or []:
+            if adj.get("kind") == "sc_adjusted":
+                try:
+                    sc_adjusted_total += float(adj.get("amount") or 0)
+                except (TypeError, ValueError):
+                    pass
+    sc_adjusted_total = round(sc_adjusted_total, 2)
+    sc_earned_effective = round(max(0.0, sc_fixed - scholarship_amount), 2)
+    # Balance vs SC Earned: per latest product spec, only the SC adjustments
+    # (NOT the collected payments) reduce the effective SC.
+    balance_vs_sc = round(sc_earned_effective - sc_adjusted_total, 2)
     s["scheduled_total"] = scheduled_total
     s["collected_total"] = collected_total
+    s["scholarship_amount"] = round(scholarship_amount, 2)
+    s["sc_adjusted_total"] = sc_adjusted_total
+    s["sc_earned_effective"] = sc_earned_effective
     s["balance_vs_scheduled"] = round(scheduled_total - collected_total, 2)
-    s["balance_vs_sc"] = round(sc_fixed - collected_total, 2)
+    s["balance_vs_sc"] = balance_vs_sc
     return s
 
 
@@ -181,6 +204,12 @@ _YEAR_FIELDS = [
 def _fees_plan_rows(fees_plan: Optional[dict]) -> List[dict]:
     if not fees_plan:
         return []
+    scholarship = 0.0
+    if fees_plan.get("has_scholarship"):
+        try:
+            scholarship = max(0.0, float(fees_plan.get("scholarship_amount") or 0))
+        except (TypeError, ValueError):
+            scholarship = 0.0
     rows = []
     for label, key in _YEAR_FIELDS:
         amt = fees_plan.get(key)
@@ -190,6 +219,9 @@ def _fees_plan_rows(fees_plan: Optional[dict]) -> List[dict]:
             amt = float(amt)
         except (TypeError, ValueError):
             continue
+        # Scholarship reduces only the 1st-year fees.
+        if key == "year_1" and scholarship > 0:
+            amt = max(0.0, amt - scholarship)
         if amt <= 0:
             continue
         rows.append({"label": label, "amount": round(amt, 2), "year_key": key})
@@ -206,6 +238,18 @@ def _merge_fees_plan_schedules(
       by any payment; otherwise zeroes its amount.
     """
     desired = {r["year_key"]: r for r in _fees_plan_rows(fees_plan)}
+    scholarship_amt = 0.0
+    if fees_plan and fees_plan.get("has_scholarship"):
+        try:
+            scholarship_amt = max(0.0, float(fees_plan.get("scholarship_amount") or 0))
+        except (TypeError, ValueError):
+            scholarship_amt = 0.0
+
+    def _remarks_for(yk: str) -> str:
+        if yk == "year_1" and scholarship_amt > 0:
+            return f"Auto from fees plan · Scholarship reduced ({scholarship_amt:.0f})"
+        return "Auto from fees plan"
+
     out: List[dict] = []
     seen_keys = set()
     for sc in existing or []:
@@ -217,7 +261,12 @@ def _merge_fees_plan_schedules(
             out.append(sc)
             continue
         if yk in desired:
-            sc = {**sc, "label": desired[yk]["label"], "amount": desired[yk]["amount"]}
+            sc = {
+                **sc,
+                "label": desired[yk]["label"],
+                "amount": desired[yk]["amount"],
+                "remarks": _remarks_for(yk),
+            }
             out.append(sc)
             seen_keys.add(yk)
         else:
@@ -236,7 +285,7 @@ def _merge_fees_plan_schedules(
             "created_at": now_iso(),
             "label": row["label"],
             "amount": row["amount"],
-            "remarks": "Auto from fees plan",
+            "remarks": _remarks_for(yk),
             "due_date": None,
             "source": "fees_plan",
             "year_key": yk,

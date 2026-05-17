@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 19 — Client Detail page + scholarship/sc_adjusted student math. ALL 8 backend pytest tests PASS and ALL frontend review checks PASS on the live preview.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "backend_results": {
+    "TestClientDetail::test_super_admin_can_view_any_client": "PASS — totals dict has students_count/sc_earned/incentive_*/total_income/total_expense/net",
+    "TestClientDetail::test_office_admin_owns_staff": "PASS — is_staff=true, detail returned",
+    "TestClientDetail::test_office_admin_cannot_view_other_client": "PASS — 404 on foreign client id",
+    "TestClientDetail::test_404_on_missing_id": "PASS",
+    "TestStudentMath::test_anupama_scholarship": "PASS — scholarship_amount=20000, sc_earned_effective=55000, balance_vs_sc matches sc_earned_effective - sc_adjusted_total",
+    "TestStudentMath::test_nafathulla_sc_adjusted": "PASS — sc_earned_effective=100000, sc_adjusted_total=10000, balance_vs_sc=90000",
+    "TestStudentMath::test_create_with_scholarship_reduces_year_1": "PASS — year_1=70000 (100k-30k); 2/3 unaffected; year_4=0 dropped; PATCH off restores 100000; PATCH scholarship>year_1 drops the row (no payments linked)",
+    "TestStudentMath::test_legacy_student_no_fees_plan": "PASS — backward compat: scholarship_amount=0, sc_earned_effective=sc_out_fixed"
+  },
+  "frontend_results": {
+    "super_admin_clients_loads": "PASS — 17 cards rendered",
+    "super_admin_staff_card_click_navigates_to_detail": "PASS — ABHISHEK P RAJ → /clients/<id>",
+    "super_admin_staff_detail_tiles": "PASS — tile-students-admitted, tile-sc-earned, tile-incentive-earned, tile-incentive-pending; no credits/debits tiles",
+    "super_admin_nonstaff_detail_tiles": "PASS — VIJITH OFFICE (km_tcr_office): tile-total-credits + tile-total-debits visible; no incentive tiles",
+    "edit_pencil_does_not_navigate": "PASS — URL stays at /clients, edit dialog opens (stopPropagation works)",
+    "office_admin_sees_only_staff": "PASS — 1 card (Ravi Kumar staff)",
+    "office_admin_staff_detail": "PASS — opens with tile-incentive-earned",
+    "office_admin_foreign_client_redirects": "PASS — toast 'Client not found' + redirect to /clients on ef820dda-... (super_admin-owned client)",
+    "student_detail_ANUPAMA_sc_earned": "PASS — '₹55,000.00\\nAfter scholarship · ₹20,000.00'",
+    "student_detail_ANUPAMA_scheduled_total": "PASS — '₹8,40,000.00\\n₹10,000.00 of ₹8,50,000.00 collected'",
+    "student_detail_ANUPAMA_balance_vs_sc": "PASS — '₹55,000.00' (no hint, no sc_adjusted)",
+    "student_detail_NAFATHULLA_sc_earned": "PASS — '₹1,00,000.00' (no scholarship hint)",
+    "student_detail_NAFATHULLA_balance_vs_sc": "PASS — '₹90,000.00\\nAfter SC adjusted · ₹10,000.00'"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration19.py",
+    "/app/test_reports/pytest/iteration19.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/clients.py client_detail (line ~87): students query uses {'user_id': owner_id} which means only admissions on the SAME office_admin's books surface for that client. This matches the spec ('office admins are scoped to their own staff'), but for super_admin viewing a super_admin-owned non-staff client, transactions+name-matched students will use the super_admin's user_id — which is correct. Documented for future maintainers.",
+    "Incentive 'eligible_count >= 3 per month' rule is duplicated between routers/clients.py::client_detail and the OfficeDashboard frontend. Consider centralising the monthly-eligibility helper in auth_lib or a domain util to avoid drift.",
+    "ClientDetail.jsx unconditional currency fallback 'USD' (line 32) — okay because seeded admin is INR, but if a brand-new user without `currency` lands on ClientDetail before settings sync, money labels would render as USD. Same fallback pattern is used elsewhere; not a regression.",
+    "Clients.jsx ClientCard uses role='button' on the Card. Edit/Delete buttons inside use both stopPropagation on the wrapping div AND on each onClick — verified working but slightly redundant; minor.",
+    "_merge_fees_plan_schedules handles 'year > 0 → drop row' via deletion when not referenced, otherwise zeros amount. Verified via PATCH scholarship>year_1 test: row is dropped. Good.",
+    "Native HTML date input (Enrollment Date, Date of Birth) still in use — out of iteration scope, but candidate for shadcn Calendar migration."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration19.py"],
+  "success_rate": { "backend": "100% (8/8)", "frontend": "100% (13/13 review checks)" },
+  "test_credentials": "admin@finflow.com/Admin@123 and blr1@finflow.com/Office@123 from /app/memory/test_credentials.md",
+  "seed_data_creation": "Temporary TEST_ScholarshipStudent_Iter19 created and DELETED during test_create_with_scholarship_reduces_year_1. No persistent data added.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 deliverables (clickable client cards → /clients/:id detail, balance_vs_sc formula = sc_earned_effective - sc_adjusted_total, office_admin scoped to own staff only) are fully verified on https://paymate-43.preview.emergentagent.com. Backend math endpoint /api/students/{id} exposes scholarship_amount, sc_adjusted_total, sc_earned_effective, balance_vs_sc. /api/clients/{id}/detail returns 404 for cross-user access and is_staff branches the totals dict. Frontend ClientDetail.jsx has all required data-testids. ANUPAMA V V and NAFATHULLA R K fixtures remain seeded.",
+  "rca of the issue": "N/A — no bugs found."
+}

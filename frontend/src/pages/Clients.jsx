@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
@@ -232,8 +233,24 @@ const OFFICE_OPTIONS = [
 ];
 
 function ClientCard({ c, allowEdit, openEdit, remove }) {
+  const nav = useNavigate();
+  const goDetail = () => nav(`/clients/${c.id}`);
+  const onKey = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      goDetail();
+    }
+  };
   return (
-    <Card key={c.id} className="p-6 border border-border bg-card rounded-lg shadow-none" data-testid={`client-card-${c.id}`}>
+    <Card
+      key={c.id}
+      role="button"
+      tabIndex={0}
+      onClick={goDetail}
+      onKeyDown={onKey}
+      className="p-6 border border-border bg-card rounded-lg shadow-none cursor-pointer hover:border-orange-300 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-400/40"
+      data-testid={`client-card-${c.id}`}
+    >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium">
@@ -245,9 +262,9 @@ function ClientCard({ c, allowEdit, openEdit, remove }) {
             {c.client_type === "staff" && c.office && <p className="text-xs text-muted-foreground flex items-center gap-1"><Buildings size={12} /> {c.office.replace("KM_", "KM ")}</p>}
           </div>
         </div>
-        <div className="flex gap-1">
-          {allowEdit && <button onClick={() => openEdit(c)} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
-          {allowEdit && <button onClick={() => remove(c.id)} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
+        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+          {allowEdit && <button onClick={(e) => { e.stopPropagation(); openEdit(c); }} data-testid={`edit-cli-${c.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
+          {allowEdit && <button onClick={(e) => { e.stopPropagation(); remove(c.id); }} data-testid={`delete-cli-${c.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
         </div>
       </div>
       <div className="mt-3 flex items-center gap-2 flex-wrap">

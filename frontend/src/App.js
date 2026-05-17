@@ -19,6 +19,7 @@ import Students from "@/pages/Students";
 import StudentDetail from "@/pages/StudentDetail";
 import Agents from "@/pages/Agents";
 import AgentDetail from "@/pages/AgentDetail";
+import ClientDetail from "@/pages/ClientDetail";
 import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
 import PermGate from "@/components/PermGate";
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/accounts" element={<PermGate page="accounts"><Accounts /></PermGate>} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/clients" element={<PermGate page="clients"><Clients /></PermGate>} />
+            <Route path="/clients/:id" element={<PermGate page="clients"><ClientDetail /></PermGate>} />
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
