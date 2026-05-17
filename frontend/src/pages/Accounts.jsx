@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { canEdit } from "@/lib/perm";
 import { formatMoney } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ const COLORS = ["#10b981", "#0ea5e9", "#f59e0b", "#ef4444", "#8b5cf6", "#78716c"
 
 export default function Accounts() {
   const { user } = useAuth();
+  const allowEdit = canEdit(user, "accounts");
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
@@ -62,11 +64,13 @@ export default function Accounts() {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Accounts</h1>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
+          {allowEdit && (
           <DialogTrigger asChild>
             <Button onClick={openCreate} data-testid="add-account-btn" className="h-10 btn-amber border-0">
               <Plus size={16} className="mr-1.5" /> Add account
             </Button>
           </DialogTrigger>
+          )}
           <DialogContent className="bg-card">
             <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} account</DialogTitle></DialogHeader>
             <form onSubmit={submit} className="space-y-4">
@@ -125,8 +129,8 @@ export default function Accounts() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button onClick={() => openEdit(a)} data-testid={`edit-acc-${a.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
-                    <button onClick={() => remove(a.id)} data-testid={`delete-acc-${a.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
+                    {allowEdit && <button onClick={() => openEdit(a)} data-testid={`edit-acc-${a.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>}
+                    {allowEdit && <button onClick={() => remove(a.id)} data-testid={`delete-acc-${a.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>}
                   </div>
                 </div>
                 <div className="mt-5">

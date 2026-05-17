@@ -10,7 +10,7 @@ ApprovalStatus = Literal["pending", "approved", "rejected"]
 
 # Page-level permission keys controllable by super_admin (office_admin only).
 PERMISSION_PAGES = (
-    "overview", "quick_entry", "transactions", "clients",
+    "overview", "quick_entry", "transactions", "accounts", "clients",
     "students", "expense_requests", "settings",
 )
 PermissionLevel = Literal["edit", "view", "none"]

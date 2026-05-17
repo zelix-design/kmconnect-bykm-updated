@@ -55,7 +55,7 @@ export default function App() {
             <Route path="/" element={<PermGate page="overview"><Dashboard /></PermGate>} />
             <Route path="/quick-entry" element={<PermGate page="quick_entry"><QuickEntry /></PermGate>} />
             <Route path="/transactions" element={<PermGate page="transactions"><Transactions /></PermGate>} />
-            <Route path="/accounts" element={<Accounts />} />
+            <Route path="/accounts" element={<PermGate page="accounts"><Accounts /></PermGate>} />
             <Route path="/invoices" element={<Invoices />} />
             <Route path="/clients" element={<PermGate page="clients"><Clients /></PermGate>} />
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />

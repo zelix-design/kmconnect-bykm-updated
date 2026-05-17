@@ -236,6 +236,14 @@
 - [x] **"SC Out Fixed" → "SC Earned"** renamed everywhere (Dashboard, StudentDetail, Students form, studentExports XLSX/PDF headers, label hint "vs. SC Earned"). DB field `sc_out_fixed` kept for backward compatibility.
 - [x] **blr1 test account auto-recreated** when missing (per testing agent cleanup) — superadmin and office_admin seeding logic resilient.
 
+## Implementation status — 2026-02-17 (iteration 19: Accounts for Office Admin)
+- [x] **Office admins now have Accounts** — sidebar `nav-accounts` shown to all roles (was super_admin-only); each user's accounts are user-scoped on the backend, so office admins only see their own.
+- [x] **`accounts` added to `PERMISSION_PAGES`** (8 controllable pages total). Backend `require_edit("accounts")` applied to POST / PATCH / DELETE on `/api/accounts`. GET stays open (gated by canView).
+- [x] **Super admin Permissions dialog** automatically shows a new "Accounts" row with edit / view / none chips.
+- [x] **Route guard** `<PermGate page="accounts">` wraps `/accounts`.
+- [x] **Accounts mini-card** on OfficeDashboard right column (`accounts-mini`) — shows up to 4 accounts with color dot, type, current balance, total balance row, "Manage →" link to `/accounts`. Empty state with "Add your first" CTA. Office admin only sees their own accounts.
+- [x] **Frontend canEdit gate** on Accounts page — hides `add-account-btn`, per-row `edit-acc-` / `delete-acc-` buttons when view-only.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

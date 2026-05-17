@@ -8,6 +8,7 @@ export const PERMISSION_PAGES = [
   { key: "overview", label: "Overview" },
   { key: "quick_entry", label: "Quick entry" },
   { key: "transactions", label: "Transactions" },
+  { key: "accounts", label: "Accounts" },
   { key: "clients", label: "Clients / Staff" },
   { key: "students", label: "Students" },
   { key: "expense_requests", label: "Office expenses" },

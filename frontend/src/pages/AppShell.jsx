@@ -17,7 +17,7 @@ const ALL_NAV = [
   { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview", perm: "overview" },
   { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry" },
   { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions", perm: "transactions" },
-  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", roles: ["super_admin"] },
+  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", perm: "accounts" },
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices", roles: ["super_admin"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients", perm: "clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students", perm: "students" },

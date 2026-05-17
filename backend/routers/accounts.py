@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
-from auth_lib import get_current_user, gen_id, now_iso
+from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import AccountIn
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
@@ -30,7 +30,7 @@ async def list_accounts(user: dict = Depends(get_current_user), for_user_id: str
 
 
 @router.post("")
-async def create_account(payload: AccountIn, user: dict = Depends(get_current_user)):
+async def create_account(payload: AccountIn, user: dict = Depends(require_edit("accounts"))):
     doc = {
         "id": gen_id(),
         "user_id": user["id"],
@@ -44,7 +44,7 @@ async def create_account(payload: AccountIn, user: dict = Depends(get_current_us
 
 
 @router.patch("/{account_id}")
-async def update_account(account_id: str, payload: AccountIn, user: dict = Depends(get_current_user)):
+async def update_account(account_id: str, payload: AccountIn, user: dict = Depends(require_edit("accounts"))):
     res = await db.accounts.update_one(
         {"id": account_id, "user_id": user["id"]},
         {"$set": payload.model_dump()},
@@ -55,7 +55,7 @@ async def update_account(account_id: str, payload: AccountIn, user: dict = Depen
 
 
 @router.delete("/{account_id}")
-async def delete_account(account_id: str, user: dict = Depends(get_current_user)):
+async def delete_account(account_id: str, user: dict = Depends(require_edit("accounts"))):
     res = await db.accounts.delete_one({"id": account_id, "user_id": user["id"]})
     if res.deleted_count == 0:
         raise HTTPException(404, "Account not found")
