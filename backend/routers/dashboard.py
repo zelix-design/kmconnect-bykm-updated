@@ -186,6 +186,15 @@ async def office_admin_dashboard(
     # All students for this user (we'll partition them)
     students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
 
+    # Total admissions in window (regardless of whether a staff reference matched).
+    # This drives the top-of-page "Admissions" tile so unreferenced or
+    # skipped-reference enrolments still show up.
+    total_admissions_in_window = 0
+    for s in students:
+        dt = _student_admission_dt(s)
+        if win_start <= dt <= win_end:
+            total_admissions_in_window += 1
+
     # First pass: tally admissions per (staff_name, year-month) to compute monthly eligibility
     month_counts: dict[tuple, int] = {}
     for s in students:
@@ -278,7 +287,8 @@ async def office_admin_dashboard(
         "window_end": win_end.isoformat(),
         "office": user.get("office"),
         "totals": {
-            "admissions": sum(r["admissions_count"] for r in breakdown),
+            "admissions": total_admissions_in_window,
+            "staff_attributed_admissions": sum(r["admissions_count"] for r in breakdown),
             "eligible_admissions": sum(r["eligible_count"] for r in breakdown),
             "staff_count": len(staffs),
             "incentive_earned": round(sum(r["incentive_earned"] for r in breakdown), 2),

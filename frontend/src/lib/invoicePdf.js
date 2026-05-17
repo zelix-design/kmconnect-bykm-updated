@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoneyForPdf as formatMoney, formatDate } from "@/lib/format";
 
 export function downloadInvoicePDF({ invoice, client, user, payments }) {
   const currency = user?.currency || "USD";

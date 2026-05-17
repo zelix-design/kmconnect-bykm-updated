@@ -3,7 +3,7 @@
 // Sub Agent / Associate / KM Office → SC + Credit/Debit statement
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoneyForPdf as formatMoney, formatDate } from "@/lib/format";
 
 const CLIENT_TYPE_LABEL = {
   staff: "Staff",

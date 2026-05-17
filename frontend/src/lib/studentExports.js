@@ -1,7 +1,11 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatMoneyForPdf, formatDate } from "@/lib/format";
+
+// PDF generator below uses the PDF-safe variant via the `fmtPdf` alias so the
+// XLSX exporter can keep using the rich `formatMoney` (Excel renders ₹ natively).
+const fmtPdf = formatMoneyForPdf;
 
 const RECEIVED_LABELS = {
   college: "College Acc.",
@@ -127,10 +131,10 @@ export function downloadStudentPdf({ student, user }) {
   y += 18;
 
   const tiles = [
-    ["SC Earned", formatMoney(student.sc_out_fixed, currency)],
-    ["Scheduled total", formatMoney(student.scheduled_total, currency)],
-    ["Collected", formatMoney(student.collected_total, currency)],
-    ["Balance vs SC Earned", formatMoney(student.balance_vs_sc, currency)],
+    ["SC Earned", fmtPdf(student.sc_earned_effective ?? student.sc_out_fixed, currency)],
+    ["Scheduled total", fmtPdf(Math.max(0, (student.scheduled_total || 0) - (student.collected_total || 0)), currency)],
+    ["Collected", fmtPdf(student.collected_total, currency)],
+    ["Balance vs SC Earned", fmtPdf(student.balance_vs_sc, currency)],
   ];
   const tileWidth = (pageWidth - margin * 2) / tiles.length;
   tiles.forEach(([label, value], i) => {
@@ -154,11 +158,11 @@ export function downloadStudentPdf({ student, user }) {
       head: [["Schedule", "Amount", "Remarks", "Due"]],
       body: schedules.map((sc) => [
         sc.label || "—",
-        formatMoney(sc.amount, currency),
+        fmtPdf(sc.amount, currency),
         sc.remarks || "—",
         sc.due_date ? formatDate(sc.due_date) : "—",
       ]),
-      foot: [["Scheduled total", formatMoney(student.scheduled_total, currency), "", ""]],
+      foot: [["Scheduled total", fmtPdf(student.scheduled_total, currency), "", ""]],
       theme: "plain",
       styles: { fontSize: 9, textColor: [28, 25, 23], cellPadding: 6 },
       headStyles: { fillColor: [245, 245, 244], textColor: [120, 113, 108], fontStyle: "bold", fontSize: 8 },
@@ -194,7 +198,7 @@ export function downloadStudentPdf({ student, user }) {
         sch ? sch.label : "Unscheduled",
         FEE_LABELS[p.fee_type] || "Other Fees",
         receivedLabel,
-        formatMoney(p.amount, currency),
+        fmtPdf(p.amount, currency),
         p.remarks || "—",
       ];
     });
@@ -203,7 +207,7 @@ export function downloadStudentPdf({ student, user }) {
       startY: y,
       head: [["Date", "Schedule", "Fee Type", "Received In", "Amount", "Remarks"]],
       body,
-      foot: [["", "", "", "Total collected", formatMoney(student.collected_total, currency), ""]],
+      foot: [["", "", "", "Total collected", fmtPdf(student.collected_total, currency), ""]],
       theme: "plain",
       styles: { fontSize: 9, textColor: [28, 25, 23], cellPadding: 6 },
       headStyles: { fillColor: [245, 245, 244], textColor: [120, 113, 108], fontStyle: "bold", fontSize: 8 },
@@ -228,8 +232,8 @@ export function downloadStudentPdf({ student, user }) {
         (p.adjustments || []).forEach((a) => {
           adjBody.push([
             formatDate(p.date),
-            a.kind === "paid_to_college" ? "Paid to College" : "SC Adjusted",
-            formatMoney(a.amount, currency),
+            a.kind === "paid_to_college" ? "Paid to College" : "Payment adjusted towards SC",
+            fmtPdf(a.amount, currency),
             formatDate(a.payment_date),
             PAYMENT_MODE_LABELS[a.payment_mode] || a.payment_mode || "—",
             a.kind === "sc_adjusted"
@@ -242,7 +246,7 @@ export function downloadStudentPdf({ student, user }) {
 
       autoTable(doc, {
         startY: y,
-        head: [["Payment Date", "Kind", "Amount", "Adj. Date", "Mode", "Sub/KM/Assoc.", "Remarks"]],
+        head: [["Payment Date", "Kind", "Amount", "Adj. Date", "Mode", "Sub / KM / Assoc.", "Remarks"]],
         body: adjBody,
         theme: "plain",
         styles: { fontSize: 8.5, textColor: [28, 25, 23], cellPadding: 5 },
@@ -380,7 +384,7 @@ export function downloadStudentsXlsx({ students, currency = "USD" }) {
           "Payment Date": p.date || "",
           "Student": s.name || "",
           "College": s.college || "",
-          "Kind": a.kind === "paid_to_college" ? "Paid to College" : "SC Adjusted",
+          "Kind": a.kind === "paid_to_college" ? "Paid to College" : "Payment adjusted towards SC",
           "Amount": num(a.amount),
           "Adj. Date": a.payment_date || "",
           "Mode": PAYMENT_MODE_LABELS[a.payment_mode] || a.payment_mode || "",
