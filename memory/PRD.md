@@ -244,6 +244,14 @@
 - [x] **Accounts mini-card** on OfficeDashboard right column (`accounts-mini`) — shows up to 4 accounts with color dot, type, current balance, total balance row, "Manage →" link to `/accounts`. Empty state with "Add your first" CTA. Office admin only sees their own accounts.
 - [x] **Frontend canEdit gate** on Accounts page — hides `add-account-btn`, per-row `edit-acc-` / `delete-acc-` buttons when view-only.
 
+## Implementation status — 2026-02-17 (iteration 20: Clients grouping + Add-student client picker)
+- [x] **Super admin Clients page** — renders as **grouped sections** by category (Sub Agent/Associate · Associate Consultant · KM BLR Office · KM TCR Office · KM KMLY Office · Our Staff) with section headers showing label + count badge + horizontal divider. Empty categories are hidden. Selecting a specific filter type narrows to a single section.
+- [x] **Staff section sub-grouped by office** — when staff exist, they're further nested under office sub-headers (KM BLR / KM TCR / KM KMLY / No office set) with Buildings icon + count.
+- [x] **Office admin Clients page** — unchanged flat grid (only staff visible, no filter, title 'Our Staff'). Separate render path keeps the simpler experience for office admins.
+- [x] **Super admin Add Student → client picker** — clicking add-student-btn opens `client-picker-dialog` listing ALL clients grouped by category (`picker-group-<type>`). Searchable by name/company/office. Picking a client (`picker-pick-<id>`) sets reference + opens the student form. `picker-skip` enrols without a reference (chip replaced by dashed placeholder). Office admin flow unchanged (form opens directly; staff picker remains on OfficeDashboard).
+- [x] **`emptyForm()` helper** used to reset the form on each picker open — guarantees no stale references leak between sessions.
+- [x] **100% regression** — iteration_17.json: 13/13 frontend checks pass, zero defects, all reviewed code paths clean.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
