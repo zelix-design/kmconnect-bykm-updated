@@ -534,7 +534,7 @@ function StudentsOverview({ students, currency, range }) {
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student} />
         <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight} />
-        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Out Fixed" />
+        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Earned" />
         <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">

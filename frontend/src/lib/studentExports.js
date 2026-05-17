@@ -127,10 +127,10 @@ export function downloadStudentPdf({ student, user }) {
   y += 18;
 
   const tiles = [
-    ["SC Out Fixed", formatMoney(student.sc_out_fixed, currency)],
+    ["SC Earned", formatMoney(student.sc_out_fixed, currency)],
     ["Scheduled total", formatMoney(student.scheduled_total, currency)],
     ["Collected", formatMoney(student.collected_total, currency)],
-    ["Balance vs SC", formatMoney(student.balance_vs_sc, currency)],
+    ["Balance vs SC Earned", formatMoney(student.balance_vs_sc, currency)],
   ];
   const tileWidth = (pageWidth - margin * 2) / tiles.length;
   tiles.forEach(([label, value], i) => {
@@ -290,10 +290,10 @@ export function downloadStudentsXlsx({ students, currency = "USD" }) {
     "Reference": s.reference || "",
     "Status": STATUS_LABELS[s.status] || s.status || "",
     "Enrollment Date": s.enrollment_date || "",
-    "SC Out Fixed": num(s.sc_out_fixed),
+    "SC Earned": num(s.sc_out_fixed),
     "Scheduled Total": num(s.scheduled_total),
     "Collected": num(s.collected_total),
-    "Balance vs SC": num(s.balance_vs_sc),
+    "Balance vs SC Earned": num(s.balance_vs_sc),
     "Balance vs Scheduled": num(s.balance_vs_scheduled),
     "Notes": s.notes || "",
   }));
@@ -306,16 +306,16 @@ export function downloadStudentsXlsx({ students, currency = "USD" }) {
     "Reference": "",
     "Status": "",
     "Enrollment Date": "",
-    "SC Out Fixed": summaryRows.reduce((a, r) => a + r["SC Out Fixed"], 0),
+    "SC Earned": summaryRows.reduce((a, r) => a + r["SC Earned"], 0),
     "Scheduled Total": summaryRows.reduce((a, r) => a + r["Scheduled Total"], 0),
     "Collected": summaryRows.reduce((a, r) => a + r["Collected"], 0),
-    "Balance vs SC": summaryRows.reduce((a, r) => a + r["Balance vs SC"], 0),
+    "Balance vs SC Earned": summaryRows.reduce((a, r) => a + r["Balance vs SC Earned"], 0),
     "Balance vs Scheduled": summaryRows.reduce((a, r) => a + r["Balance vs Scheduled"], 0),
     "Notes": "",
   };
 
   const summarySheet = XLSX.utils.json_to_sheet([...summaryRows, totalsRow]);
-  applyCurrencyFormat(summarySheet, ["SC Out Fixed", "Scheduled Total", "Collected", "Balance vs SC", "Balance vs Scheduled"], summaryRows.length + 1, currencyFmt);
+  applyCurrencyFormat(summarySheet, ["SC Earned", "Scheduled Total", "Collected", "Balance vs SC Earned", "Balance vs Scheduled"], summaryRows.length + 1, currencyFmt);
   summarySheet["!cols"] = [
     { wch: 24 }, { wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 12 }, { wch: 14 },
     { wch: 14 }, { wch: 16 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 30 },

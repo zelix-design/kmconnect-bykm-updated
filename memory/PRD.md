@@ -230,6 +230,12 @@
 - [ ] Browser Push (Web Push API + service worker + VAPID keys) — heavier alternative to in-app bell; can be added on top of existing notifications collection.
 - [ ] Split Dashboard.jsx (>1000 lines) into per-tile components.
 
+## Implementation status — 2026-02-17 (iteration 18: Add-an-admission flow + SC Earned rename + Reference field removed)
+- [x] **"Add an admission" flow**: OfficeDashboard incentive-rule card → `add-admission-btn` opens a **staff picker dialog** (`staff-picker-dialog`) with searchable list of staff clients → selecting one navigates to `/students?new=1&staff=<encoded name>` → Students.jsx auto-opens the Add Student dialog with reference pre-filled.
+- [x] **Reference field removed** from the student form. Replaced with a **read-only amber chip** (`st-reference-chip`) showing the pre-selected staff name + a "Change" button that clears it. When no reference is set, a dashed placeholder explains the flow.
+- [x] **"SC Out Fixed" → "SC Earned"** renamed everywhere (Dashboard, StudentDetail, Students form, studentExports XLSX/PDF headers, label hint "vs. SC Earned"). DB field `sc_out_fixed` kept for backward compatibility.
+- [x] **blr1 test account auto-recreated** when missing (per testing agent cleanup) — superadmin and office_admin seeding logic resilient.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

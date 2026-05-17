@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format";
 import {
   GraduationCap, CurrencyInr, Cake, Trophy, CheckCircle, ClockClockwise,
   Buildings, Lightning, ArrowRight, Sparkle, UserCircle, Calendar,
+  MagnifyingGlass, Plus,
 } from "@phosphor-icons/react";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
@@ -42,10 +47,14 @@ function StatCard({ icon: Icon, eyebrow, value, hint, palette, testId }) {
 
 export default function OfficeDashboard() {
   const { user } = useAuth();
+  const nav = useNavigate();
   const currency = user?.currency || "INR";
   const [window, setWindow] = useState("month");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState("");
+  const [allStaff, setAllStaff] = useState([]);
 
   const load = async () => {
     setLoading(true);
@@ -84,6 +93,31 @@ export default function OfficeDashboard() {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
     }
   };
+
+  // ----- "Add an admission" flow: pick staff, then jump to student form -----
+  const openAdmissionPicker = async () => {
+    try {
+      const { data } = await api.get("/clients");
+      const staff = (data || []).filter((c) => c.client_type === "staff");
+      setAllStaff(staff);
+      setPickerSearch("");
+      setPickerOpen(true);
+    } catch {
+      toast.error("Couldn't load staff list");
+    }
+  };
+
+  const pickStaffAndEnrol = (staff) => {
+    setPickerOpen(false);
+    // Pass the staff name in the URL so Students.jsx can pre-fill it and open the dialog.
+    nav(`/students?new=1&staff=${encodeURIComponent(staff.name)}`);
+  };
+
+  const filteredStaff = allStaff.filter((s) => {
+    if (!pickerSearch) return true;
+    const q = pickerSearch.toLowerCase();
+    return (s.name || "").toLowerCase().includes(q) || (s.office || "").toLowerCase().includes(q);
+  });
 
   const t = data?.totals || {};
   const breakdown = data?.staff_breakdown || [];
@@ -287,12 +321,81 @@ export default function OfficeDashboard() {
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Each staff member becomes <span className="text-foreground font-medium">eligible</span> for their per-admission incentive after their <span className="text-foreground font-medium">3rd admission in a month</span>. The first two admissions get backdated automatically.
             </p>
-            <Link to="/quick-entry" className="inline-flex items-center gap-1 mt-3 text-xs text-orange-700 dark:text-orange-400 font-medium hover:underline">
+            <button
+              type="button"
+              onClick={openAdmissionPicker}
+              data-testid="add-admission-btn"
+              className="inline-flex items-center gap-1 mt-3 text-xs text-orange-700 dark:text-orange-400 font-medium hover:underline"
+            >
               <Calendar size={12} /> Add an admission
-            </Link>
+            </button>
           </Card>
         </div>
       </div>
+
+      {/* Staff picker → Add admission */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-md p-0 overflow-hidden" data-testid="staff-picker-dialog">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+            <DialogTitle className="flex items-center gap-2">
+              <Calendar size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
+              Add an admission
+            </DialogTitle>
+            <DialogDescription>Pick the staff this student is being enrolled under.</DialogDescription>
+          </DialogHeader>
+          <div className="px-5 py-3 border-b border-border">
+            <div className="relative">
+              <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search staff…"
+                value={pickerSearch}
+                onChange={(e) => setPickerSearch(e.target.value)}
+                className="pl-10 h-10"
+                data-testid="staff-picker-search"
+              />
+            </div>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto" data-testid="staff-picker-list">
+            {filteredStaff.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-muted-foreground" data-testid="staff-picker-empty">
+                {allStaff.length === 0 ? (
+                  <>
+                    No staff yet.{" "}
+                    <Link to="/clients" onClick={() => setPickerOpen(false)} className="text-orange-600 dark:text-orange-400 underline">
+                      Add your first
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  "No staff matches your search."
+                )}
+              </div>
+            ) : (
+              filteredStaff.map((s) => (
+                <button
+                  type="button"
+                  key={s.id}
+                  onClick={() => pickStaffAndEnrol(s)}
+                  data-testid={`staff-pick-${s.id}`}
+                  className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-muted/40 transition-colors border-b border-border/40"
+                >
+                  <div className="w-9 h-9 rounded-full bg-amber-gradient text-white text-sm font-semibold flex items-center justify-center shrink-0">
+                    {(s.name || "?")[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {s.office ? (OFFICE_LABEL[s.office] || s.office) : "—"}
+                      {s.eligible_incentive != null ? ` · ₹${s.eligible_incentive}/admission` : ""}
+                    </p>
+                  </div>
+                  <ArrowRight size={14} className="text-muted-foreground shrink-0" />
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -334,7 +334,7 @@ export default function StudentDetail() {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>SC Out Fixed</Label><Input type="number" step="0.01" value={header.sc_out_fixed} onChange={(e) => setHeader({ ...header, sc_out_fixed: e.target.value })} /></div>
+              <div><Label>SC Earned</Label><Input type="number" step="0.01" value={header.sc_out_fixed} onChange={(e) => setHeader({ ...header, sc_out_fixed: e.target.value })} /></div>
               <div>
                 <Label>Status</Label>
                 <Select value={header.status} onValueChange={(v) => setHeader({ ...header, status: v })}>
@@ -402,10 +402,10 @@ export default function StudentDetail() {
       </Card>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="summary-tiles">
-        <Tile label="SC Out Fixed" value={formatMoney(s.sc_out_fixed, currency)} />
+        <Tile label="SC Earned" value={formatMoney(s.sc_out_fixed, currency)} />
         <Tile label="Scheduled total" value={formatMoney(s.scheduled_total, currency)} />
         <Tile label="Collected" value={formatMoney(s.collected_total, currency)} tone="success" />
-        <Tile label="Balance vs SC" value={formatMoney(s.balance_vs_sc, currency)} tone={s.balance_vs_sc > 0 ? "danger" : "default"} />
+        <Tile label="Balance vs SC Earned" value={formatMoney(s.balance_vs_sc, currency)} tone={s.balance_vs_sc > 0 ? "danger" : "default"} />
       </div>
 
       {/* Schedules */}

@@ -74,18 +74,22 @@ export default function Students() {
   };
   useEffect(() => { load(); }, []);
 
-  // Auto-open the Add dialog when arriving with ?new=1 (from Quick Entry hub)
+  // Auto-open the Add dialog when arriving with ?new=1 (from Quick Entry hub or Add-an-admission flow)
   const [searchParams, setSearchParams] = useSearchParams();
   const newFlag = searchParams.get("new");
+  const staffParam = searchParams.get("staff");
   const action = searchParams.get("action");
   useEffect(() => {
     if (newFlag === "1") {
+      // Pre-fill reference if we arrived from the Add-an-admission staff picker
+      setForm((f) => ({ ...f, reference: staffParam ? decodeURIComponent(staffParam) : f.reference }));
       setOpen(true);
-      // Strip the param so refresh doesn't reopen
-      searchParams.delete("new");
-      setSearchParams(searchParams, { replace: true });
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      next.delete("staff");
+      setSearchParams(next, { replace: true });
     }
-  }, [newFlag, searchParams, setSearchParams]);
+  }, [newFlag, staffParam, searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
@@ -164,25 +168,27 @@ export default function Students() {
                 <div><Label>College</Label><Input value={form.college} onChange={(e) => setForm({ ...form, college: e.target.value })} placeholder="IIT Delhi" data-testid="st-college" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Reference (staff)</Label>
-                  <Select
-                    value={form.reference || "_none"}
-                    onValueChange={(v) => setForm({ ...form, reference: v === "_none" ? "" : v })}
-                  >
-                    <SelectTrigger data-testid="st-reference"><SelectValue placeholder="Pick the referring staff" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_none">— None —</SelectItem>
-                      {clients.filter((c) => c.client_type === "staff").map((c) => (
-                        <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                      ))}
-                      {clients.filter((c) => c.client_type === "staff").length === 0 && (
-                        <SelectItem value="_no_staff" disabled>No staff yet — add them in Clients</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div><Label>SC Out Fixed</Label><Input type="number" step="0.01" value={form.sc_out_fixed} onChange={(e) => setForm({ ...form, sc_out_fixed: e.target.value })} data-testid="st-sc" /></div>
+                {form.reference ? (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-gradient-soft px-3 py-2.5 flex items-center justify-between gap-2" data-testid="st-reference-chip">
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Reference (staff)</p>
+                      <p className="text-sm font-medium text-foreground truncate">{form.reference}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, reference: "" })}
+                      data-testid="st-reference-clear"
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2.5 flex items-center text-[12px] text-muted-foreground">
+                    No staff reference (use "Add an admission" on the dashboard to attach one)
+                  </div>
+                )}
+                <div><Label>SC Earned</Label><Input type="number" step="0.01" value={form.sc_out_fixed} onChange={(e) => setForm({ ...form, sc_out_fixed: e.target.value })} data-testid="st-sc" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
