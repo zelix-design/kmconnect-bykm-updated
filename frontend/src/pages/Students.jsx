@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -72,6 +72,19 @@ export default function Students() {
   };
   useEffect(() => { load(); }, []);
 
+  // Auto-open the Add dialog when arriving with ?new=1 (from Quick Entry hub)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const newFlag = searchParams.get("new");
+  const action = searchParams.get("action");
+  useEffect(() => {
+    if (newFlag === "1") {
+      setOpen(true);
+      // Strip the param so refresh doesn't reopen
+      searchParams.delete("new");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [newFlag, searchParams, setSearchParams]);
+
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
     return [...list]
@@ -102,6 +115,12 @@ export default function Students() {
           <p className="label-eyebrow">Pipeline</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Students</h1>
           <p className="text-sm text-muted-foreground mt-1">Recent enrollments — search by name, college, or reference.</p>
+          {action === "log_payment" && (
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-gradient-soft border border-amber-500/30 text-sm text-foreground" data-testid="log-payment-banner">
+              <ArrowRight size={14} className="text-amber-700 dark:text-amber-400" />
+              <span><strong>Log Payment:</strong> click a student card below to open their fees ledger.</span>
+            </div>
+          )}
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">

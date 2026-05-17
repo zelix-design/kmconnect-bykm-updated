@@ -523,6 +523,31 @@ async def delete_student(student_id: str, user: dict = Depends(get_current_user)
     return {"ok": True}
 
 
+@router.post("/{student_id}/incentive/mark-paid")
+async def mark_incentive_paid(student_id: str, user: dict = Depends(get_current_user)):
+    """Mark the staff incentive earned on this admission as paid. Idempotent."""
+    s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "Student not found")
+    await db.students.update_one(
+        {"id": student_id, "user_id": user["id"]},
+        {"$set": {"incentive_paid": True, "incentive_paid_at": now_iso()}},
+    )
+    return {"ok": True, "student_id": student_id, "incentive_paid": True}
+
+
+@router.post("/{student_id}/incentive/unmark-paid")
+async def unmark_incentive_paid(student_id: str, user: dict = Depends(get_current_user)):
+    s = await db.students.find_one({"id": student_id, "user_id": user["id"]}, {"_id": 0})
+    if not s:
+        raise HTTPException(404, "Student not found")
+    await db.students.update_one(
+        {"id": student_id, "user_id": user["id"]},
+        {"$set": {"incentive_paid": False}, "$unset": {"incentive_paid_at": ""}},
+    )
+    return {"ok": True, "student_id": student_id, "incentive_paid": False}
+
+
 # ---------- Schedules ----------
 async def _load_student_or_404(student_id: str, user_id: str) -> dict:
     s = await db.students.find_one({"id": student_id, "user_id": user_id}, {"_id": 0})

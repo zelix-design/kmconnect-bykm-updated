@@ -9,15 +9,49 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowDownRight, ArrowUpRight, Plus, Check } from "@phosphor-icons/react";
+import {
+  ArrowDownRight, ArrowUpRight, Plus, Check, ArrowLeft,
+  Receipt, ReceiptX, Student as StudentIcon, CurrencyInr,
+} from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const KEYPAD = ["1","2","3","4","5","6","7","8","9",".","0","⌫"];
+
+function HubCard({ icon: Icon, palette, title, subtitle, onClick, testId }) {
+  const PAL = {
+    amber: "bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100/70 dark:hover:bg-amber-500/20 border-amber-200/60 dark:border-amber-500/30",
+    rose: "bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100/70 dark:hover:bg-rose-500/20 border-rose-200/60 dark:border-rose-500/30",
+    emerald: "bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100/70 dark:hover:bg-emerald-500/20 border-emerald-200/60 dark:border-emerald-500/30",
+    violet: "bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100/70 dark:hover:bg-violet-500/20 border-violet-200/60 dark:border-violet-500/30",
+  };
+  const ICON_PAL = {
+    amber: "bg-amber-gradient text-white",
+    rose: "bg-rose-500 text-white",
+    emerald: "bg-emerald-500 text-white",
+    violet: "bg-violet-500 text-white",
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      className={`text-left p-6 rounded-2xl border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg shadow-orange-500/0 hover:shadow-orange-500/10 ${PAL[palette]}`}
+    >
+      <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${ICON_PAL[palette]} shadow-lg`}>
+        <Icon size={26} weight="duotone" />
+      </div>
+      <h3 className="font-display text-xl mt-5 text-foreground">{title}</h3>
+      <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+    </button>
+  );
+}
 
 export default function QuickEntry() {
   const { user } = useAuth();
   const nav = useNavigate();
   const currency = user?.currency || "USD";
+  const isOfficeAdmin = user?.role === "office_admin";
+  const [view, setView] = useState("hub"); // "hub" | "transaction"
 
   const [mode, setMode] = useState("debit"); // debit = expense (money out), credit = income (money in)
   const [amount, setAmount] = useState("");
@@ -84,9 +118,60 @@ export default function QuickEntry() {
     ? { bg: "bg-rose-700 hover:bg-rose-800", soft: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400", ring: "ring-rose-300" }
     : { bg: "bg-emerald-700 hover:bg-emerald-800", soft: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-300" };
 
+  // ---- HUB VIEW: 4 quick actions ----
+  if (view === "hub") {
+    return (
+      <div className="space-y-6 animate-fade-in max-w-5xl" data-testid="quick-entry-page">
+        <header>
+          <p className="label-eyebrow">Quick entry</p>
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">What would you like to do?</h1>
+          <p className="text-sm text-muted-foreground mt-1">Pick an action — we'll take you straight to it.</p>
+        </header>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <HubCard
+            testId="qe-add-transaction"
+            icon={Receipt}
+            palette="amber"
+            title="Add Transaction"
+            subtitle="Log a debit or credit instantly"
+            onClick={() => setView("transaction")}
+          />
+          <HubCard
+            testId="qe-request-expense"
+            icon={ReceiptX}
+            palette="rose"
+            title={isOfficeAdmin ? "Request Expense" : "New Expense Request"}
+            subtitle={isOfficeAdmin ? "Submit for super-admin approval" : "Review office submissions"}
+            onClick={() => nav(isOfficeAdmin ? "/expense-requests?new=1" : "/expense-requests")}
+          />
+          <HubCard
+            testId="qe-add-student"
+            icon={StudentIcon}
+            palette="emerald"
+            title="Add Student"
+            subtitle="Enrol with fees plan & schedule"
+            onClick={() => nav("/students?new=1")}
+          />
+          <HubCard
+            testId="qe-log-payment"
+            icon={CurrencyInr}
+            palette="violet"
+            title="Log Payment"
+            subtitle="Record a student fee receipt"
+            onClick={() => nav("/students?action=log_payment")}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl" data-testid="quick-entry-page">
       <header>
+        <button onClick={() => setView("hub")} data-testid="qe-back-to-hub" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
+          <ArrowLeft size={12} /> Back to quick actions
+        </button>
         <p className="label-eyebrow">Quick entry</p>
         <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Log debit or credit</h1>
         <p className="text-sm text-muted-foreground mt-1">Fast money-in / money-out logging. Tap the keypad, pick a category, save.</p>

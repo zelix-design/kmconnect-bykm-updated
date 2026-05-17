@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,16 @@ export default function ExpenseRequests() {
   };
 
   useEffect(() => { load(); /* eslint-disable-line */ }, [tab]);
+
+  // Auto-open the New Request dialog from /expense-requests?new=1
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && !isSuper) {
+      setCreateOpen(true);
+      searchParams.delete("new");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, isSuper]);
 
   useEffect(() => {
     if (!isSuper) {

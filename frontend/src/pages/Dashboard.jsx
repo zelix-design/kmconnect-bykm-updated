@@ -15,6 +15,7 @@ import {
   IdentificationBadge, Briefcase, Buildings, GraduationCap,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
+import OfficeDashboard from "./OfficeDashboard";
 
 function isoDate(d) { return d.toISOString().slice(0, 10); }
 
@@ -168,6 +169,15 @@ function allTimeMonthlyBuckets(dates) {
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  // Office admins get their bespoke dashboard
+  if (user?.role === "office_admin") {
+    return <OfficeDashboard />;
+  }
+  return <SuperAdminDashboard />;
+}
+
+function SuperAdminDashboard() {
   const { user } = useAuth();
   const currency = user?.currency || "USD";
   const [preset, setPreset] = useState("this_month");
