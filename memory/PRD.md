@@ -202,9 +202,33 @@
 - [x] **UI toast text** clarifies the auto-request on mark-paid / unmark-paid.
 - [x] **100% regression** — iteration_15.json: backend 9/9 pytest pass, frontend live-refresh + route guard + super-admin bypass all verified. Zero defects, two minor code-review notes (redirect-loop & dedupe) ADDRESSED in this commit.
 
-## Phase 4 backlog still open
-- [ ] **Push notifications** — Web Push API (service worker + VAPID keys) for in-browser notifications on register / approve / new request / etc. Requires user confirmation on scope (in-app bell list vs browser push vs both).
-- [ ] **Split Dashboard.jsx** (>1000 lines) into smaller per-tile components (`OverviewTiles.jsx`, `EnrollmentList.jsx`, `LedgerOverview.jsx`, etc.) — pure refactor, no behavior change.
+## Implementation status — 2026-02-17 (iteration 17: In-app notifications for Super Admin)
+- [x] **New backend router** `/api/notifications` with collection `notifications`. Endpoints:
+  - `GET /` — list own (recipient-scoped, sort desc, limit 50, max 200, `unread_only` filter)
+  - `GET /unread-count` — `{count}`
+  - `POST /{id}/read` — mark read + read_at
+  - `POST /read-all` — bulk mark read
+  - `DELETE /{id}` — delete one
+  - cross-user access returns 404 (compound filter `{id, recipient_user_id}`)
+- [x] **`notify_super_admins(...)` helper** — fans out one doc per super_admin via `insert_many`; skips actor; takes type/title/message/link/metadata/actor_user_id.
+- [x] **Three triggers** wired into existing endpoints:
+  - `POST /api/expense-requests` → `expense_request` (or `salary_request` when kind=salary) — title/message include amount, urgency flag, description, office.
+  - `POST /api/transactions` → `transaction` — ONLY when actor.role=='office_admin'. Defense-in-depth: helper also filters by actor_user_id.
+  - `POST /api/students` → `student_enrolled` — ONLY when actor.role=='office_admin'. Message contains name, college, course, ref staff, office. Link goes to `/students/{id}`.
+- [x] **Bell + dropdown UI** (`NotificationsBell.jsx`) replaces the static topbar bell:
+  - Red unread-count badge (99+ cap), polls every 30s + visibilitychange listener
+  - Popover with color-coded icons (rose=expense, amber=transaction, emerald=student), unread dot, title, message, time-ago
+  - Click item → marks read + navigates to link
+  - Hover → delete icon (`stopPropagation`), works with new accessible div-role-button
+  - Mark-all-read button (conditional on unread > 0)
+  - Empty state for office admins / no notifications
+  - Click-away to close (mousedown listener)
+- [x] **DOM-nesting bug fixed** — outer item is now `<div role="button" tabIndex={0}>` with Enter/Space key support; inner delete icon remains a `<button>`. No more "<button> inside <button>" React warning.
+- [x] **100% regression** — iteration_16.json: backend 15/15 pytest pass, frontend bell+badge+popover+items+click-away+delete+empty-state all verified, zero functional bugs.
+
+## Phase 4 still open
+- [ ] Browser Push (Web Push API + service worker + VAPID keys) — heavier alternative to in-app bell; can be added on top of existing notifications collection.
+- [ ] Split Dashboard.jsx (>1000 lines) into per-tile components.
 
 ## Prioritized backlog
 **P1**

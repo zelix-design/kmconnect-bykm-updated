@@ -164,11 +164,14 @@ export default function NotificationsBell() {
                 const meta = TYPE_ICON[n.type] || TYPE_ICON.transaction;
                 const Icon = meta.icon;
                 return (
-                  <button
+                  <div
                     key={n.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onClickItem(n)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClickItem(n); } }}
                     data-testid={`notification-${n.id}`}
-                    className={`group w-full text-left px-4 py-3 border-b border-border/60 hover:bg-muted/40 transition-colors flex gap-3 ${
+                    className={`group w-full text-left px-4 py-3 border-b border-border/60 hover:bg-muted/40 cursor-pointer transition-colors flex gap-3 outline-none focus:bg-muted/40 ${
                       n.read ? "" : "bg-orange-500/5 dark:bg-orange-500/10"
                     }`}
                   >
@@ -186,6 +189,7 @@ export default function NotificationsBell() {
                       <p className="text-[10px] text-muted-foreground/70 mt-1">{timeAgo(n.created_at)}</p>
                     </div>
                     <button
+                      type="button"
                       onClick={(e) => onDelete(e, n)}
                       data-testid={`notification-delete-${n.id}`}
                       className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-rose-600 self-start p-1"
@@ -193,7 +197,7 @@ export default function NotificationsBell() {
                     >
                       <Trash size={14} />
                     </button>
-                  </button>
+                  </div>
                 );
               })
             )}
