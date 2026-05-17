@@ -150,11 +150,28 @@
 - [x] **Accounts list** — `GET /api/accounts?for_user_id=X` works for super_admin only (used in approval dialog).
 - [x] **100% regression** — iteration_12.json: backend 20/20 pytest pass; frontend all 7 acceptance flows pass.
 
-## Phase 2 (next iteration) — Office Admin dashboard + incentive logic
-- [ ] Office Admin dashboard: Staff admission count · Incentive earned · Upcoming birthdays · weekly/monthly/yearly toggle
-- [ ] Quick Entry → popup with 3 buttons (Add Transaction · Add Student · Log Payment) → opens corresponding form
-- [ ] Incentive rule: 3+ admissions/staff/month → eligible → previous 2 admissions retroactively eligible → "Mark incentive paid" action
-- [ ] Salary-request payout view on staff cards
+## Implementation status — 2026-02-17 (iteration 14: Office Admin Dashboard + Incentive logic · Phase 2)
+- [x] **`GET /api/dashboard/office-admin?window=week|month|year`** — per-staff admission counts, monthly eligibility, incentive earned/paid/pending totals, upcoming-30-day birthdays.
+- [x] **Incentive rule** — staff with **3+ admissions in a calendar month** become eligible for that whole month; the earlier 2 admissions are retroactively counted. Per-admission incentive = `staff.eligible_incentive` (₹).
+- [x] **`POST /api/students/{id}/incentive/mark-paid`** & **`/unmark-paid`** — idempotent paid flag with timestamp.
+- [x] **OfficeDashboard.jsx** — bespoke dashboard for `office_admin`:
+  - 4 stat cards (Admissions · Incentive earned · Incentive pending · Staff count)
+  - Window toggle: This week / This month / This year
+  - "Admissions by staff" — expandable rows with per-admission Mark paid / Paid toggle
+  - "Upcoming birthdays · next 30 days" card
+  - Amber "Incentive rule" callout
+- [x] **Dashboard.jsx** — conditional render: `SuperAdminDashboard` for super_admin, `OfficeDashboard` for office_admin (no Rules-of-Hooks violation; SuperAdminDashboard extracted as sibling component).
+- [x] **Quick Entry HUB** — `/quick-entry` shows 4 action cards: Add Transaction (amber, swaps to inline keypad form) · Request Expense (rose, → `/expense-requests?new=1`) · Add Student (emerald, → `/students?new=1`) · Log Payment (violet, → `/students?action=log_payment` with banner).
+- [x] **Auto-open from query params** — Students.jsx opens Add dialog on `?new=1`; ExpenseRequests.jsx opens New Request on `?new=1`; both strip the param after.
+- [x] **100% regression** — iteration_13.json: backend 11/11 pytest pass, frontend 14/14 acceptance flows pass.
+
+## Phase 3 (future) — Polish & enhancements
+- [ ] Auto-create a salary-style expense_request on mark-paid (so the actual cash payout also flows through approval)
+- [ ] Reference dropdown on Students could include staff names from the Super Admin's own books too
+- [ ] Brute-force lockout on login (5-fail → 15 min)
+- [ ] Email notifications on register / approve / reject / new expense request (Resend / SendGrid)
+- [ ] Payments timeline strip on invoice PDF · Date-range filter on student XLSX
+- [ ] Refactor Dashboard.jsx (>1000 lines) into smaller per-tile components
 
 ## Prioritized backlog
 **P1**
