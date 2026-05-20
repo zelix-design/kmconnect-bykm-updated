@@ -286,6 +286,28 @@
 - [x] **100% testing** — iteration_20.json: backend 9/9 pytest pass · frontend 16/16 e2e flows pass.
 
 ## Implementation status — 2026-02-18 (iteration 24: Office admissions count + PDF currency fix + SC label clarity)
+- [x] **Office Admin "Admissions" count fixed**: backend `/api/dashboard/office-admin` now exposes `totals.admissions` as the *total* admissions in the window (regardless of staff reference). Staff-attributed subset still available as `totals.staff_attributed_admissions`.
+- [x] **PDF rupee glyph fix**: added `formatMoneyForPdf()` in `/lib/format.js` emitting `Rs. 1,23,45,000.00` (en-IN grouping) — sidesteps jsPDF Helvetica's lack of ₹ glyph. Wired into all 3 PDF generators. XLSX still uses native ₹.
+- [x] **SC Adjusted label clarity**: PDF + XLSX Adjustments table now labels `sc_adjusted` rows as "Payment adjusted towards SC".
+
+## Implementation status — 2026-02-19 (iteration 25: Code-quality refactor pass — components + backend extraction + tests)
+- [x] **Component refactors** (4 oversized → focused sub-components, **−51% avg lines**):
+  - `StudentDetail.jsx` 987→455 (−54%) — extracted to `/components/student-detail/`: `constants.js`, `SummaryTiles.jsx`, `HeaderCard.jsx`, `PaymentDialog.jsx`, `AddEntryDialog.jsx`, `AdjustmentsSection.jsx`.
+  - `OfficeDashboard.jsx` 463→179 (−61%) — extracted to `/components/office-dashboard/`: `StaffBreakdownList.jsx`, `AsideCards.jsx` (Accounts/Birthdays/Rule), `StaffPickerDialog.jsx`.
+  - `ExpenseRequests.jsx` 409→221 (−46%) — extracted to `/components/expense-requests/`: `NewRequestDialog.jsx`, `RequestCard.jsx`, `ActionDialog.jsx`.
+  - `InvoiceForm.jsx` 417→221 (−47%) — extracted to `/components/invoice-form/`: `ServiceMetaBlock.jsx`, `ParticularsSection.jsx`, `PrevScPaymentBlock.jsx`.
+- [x] **Backend extraction → `/app/backend/lib/`** (3 new pure modules, dropped cyclomatic complexity below 10):
+  - `incentive_math.py` — `filter_admissions_by_reference`, `compute_monthly_admission_counts`, `enrich_student_with_incentive`, `build_client_detail_totals` (used by `routers/clients.py::client_detail`).
+  - `office_dashboard.py` — `window_bounds`, `student_admission_dt`, `compute_staff_month_counts`, `build_staff_breakdown`, `upcoming_birthdays_30d`, `count_admissions_in_window` (used by `routers/dashboard.py::office_admin_dashboard`).
+  - `student_math.py` — `coerce_float`, `fees_plan_total`, `sum_sc_adjusted`, `compute_summary` (used by `routers/students.py::_summarize`).
+  - `routers/invoices.py::_sync_invoice_expense_transactions` decomposed into `_resolve_expense_category`, `_build_expense_tx`, `_build_invoice_expense_docs` (5-level nesting → 2).
+- [x] **Safety fixes** (from code review):
+  - 4 empty catch blocks in `auth.jsx`, `NotificationsBell.jsx`, `Invoices.jsx` now log via `console.error` with feature tag (e.g. `[notifications] mark-read failed: ...`).
+  - 8 array-index `key=` props replaced with stable identifiers (UUID-on-create for adjustments / particulars; composite keys for Recharts Cells).
+  - Hardcoded test credentials moved to `/app/backend/tests/_creds.py` with env-var overrides (`TEST_ADMIN_EMAIL`, `TEST_ADMIN_PASSWORD`, `TEST_OFFICE_EMAIL`, `TEST_OFFICE_PASSWORD`, `TEST_BACKEND_URL`).
+  - Type hints added to `server.py` (`startup`, `shutdown`, `root`) + test fixtures (return types).
+- [x] **Unit tests** — new `/app/backend/tests/test_lib_helpers.py` covers the 3 extracted modules: 27 tests, all pass.
+- [x] **100% regression** — iteration_21.json: 27/27 unit + 8/8 new integration + 9/9 iteration_20 regression backend, 13/13 frontend critical flows. **Zero regressions** across StudentDetail / OfficeDashboard / ExpenseRequests / InvoiceForm / Notifications / Logout flows.
 - [x] **Office Admin "Admissions" count fixed**: backend `/api/dashboard/office-admin` now exposes `totals.admissions` as the *total* admissions in the window for the office admin (regardless of whether a staff reference matched). The staff-attributed subset is still available as `totals.staff_attributed_admissions`. Frontend tile (`stat-admissions`) now reflects unreferenced enrolments too.
 - [x] **PDF rupee glyph fix**: jsPDF's built-in Helvetica is WinAnsi-encoded and can't render `₹` (U+20B9) — it was showing as `¹` in all downloaded PDFs. Added `formatMoneyForPdf()` in `/lib/format.js` that emits `Rs. 1,23,45,000.00` (en-IN grouping, "Rs." prefix). Wired into all 3 PDF generators (`invoicePdf.js`, `studentExports.js → downloadStudentPdf`, `clientStatementPdf.js`). XLSX export still uses the proper `₹` symbol (Excel renders it natively).
 - [x] **SC Adjusted label clarity**: PDF + XLSX Adjustments table now labels `sc_adjusted` rows as "Payment adjusted towards SC" (was "SC Adjusted"). Column header also renamed `Sub/KM/Assoc.` → `Sub / KM / Assoc.` for readability.
