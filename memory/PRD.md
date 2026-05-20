@@ -291,6 +291,22 @@
 - [x] **SC Adjusted label clarity**: PDF + XLSX Adjustments table now labels `sc_adjusted` rows as "Payment adjusted towards SC".
 
 ## Implementation status — 2026-02-19 (iteration 25: Code-quality refactor pass — components + backend extraction + tests)
+- [x] **Component refactors** (avg −51%): StudentDetail 987→455, OfficeDashboard 463→179, ExpenseRequests 409→221, InvoiceForm 417→221. 16 new sub-components under `/components/{student-detail,office-dashboard,expense-requests,invoice-form}/`.
+- [x] **Backend extraction → `/app/backend/lib/`** (3 new pure modules, cyclomatic complexity 21-28→<10): `incentive_math.py`, `office_dashboard.py`, `student_math.py`. Plus `routers/invoices.py::_sync_invoice_expense_transactions` decomposed.
+- [x] **Safety fixes**: 4 empty catch blocks now log via `console.error`; 8 array-index keys replaced with stable UUIDs; hardcoded test creds → env-aware `tests/_creds.py`; type hints on server.py + test fixtures.
+- [x] **27 new unit tests** + 100% regression on iteration_21.json.
+
+## Implementation status — 2026-02-20 (iteration 26: Public admission application form + Application PDF)
+- [x] **Public `/apply` route** — 6-step wizard (Basic Info · Course · Communication · Academic · Payment · Reference) with stepper UI, amber gradient, per-step validation, success screen with shareable reference code. No auth required.
+- [x] **Backend** — new `routers/applications.py` exposes:
+  - `POST /api/public/applications` (status 201) → creates a `students` row owned by the first super-admin, status=`inquiry`, with the whole application payload preserved under `application` sub-doc and `application_source="public_form"`. Optional registration_amount is auto-logged as a booking_admission payment with "pending verification" remarks. Fires super-admin notification.
+  - `GET /api/public/courses` → static course list for the form dropdown.
+- [x] **Admin surface** — Public-application students show:
+  - **"FROM ONLINE APPLICATION"** amber badge in Student Detail header (data-testid `badge-public-application`).
+  - **"Application PDF"** button next to the existing PDF button — renders the full 6-section application as A4 (data-testid `export-application-pdf`).
+  - **"Share application link"** button on Students page header copies the public form URL (`${origin}/apply`) to clipboard.
+- [x] **Application PDF generator** (`/lib/applicationPdf.js`) — formal A4 layout: amber header bar with ref code + submitted date, 6 boxed sections with eyebrow strips, 2-column key/value tables (autoTable), Academic block with 10th + 12th sub-tables, signature strip + generated-timestamp footer. Uses `formatMoneyForPdf` so `₹` renders as `Rs.`.
+- [x] **Verified end-to-end** — public submission → admin grid → student detail → PDF download. Test run: submitted "Priya Subramaniam" application, ref code `9AE63D6B`, downloaded PDF contains all 6 sections + payment row + UTR.
 - [x] **Component refactors** (4 oversized → focused sub-components, **−51% avg lines**):
   - `StudentDetail.jsx` 987→455 (−54%) — extracted to `/components/student-detail/`: `constants.js`, `SummaryTiles.jsx`, `HeaderCard.jsx`, `PaymentDialog.jsx`, `AddEntryDialog.jsx`, `AdjustmentsSection.jsx`.
   - `OfficeDashboard.jsx` 463→179 (−61%) — extracted to `/components/office-dashboard/`: `StaffBreakdownList.jsx`, `AsideCards.jsx` (Accounts/Birthdays/Rule), `StaffPickerDialog.jsx`.

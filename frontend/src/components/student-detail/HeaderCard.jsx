@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PencilSimple, Trash, Plus, FilePdf } from "@phosphor-icons/react";
+import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText } from "@phosphor-icons/react";
 import { formatDate } from "@/lib/format";
 import FeesPlanFields, { emptyFeesPlan } from "@/components/FeesPlanFields";
 import { STATUS_OPTIONS } from "./constants";
@@ -28,6 +28,7 @@ export default function HeaderCard({
   onDelete,
   onAddEntry,
   onExportPdf,
+  onExportApplicationPdf,
 }) {
   return (
     <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
@@ -86,9 +87,14 @@ export default function HeaderCard({
               {s.college && <span>· {s.college}</span>}
               {s.reference && <span>· Referred by {s.reference}</span>}
             </div>
-            <div className="mt-3 flex items-center gap-2 text-xs">
+            <div className="mt-3 flex items-center gap-2 text-xs flex-wrap">
               <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${STATUS_STYLES[s.status] || "bg-muted text-foreground"}`}>{s.status}</span>
               {s.enrollment_date && <span className="text-muted-foreground">Enrolled {formatDate(s.enrollment_date)}</span>}
+              {s.application_source === "public_form" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100/70 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 uppercase tracking-wider" data-testid="badge-public-application">
+                  <FileText size={11} weight="duotone" /> From online application
+                </span>
+              )}
             </div>
             {s.notes && <p className="mt-3 text-sm text-muted-foreground">{s.notes}</p>}
           </div>
@@ -99,6 +105,11 @@ export default function HeaderCard({
             <Button variant="outline" onClick={onExportPdf} data-testid="export-student-pdf">
               <FilePdf size={14} className="mr-1.5" /> PDF
             </Button>
+            {s.application_source === "public_form" && s.application && (
+              <Button variant="outline" onClick={onExportApplicationPdf} data-testid="export-application-pdf">
+                <ClipboardText size={14} className="mr-1.5" /> Application PDF
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-header"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>
             <Button variant="outline" className="text-rose-700 dark:text-rose-400 hover:text-rose-800" onClick={onDelete} data-testid="delete-student"><Trash size={14} className="mr-1.5" /> Delete</Button>
           </div>

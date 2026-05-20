@@ -22,6 +22,7 @@ import AgentDetail from "@/pages/AgentDetail";
 import ClientDetail from "@/pages/ClientDetail";
 import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
+import PublicApplication from "@/pages/PublicApplication";
 import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {
@@ -50,6 +51,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
         <Routes>
+          <Route path="/apply" element={<PublicApplication />} />
           <Route path="/login" element={<PublicOnly><AuthPage mode="login" /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
           <Route element={<Protected><AppShell /></Protected>}>

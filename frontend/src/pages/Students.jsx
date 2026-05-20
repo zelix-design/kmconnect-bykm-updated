@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
@@ -139,6 +139,22 @@ export default function Students() {
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                const url = `${window.location.origin}/apply`;
+                navigator.clipboard.writeText(url).then(
+                  () => toast.success(`Public form link copied · ${url}`),
+                  () => { window.prompt("Copy the application link:", url); }
+                );
+              }}
+              className="h-10"
+              data-testid="share-apply-link-btn"
+              title="Copy the public admission form link"
+            >
+              <ShareNetwork size={16} className="mr-1.5" /> Share application link
+            </Button>
             <Button
               type="button"
               variant="outline"

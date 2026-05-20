@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Plus, PencilSimple, Trash, CaretDown, CaretUp } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentPdf } from "@/lib/studentExports";
+import { downloadApplicationPdf } from "@/lib/applicationPdf";
 import { feesPlanFromApi, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import HeaderCard from "@/components/student-detail/HeaderCard";
 import SummaryTiles from "@/components/student-detail/SummaryTiles";
@@ -238,6 +239,16 @@ export default function StudentDetail() {
     }
   };
 
+  const onExportApplicationPdf = () => {
+    try {
+      downloadApplicationPdf({ student: s, user });
+      toast.success("Application PDF generated");
+    } catch (err) {
+      console.error("[student-detail] application pdf failed:", err);
+      toast.error(err?.message || "Export failed");
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in" data-testid="student-detail">
       <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" data-testid="back-to-list">
@@ -256,6 +267,7 @@ export default function StudentDetail() {
         onDelete={removeStudent}
         onAddEntry={openEntryAdd}
         onExportPdf={onExportPdf}
+        onExportApplicationPdf={onExportApplicationPdf}
       />
 
       <SummaryTiles s={s} currency={currency} />

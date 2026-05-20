@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications
 
 
 app = FastAPI(title="FinFlow API")
@@ -28,6 +28,7 @@ app.include_router(students.router)
 app.include_router(users.router)
 app.include_router(expense_requests.router)
 app.include_router(notifications.router)
+app.include_router(applications.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
