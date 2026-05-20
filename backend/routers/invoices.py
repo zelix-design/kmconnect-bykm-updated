@@ -76,61 +76,87 @@ async def _sync_invoice_sc_payment_transaction(user_id: str, invoice: dict) -> N
     })
 
 
+def _resolve_expense_category(description: str, by_name: dict[str, str]) -> Optional[str]:
+    """Map a particular's description → expense-category id. Tries direct name,
+    then the PARTICULAR_TO_CATEGORY alias map, falling back to "Other"."""
+    d = (description or "").strip().lower()
+    if d.startswith("other:") or d == "other":
+        return by_name.get("other")
+    if d in by_name:
+        return by_name[d]
+    mapped = PARTICULAR_TO_CATEGORY.get(d)
+    if mapped:
+        return by_name.get(mapped.lower())
+    return None
+
+
+def _build_expense_tx(item: dict, *, user_id: str, invoice: dict, account_id: str, category_id: Optional[str]) -> Optional[dict]:
+    """Construct the expense-transaction doc for one invoice line. Returns
+    None when the amount is zero/negative (nothing to log)."""
+    amount = (item.get("quantity") or 1) * (item.get("unit_price") or 0)
+    if amount <= 0:
+        return None
+    desc = item.get("description") or "Expense"
+    return {
+        "id": gen_id(),
+        "user_id": user_id,
+        "created_at": now_iso(),
+        "type": "expense",
+        "amount": round(amount, 2),
+        "account_id": account_id,
+        "category_id": category_id,
+        "date": invoice.get("issue_date"),
+        "description": f"{desc} · Invoice {invoice.get('invoice_number')}",
+        "client_id": invoice.get("client_id"),
+        "linked_invoice_id": invoice["id"],
+    }
+
+
+async def _build_invoice_expense_docs(user_id: str, invoice: dict) -> List[dict]:
+    """Return the full list of expense-tx docs that should exist for an
+    auto-logged invoice. Empty when auto_log is off or items are absent.
+
+    Pulls the user's default expense account and resolves each line's category
+    via the cached category-by-name map.
+    """
+    if not invoice.get("auto_log_expenses", True):
+        return []
+    items = invoice.get("items") or []
+    if not items:
+        return []
+    account_id = invoice.get("expense_account_id")
+    if not account_id:
+        first_account = await db.accounts.find_one({"user_id": user_id}, {"_id": 0})
+        if not first_account:
+            return []
+        account_id = first_account["id"]
+
+    cats = await db.categories.find(
+        {"user_id": user_id, "type": "expense"}, {"_id": 0}
+    ).to_list(500)
+    by_name = {c["name"].lower(): c["id"] for c in cats}
+
+    docs: List[dict] = []
+    for it in items:
+        doc = _build_expense_tx(
+            it,
+            user_id=user_id,
+            invoice=invoice,
+            account_id=account_id,
+            category_id=_resolve_expense_category(it.get("description"), by_name),
+        )
+        if doc:
+            docs.append(doc)
+    return docs
+
+
 async def _sync_invoice_expense_transactions(user_id: str, invoice: dict) -> None:
     """Delete prior linked expense transactions and re-create them per particulars.
     Uses a Mongo session/transaction when supported (replica set); falls back to a
     best-effort delete-then-insert on standalone MongoDB."""
     invoice_id = invoice["id"]
+    new_docs = await _build_invoice_expense_docs(user_id, invoice)
 
-    # Build the new tx docs first (so we don't delete if nothing valid to insert).
-    auto_log = bool(invoice.get("auto_log_expenses", True))
-    new_docs: List[dict] = []
-
-    if auto_log:
-        items = invoice.get("items") or []
-        if items:
-            account_id = invoice.get("expense_account_id")
-            if not account_id:
-                first_account = await db.accounts.find_one({"user_id": user_id}, {"_id": 0})
-                if first_account:
-                    account_id = first_account["id"]
-            if account_id:
-                cats = await db.categories.find(
-                    {"user_id": user_id, "type": "expense"}, {"_id": 0}
-                ).to_list(500)
-                by_name = {c["name"].lower(): c["id"] for c in cats}
-
-                def resolve_category(description: str) -> Optional[str]:
-                    d = (description or "").strip().lower()
-                    if d.startswith("other:") or d == "other":
-                        return by_name.get("other")
-                    if d in by_name:
-                        return by_name[d]
-                    mapped = PARTICULAR_TO_CATEGORY.get(d)
-                    if mapped:
-                        return by_name.get(mapped.lower())
-                    return None
-
-                for it in items:
-                    amount = (it.get("quantity") or 1) * (it.get("unit_price") or 0)
-                    if amount <= 0:
-                        continue
-                    desc = it.get("description") or "Expense"
-                    new_docs.append({
-                        "id": gen_id(),
-                        "user_id": user_id,
-                        "created_at": now_iso(),
-                        "type": "expense",
-                        "amount": round(amount, 2),
-                        "account_id": account_id,
-                        "category_id": resolve_category(desc),
-                        "date": invoice.get("issue_date"),
-                        "description": f"{desc} · Invoice {invoice.get('invoice_number')}",
-                        "client_id": invoice.get("client_id"),
-                        "linked_invoice_id": invoice_id,
-                    })
-
-    # Atomic sync with fallback for standalone MongoDB.
     try:
         async with await client.start_session() as session:
             async with session.start_transaction():

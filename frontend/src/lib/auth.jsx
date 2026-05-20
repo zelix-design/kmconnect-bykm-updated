@@ -59,7 +59,13 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch {}
+    try {
+      await api.post("/auth/logout");
+    } catch (err) {
+      // Surface server-side logout failures in dev tools but always clear
+      // the local session so the user isn't stuck.
+      console.error("[auth] logout failed:", err?.message || err);
+    }
     setUser(false);
   };
 

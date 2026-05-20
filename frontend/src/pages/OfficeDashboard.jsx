@@ -1,21 +1,18 @@
-import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format";
 import {
-  GraduationCap, CurrencyInr, Cake, Trophy, CheckCircle, ClockClockwise,
-  Buildings, Lightning, ArrowRight, Sparkle, UserCircle, Calendar,
-  MagnifyingGlass, Plus,
+  GraduationCap, Trophy, ClockClockwise, UserCircle,
 } from "@phosphor-icons/react";
+import { StatCard } from "@/components/dashboard/StatCard";
+import StaffBreakdownList from "@/components/office-dashboard/StaffBreakdownList";
+import {
+  AccountsMiniCard, UpcomingBirthdaysCard, IncentiveRuleCard,
+} from "@/components/office-dashboard/AsideCards";
+import StaffPickerDialog from "@/components/office-dashboard/StaffPickerDialog";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -25,59 +22,44 @@ const WINDOWS = [
   { value: "year", label: "This year" },
 ];
 
-function StatCard({ icon: Icon, eyebrow, value, hint, palette, testId }) {
-  const palettes = {
-    amber: { bg: "bg-amber-50 dark:bg-amber-500/15", chip: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400" },
-    emerald: { bg: "bg-emerald-50 dark:bg-emerald-500/15", chip: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" },
-    violet: { bg: "bg-violet-50 dark:bg-violet-500/15", chip: "bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400" },
-    rose: { bg: "bg-rose-50 dark:bg-rose-500/15", chip: "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400" },
-  };
-  const p = palettes[palette] || palettes.amber;
-  return (
-    <Card className={`p-5 rounded-xl shadow-none border-0 ${p.bg}`} data-testid={testId}>
-      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${p.chip}`}>
-        <Icon size={18} weight="duotone" />
-      </div>
-      <p className="font-display text-2xl mt-4 text-foreground tabular-nums">{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{eyebrow}</p>
-      {hint && <p className="text-[10px] text-muted-foreground mt-0.5">{hint}</p>}
-    </Card>
-  );
-}
-
 export default function OfficeDashboard() {
   const { user } = useAuth();
   const nav = useNavigate();
   const currency = user?.currency || "INR";
-  const [window, setWindow] = useState("month");
+  const [windowKey, setWindowKey] = useState("month");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const [allStaff, setAllStaff] = useState([]);
+  const [accounts, setAccounts] = useState([]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/dashboard/office-admin?window=${window}`);
+      const { data } = await api.get(`/dashboard/office-admin?window=${windowKey}`);
       setData(data);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed to load");
     } finally {
       setLoading(false);
     }
-  };
+  }, [windowKey]);
 
-  useEffect(() => { load(); /* eslint-disable-line */ }, [window]);
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    api.get("/accounts")
+      .then((r) => setAccounts(r.data || []))
+      .catch((err) => console.error("[office-dashboard] accounts fetch failed:", err?.message || err));
+  }, []);
 
   const markPaid = async (studentId) => {
     try {
       const { data } = await api.post(`/students/${studentId}/incentive/mark-paid`);
-      if (data?.expense_request_id) {
-        toast.success("Incentive marked paid · salary request sent for approval");
-      } else {
-        toast.success("Incentive marked paid");
-      }
+      toast.success(data?.expense_request_id
+        ? "Incentive marked paid · salary request sent for approval"
+        : "Incentive marked paid");
       load();
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed");
@@ -94,45 +76,30 @@ export default function OfficeDashboard() {
     }
   };
 
-  // ----- "Add an admission" flow: pick staff, then jump to student form -----
   const openAdmissionPicker = async () => {
     try {
       const { data } = await api.get("/clients");
-      const staff = (data || []).filter((c) => c.client_type === "staff");
-      setAllStaff(staff);
+      setAllStaff((data || []).filter((c) => c.client_type === "staff"));
       setPickerSearch("");
       setPickerOpen(true);
-    } catch {
+    } catch (err) {
+      console.error("[office-dashboard] staff fetch failed:", err?.message || err);
       toast.error("Couldn't load staff list");
     }
   };
 
   const pickStaffAndEnrol = (staff) => {
     setPickerOpen(false);
-    // Pass the staff name in the URL so Students.jsx can pre-fill it and open the dialog.
     nav(`/students?new=1&staff=${encodeURIComponent(staff.name)}`);
   };
-
-  const filteredStaff = allStaff.filter((s) => {
-    if (!pickerSearch) return true;
-    const q = pickerSearch.toLowerCase();
-    return (s.name || "").toLowerCase().includes(q) || (s.office || "").toLowerCase().includes(q);
-  });
 
   const t = data?.totals || {};
   const breakdown = data?.staff_breakdown || [];
   const birthdays = data?.upcoming_birthdays || [];
-
-  // Accounts mini-summary — shows ONLY this user's accounts
-  const [accounts, setAccounts] = useState([]);
-  useEffect(() => {
-    api.get("/accounts").then((r) => setAccounts(r.data || [])).catch(() => {});
-  }, []);
-
+  const windowLabel = WINDOWS.find((x) => x.value === windowKey)?.label?.toLowerCase();
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="office-dashboard">
-      {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <p className="label-eyebrow">{user?.office ? `${OFFICE_LABEL[user.office] || user.office} · office` : "Office"}</p>
@@ -146,10 +113,10 @@ export default function OfficeDashboard() {
           {WINDOWS.map((w) => (
             <button
               key={w.value}
-              onClick={() => setWindow(w.value)}
+              onClick={() => setWindowKey(w.value)}
               data-testid={`window-${w.value}`}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                window === w.value
+                windowKey === w.value
                   ? "bg-amber-gradient text-white shadow-md shadow-orange-500/25"
                   : "bg-card border border-border text-foreground hover:bg-muted/40"
               }`}
@@ -160,12 +127,11 @@ export default function OfficeDashboard() {
         </div>
       </header>
 
-      {/* Stat row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard testId="stat-admissions" icon={GraduationCap} palette="amber"
           eyebrow="Admissions"
           value={loading ? "—" : (t.admissions ?? 0)}
-          hint={`in ${WINDOWS.find((x) => x.value === window)?.label?.toLowerCase()}`}
+          hint={`in ${windowLabel}`}
         />
         <StatCard testId="stat-incentive-earned" icon={Trophy} palette="emerald"
           eyebrow="Incentive earned"
@@ -185,278 +151,29 @@ export default function OfficeDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Staff breakdown — 2/3 */}
-        <Card className="lg:col-span-2 p-5 rounded-xl border border-border shadow-none" data-testid="staff-breakdown">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="label-eyebrow">Admissions by staff</p>
-              <h2 className="font-display text-lg mt-1">Who's bringing students in</h2>
-            </div>
-            <Link to="/clients" className="text-xs text-orange-600 dark:text-orange-400 inline-flex items-center gap-1 hover:text-orange-700">
-              Manage staff <ArrowRight size={12} />
-            </Link>
-          </div>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
-          ) : breakdown.length === 0 ? (
-            <div className="text-center py-10 space-y-3">
-              <Sparkle size={28} weight="duotone" className="mx-auto text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No admissions this window.</p>
-              <p className="text-xs text-muted-foreground">Add staff in <Link to="/clients" className="text-orange-600 dark:text-orange-400 underline">Our Staff</Link> and reference them when enrolling students.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {breakdown.map((row) => (
-                <details key={row.staff_id} className="rounded-lg border border-border bg-card overflow-hidden group" data-testid={`staff-row-${row.staff_id}`}>
-                  <summary className="cursor-pointer list-none flex items-center gap-3 px-4 py-3 hover:bg-muted/40">
-                    <div className="w-10 h-10 rounded-full bg-amber-gradient text-white text-sm font-semibold flex items-center justify-center shrink-0">
-                      {(row.name || "?")[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-foreground truncate">{row.name}</p>
-                        {row.office && (
-                          <Badge variant="outline" className="text-[10px] py-0">
-                            <Buildings size={10} className="mr-1" /> {OFFICE_LABEL[row.office] || row.office}
-                          </Badge>
-                        )}
-                        {row.eligible_count > 0 && (
-                          <Badge className="bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-0 text-[10px] py-0">
-                            <Lightning size={10} className="mr-0.5" /> eligible
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {row.admissions_count} admission{row.admissions_count === 1 ? "" : "s"}
-                        {row.eligible_count > 0 && ` · ${row.eligible_count} eligible`}
-                        {row.eligible_incentive > 0 && ` · ₹${row.eligible_incentive}/admission`}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-display text-base font-semibold tabular-nums text-foreground">
-                        {formatMoney(row.incentive_earned, currency)}
-                      </p>
-                      {row.incentive_pending > 0 && (
-                        <p className="text-[11px] text-rose-600 dark:text-rose-400">
-                          {formatMoney(row.incentive_pending, currency)} pending
-                        </p>
-                      )}
-                    </div>
-                  </summary>
+        <StaffBreakdownList
+          breakdown={breakdown}
+          loading={loading}
+          currency={currency}
+          onMarkPaid={markPaid}
+          onUnmarkPaid={unmarkPaid}
+        />
 
-                  {/* Per-admission expand */}
-                  <div className="border-t border-border bg-muted/30 px-4 py-3 space-y-2">
-                    {row.admissions.map((a) => (
-                      <div key={a.student_id} className="flex items-center gap-3 text-sm" data-testid={`adm-${a.student_id}`}>
-                        <Link to={`/students/${a.student_id}`} className="flex-1 min-w-0 hover:underline">
-                          <p className="font-medium text-foreground truncate">{a.student_name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {a.college || "—"} · {new Date(a.enrolled_at).toLocaleDateString()}
-                          </p>
-                        </Link>
-                        {a.eligible ? (
-                          a.incentive_paid ? (
-                            <Button
-                              size="sm" variant="outline"
-                              data-testid={`unmark-${a.student_id}`}
-                              onClick={() => unmarkPaid(a.student_id)}
-                              className="h-7 text-[11px] border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
-                            >
-                              <CheckCircle size={12} weight="fill" className="mr-1" /> Paid
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              data-testid={`mark-paid-${a.student_id}`}
-                              onClick={() => markPaid(a.student_id)}
-                              className="h-7 text-[11px] btn-amber border-0 px-2"
-                            >
-                              Mark paid · {formatMoney(a.incentive_amount, currency)}
-                            </Button>
-                          )
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground">
-                            not eligible yet
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Right column: birthdays + quick links */}
         <div className="space-y-4">
-          <Card className="p-5 rounded-xl border border-border shadow-none" data-testid="accounts-mini">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-                  <CurrencyInr size={16} weight="duotone" />
-                </div>
-                <div>
-                  <p className="label-eyebrow">Your books</p>
-                  <h2 className="font-display text-base">Accounts</h2>
-                </div>
-              </div>
-              <Link to="/accounts" className="text-[11px] text-orange-600 dark:text-orange-400 hover:text-orange-700 inline-flex items-center gap-0.5">
-                Manage <ArrowRight size={11} />
-              </Link>
-            </div>
-            {accounts.length === 0 ? (
-              <div className="text-center py-4 space-y-2" data-testid="accounts-mini-empty">
-                <p className="text-xs text-muted-foreground">No accounts yet.</p>
-                <Link to="/accounts" className="inline-flex items-center gap-1 text-xs text-orange-700 dark:text-orange-400 font-medium hover:underline">
-                  <Plus size={12} /> Add your first
-                </Link>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-1.5" data-testid="accounts-mini-list">
-                  {accounts.slice(0, 4).map((a) => (
-                    <div key={a.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/40" data-testid={`acc-mini-${a.id}`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: a.color || "#10b981" }} />
-                        <span className="text-sm font-medium truncate">{a.name}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{(a.type || "").replace("_", " ")}</span>
-                      </div>
-                      <span className="text-sm font-display tabular-nums shrink-0">{formatMoney(a.current_balance ?? a.opening_balance ?? 0, currency)}</span>
-                    </div>
-                  ))}
-                </div>
-                {accounts.length > 4 && (
-                  <Link to="/accounts" className="block text-[11px] text-center text-muted-foreground hover:text-foreground mt-2">
-                    +{accounts.length - 4} more
-                  </Link>
-                )}
-                <div className="border-t border-border mt-3 pt-3 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Total balance</span>
-                  <span className="font-display text-base font-semibold tabular-nums">
-                    {formatMoney(
-                      accounts.reduce((s, a) => s + (a.current_balance ?? a.opening_balance ?? 0), 0),
-                      currency
-                    )}
-                  </span>
-                </div>
-              </>
-            )}
-          </Card>
-
-          <Card className="p-5 rounded-xl border border-border shadow-none" data-testid="upcoming-birthdays">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-9 h-9 rounded-lg bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 flex items-center justify-center">
-                <Cake size={16} weight="duotone" />
-              </div>
-              <div>
-                <p className="label-eyebrow">Coming up</p>
-                <h2 className="font-display text-base">Birthdays · next 30 days</h2>
-              </div>
-            </div>
-            {birthdays.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-6">
-                No birthdays in the next 30 days.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {birthdays.map((b) => (
-                  <div key={b.staff_id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/40" data-testid={`bday-${b.staff_id}`}>
-                    <Cake size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{b.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{new Date(b.date_of_birth).toLocaleDateString(undefined, { day: "numeric", month: "short" })}</p>
-                    </div>
-                    <Badge className="bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400 border-0 text-[10px]">
-                      {b.days_until === 0 ? "Today!" : b.days_until === 1 ? "Tomorrow" : `in ${b.days_until}d`}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          <Card className="p-5 rounded-xl bg-amber-gradient-soft border border-amber-500/20" data-testid="incentive-rule-card">
-            <Lightning size={20} weight="duotone" className="text-amber-700 dark:text-amber-400" />
-            <h3 className="font-display text-base mt-3">Incentive rule</h3>
-            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-              Each staff member becomes <span className="text-foreground font-medium">eligible</span> for their per-admission incentive after their <span className="text-foreground font-medium">3rd admission in a month</span>. The first two admissions get backdated automatically.
-            </p>
-            <button
-              type="button"
-              onClick={openAdmissionPicker}
-              data-testid="add-admission-btn"
-              className="inline-flex items-center gap-1 mt-3 text-xs text-orange-700 dark:text-orange-400 font-medium hover:underline"
-            >
-              <Calendar size={12} /> Add an admission
-            </button>
-          </Card>
+          <AccountsMiniCard accounts={accounts} currency={currency} />
+          <UpcomingBirthdaysCard birthdays={birthdays} />
+          <IncentiveRuleCard onAddAdmission={openAdmissionPicker} />
         </div>
       </div>
 
-      {/* Staff picker → Add admission */}
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="max-w-md p-0 overflow-hidden" data-testid="staff-picker-dialog">
-          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
-            <DialogTitle className="flex items-center gap-2">
-              <Calendar size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
-              Add an admission
-            </DialogTitle>
-            <DialogDescription>Pick the staff this student is being enrolled under.</DialogDescription>
-          </DialogHeader>
-          <div className="px-5 py-3 border-b border-border">
-            <div className="relative">
-              <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search staff…"
-                value={pickerSearch}
-                onChange={(e) => setPickerSearch(e.target.value)}
-                className="pl-10 h-10"
-                data-testid="staff-picker-search"
-              />
-            </div>
-          </div>
-          <div className="max-h-[55vh] overflow-y-auto" data-testid="staff-picker-list">
-            {filteredStaff.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-muted-foreground" data-testid="staff-picker-empty">
-                {allStaff.length === 0 ? (
-                  <>
-                    No staff yet.{" "}
-                    <Link to="/clients" onClick={() => setPickerOpen(false)} className="text-orange-600 dark:text-orange-400 underline">
-                      Add your first
-                    </Link>
-                    .
-                  </>
-                ) : (
-                  "No staff matches your search."
-                )}
-              </div>
-            ) : (
-              filteredStaff.map((s) => (
-                <button
-                  type="button"
-                  key={s.id}
-                  onClick={() => pickStaffAndEnrol(s)}
-                  data-testid={`staff-pick-${s.id}`}
-                  className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-muted/40 transition-colors border-b border-border/40"
-                >
-                  <div className="w-9 h-9 rounded-full bg-amber-gradient text-white text-sm font-semibold flex items-center justify-center shrink-0">
-                    {(s.name || "?")[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {s.office ? (OFFICE_LABEL[s.office] || s.office) : "—"}
-                      {s.eligible_incentive != null ? ` · ₹${s.eligible_incentive}/admission` : ""}
-                    </p>
-                  </div>
-                  <ArrowRight size={14} className="text-muted-foreground shrink-0" />
-                </button>
-              ))
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <StaffPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        search={pickerSearch}
+        onSearchChange={setPickerSearch}
+        staff={allStaff}
+        onPick={pickStaffAndEnrol}
+      />
     </div>
   );
 }

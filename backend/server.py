@@ -34,7 +34,7 @@ health = APIRouter(prefix="/api", tags=["health"])
 
 
 @health.get("/")
-async def root():
+async def root() -> dict[str, str]:
     return {"service": "FinFlow", "status": "ok"}
 
 
@@ -52,8 +52,26 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+async def _ensure_login_attempts_index() -> None:
+    """Build the unique index on login_attempts.email, deduping legacy rows
+    that would otherwise block creation."""
+    try:
+        await db.login_attempts.create_index("email", unique=True)
+        return
+    except Exception:
+        # If duplicates exist from older runs, dedupe + retry once.
+        seen: set[str | None] = set()
+        async for d in db.login_attempts.find({}, {"_id": 1, "email": 1}):
+            email = d.get("email")
+            if email in seen:
+                await db.login_attempts.delete_one({"_id": d["_id"]})
+            else:
+                seen.add(email)
+        await db.login_attempts.create_index("email", unique=True)
+
+
 @app.on_event("startup")
-async def startup():
+async def startup() -> None:
     await db.users.create_index("email", unique=True)
     await db.accounts.create_index("user_id")
     await db.clients.create_index("user_id")
@@ -71,18 +89,7 @@ async def startup():
     await db.expense_requests.create_index("status")
     await db.notifications.create_index([("recipient_user_id", 1), ("created_at", -1)])
     await db.notifications.create_index([("recipient_user_id", 1), ("read", 1)])
-    # Harden against any legacy duplicates before declaring the unique index.
-    try:
-        await db.login_attempts.create_index("email", unique=True)
-    except Exception:
-        # If duplicates exist from older runs, dedupe + retry once.
-        seen = set()
-        async for d in db.login_attempts.find({}, {"_id": 1, "email": 1}):
-            if d.get("email") in seen:
-                await db.login_attempts.delete_one({"_id": d["_id"]})
-            else:
-                seen.add(d.get("email"))
-        await db.login_attempts.create_index("email", unique=True)
+    await _ensure_login_attempts_index()
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},
@@ -97,5 +104,5 @@ async def startup():
 
 
 @app.on_event("shutdown")
-async def shutdown():
+async def shutdown() -> None:
     client.close()

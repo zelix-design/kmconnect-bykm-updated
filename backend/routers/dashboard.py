@@ -164,122 +164,40 @@ def _days_until_birthday(dob_iso: str, today: datetime) -> int:
 async def office_admin_dashboard(
     user: dict = Depends(get_current_user),
     window: str = "month",
-):
+) -> dict:
     """Aggregated view for office admins (or super admin in office_admin shoes).
-    - admissions_in_window: total students enrolled in window
-    - staff_breakdown: per-staff admissions + eligibility + incentive_earned + paid/pending
+
+    - admissions: total students enrolled in window (any reference)
+    - staff_breakdown: per-staff admissions + eligibility + incentive_earned/paid/pending
     - upcoming_birthdays: staff with DOB within next 30 days
     - totals: incentive_earned, incentive_paid, incentive_pending
     """
+    from lib.office_dashboard import (
+        build_staff_breakdown,
+        compute_staff_month_counts,
+        count_admissions_in_window,
+        upcoming_birthdays_30d,
+    )
+
     if window not in ("week", "month", "year"):
         window = "month"
     user_id = user["id"]
     now = datetime.now(timezone.utc)
     win_start, win_end = _window_bounds(window, now)
 
-    # All staffs (clients with client_type='staff') for this user
     staffs = await db.clients.find(
         {"user_id": user_id, "client_type": "staff"}, {"_id": 0}
     ).to_list(500)
-    staff_by_name = {s["name"].strip().lower(): s for s in staffs}
-
-    # All students for this user (we'll partition them)
     students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
 
-    # Total admissions in window (regardless of whether a staff reference matched).
-    # This drives the top-of-page "Admissions" tile so unreferenced or
-    # skipped-reference enrolments still show up.
-    total_admissions_in_window = 0
-    for s in students:
-        dt = _student_admission_dt(s)
-        if win_start <= dt <= win_end:
-            total_admissions_in_window += 1
-
-    # First pass: tally admissions per (staff_name, year-month) to compute monthly eligibility
-    month_counts: dict[tuple, int] = {}
-    for s in students:
-        ref = (s.get("reference") or "").strip().lower()
-        if not ref:
-            continue
-        dt = _student_admission_dt(s)
-        key = (ref, f"{dt.year:04d}-{dt.month:02d}")
-        month_counts[key] = month_counts.get(key, 0) + 1
-
-    # Second pass: for each staff, gather admissions in window with eligibility per-month
-    staff_rows: dict[str, dict] = {}
-    for s in students:
-        ref = (s.get("reference") or "").strip().lower()
-        if not ref:
-            continue
-        dt = _student_admission_dt(s)
-        if dt < win_start or dt > win_end:
-            continue
-        staff = staff_by_name.get(ref)
-        # Skip references that don't match any staff record (legacy free-text refs)
-        if not staff:
-            continue
-        month_key = (ref, f"{dt.year:04d}-{dt.month:02d}")
-        is_eligible_month = month_counts.get(month_key, 0) >= 3
-
-        row = staff_rows.setdefault(staff["id"], {
-            "staff_id": staff["id"],
-            "name": staff["name"],
-            "office": staff.get("office"),
-            "eligible_incentive": staff.get("eligible_incentive") or 0,
-            "date_of_birth": staff.get("date_of_birth"),
-            "admissions": [],
-            "admissions_count": 0,
-            "eligible_count": 0,
-            "incentive_earned": 0.0,
-            "incentive_paid": 0.0,
-        })
-        incentive_amount = float(staff.get("eligible_incentive") or 0)
-        admission = {
-            "student_id": s["id"],
-            "student_name": s.get("name"),
-            "college": s.get("college"),
-            "course": s.get("course"),
-            "enrolled_at": dt.isoformat(),
-            "month": month_key[1],
-            "eligible": is_eligible_month,
-            "incentive_amount": incentive_amount if is_eligible_month else 0.0,
-            "incentive_paid": bool(s.get("incentive_paid")),
-            "incentive_paid_at": s.get("incentive_paid_at"),
-        }
-        row["admissions"].append(admission)
-        row["admissions_count"] += 1
-        if is_eligible_month:
-            row["eligible_count"] += 1
-            row["incentive_earned"] += incentive_amount
-            if admission["incentive_paid"]:
-                row["incentive_paid"] += incentive_amount
-
-    # Sort admissions desc per row, sort rows by admissions_count
-    breakdown = []
-    for row in staff_rows.values():
-        row["admissions"].sort(key=lambda a: a["enrolled_at"], reverse=True)
-        row["incentive_pending"] = round(row["incentive_earned"] - row["incentive_paid"], 2)
-        row["incentive_earned"] = round(row["incentive_earned"], 2)
-        row["incentive_paid"] = round(row["incentive_paid"], 2)
-        breakdown.append(row)
-    breakdown.sort(key=lambda r: (-r["admissions_count"], r["name"].lower()))
-
-    # Upcoming birthdays — any staff with DOB in next 30 days (regardless of window)
-    upcoming = []
-    for staff in staffs:
-        dob = staff.get("date_of_birth")
-        if not dob:
-            continue
-        days = _days_until_birthday(dob, now)
-        if days <= 30:
-            upcoming.append({
-                "staff_id": staff["id"],
-                "name": staff["name"],
-                "office": staff.get("office"),
-                "date_of_birth": dob,
-                "days_until": days,
-            })
-    upcoming.sort(key=lambda u: u["days_until"])
+    total_admissions_in_window = count_admissions_in_window(students, win_start, win_end)
+    month_counts = compute_staff_month_counts(students)
+    breakdown = build_staff_breakdown(
+        students, staffs,
+        win_start=win_start, win_end=win_end,
+        month_counts=month_counts,
+    )
+    upcoming = upcoming_birthdays_30d(staffs, now)
 
     return {
         "window": window,

@@ -305,7 +305,10 @@ export default function Invoices() {
                         try {
                           const { data } = await api.get(`/invoices/${inv.id}/payments`);
                           payments = data?.payments || [];
-                        } catch { /* fall back to invoice.previous_sc_payment */ }
+                        } catch (err) {
+                          // Non-fatal: PDF still generates from invoice.previous_sc_payment fallback.
+                          console.error("[invoices] payments fetch failed:", err?.message || err);
+                        }
                         downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user, payments });
                       }} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
                       <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>

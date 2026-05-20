@@ -146,49 +146,26 @@ def _normalize_legacy_payment(p: dict) -> dict:
 
 
 def _summarize(s: dict) -> dict:
-    schedules = s.get("schedules") or []
-    payments = [_normalize_legacy_payment(p) for p in (s.get("payments") or [])]
-    s["payments"] = payments
-    scheduled_total = round(sum(x.get("amount", 0) for x in schedules), 2)
-    collected_total = round(sum(x.get("amount", 0) for x in payments), 2)
-    sc_fixed = float(s.get("sc_out_fixed", 0) or 0)
+    """Compute summary fields on a student doc (in-place)."""
+    from lib.student_math import compute_summary
+
+    s["payments"] = [_normalize_legacy_payment(p) for p in (s.get("payments") or [])]
+    summary = compute_summary(s)
+
+    # Persist computed total_fees back onto the nested fees_plan dict so the
+    # frontend doesn't have to recompute it.
     fp = s.get("fees_plan") or {}
-    scholarship_amount = 0.0
-    if fp.get("has_scholarship"):
-        try:
-            scholarship_amount = max(0.0, float(fp.get("scholarship_amount") or 0))
-        except (TypeError, ValueError):
-            scholarship_amount = 0.0
-    total_fees = round(
-        (fp.get("year_1") or 0) + (fp.get("year_2") or 0)
-        + (fp.get("year_3") or 0) + (fp.get("year_4") or 0)
-        - scholarship_amount,
-        2,
-    )
     if fp:
-        fp["total_fees"] = total_fees
+        fp["total_fees"] = summary["fees_plan_total"]
         s["fees_plan"] = fp
-    # Sum of SC adjustments routed elsewhere (Sub Agent / Associate / KM)
-    sc_adjusted_total = 0.0
-    for p in payments:
-        for adj in p.get("adjustments") or []:
-            if adj.get("kind") == "sc_adjusted":
-                try:
-                    sc_adjusted_total += float(adj.get("amount") or 0)
-                except (TypeError, ValueError):
-                    pass
-    sc_adjusted_total = round(sc_adjusted_total, 2)
-    sc_earned_effective = round(max(0.0, sc_fixed - scholarship_amount), 2)
-    # Balance vs SC Earned: per latest product spec, only the SC adjustments
-    # (NOT the collected payments) reduce the effective SC.
-    balance_vs_sc = round(sc_earned_effective - sc_adjusted_total, 2)
-    s["scheduled_total"] = scheduled_total
-    s["collected_total"] = collected_total
-    s["scholarship_amount"] = round(scholarship_amount, 2)
-    s["sc_adjusted_total"] = sc_adjusted_total
-    s["sc_earned_effective"] = sc_earned_effective
-    s["balance_vs_scheduled"] = round(scheduled_total - collected_total, 2)
-    s["balance_vs_sc"] = balance_vs_sc
+
+    # Surface the summary fields onto the student doc.
+    for key in (
+        "scheduled_total", "collected_total", "scholarship_amount",
+        "sc_adjusted_total", "sc_earned_effective",
+        "balance_vs_scheduled", "balance_vs_sc",
+    ):
+        s[key] = summary[key]
     return s
 
 

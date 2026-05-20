@@ -2,21 +2,19 @@
 
 Covers: auth, accounts, clients, categories, transactions, invoices, dashboard.
 """
-import os
 import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://paymate-43.preview.emergentagent.com").rstrip("/")
-API = f"{BASE_URL}/api"
+from tests._creds import api_base, admin_credentials
 
-ADMIN_EMAIL = "admin@finflow.com"
-ADMIN_PASSWORD = "Admin@123"
+API = api_base()
+ADMIN_EMAIL, ADMIN_PASSWORD = admin_credentials()
 
 
 # ---------- Fixtures ----------
 @pytest.fixture(scope="session")
-def admin_session():
+def admin_session() -> requests.Session:
     s = requests.Session()
     r = s.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
@@ -27,7 +25,7 @@ def admin_session():
 
 
 @pytest.fixture(scope="session")
-def new_user_session():
+def new_user_session() -> requests.Session:
     s = requests.Session()
     email = f"test_{uuid.uuid4().hex[:10]}@example.com"
     r = s.post(f"{API}/auth/register", json={
@@ -42,7 +40,7 @@ def new_user_session():
 
 
 # ---------- Health ----------
-def test_health_root():
+def test_health_root() -> None:
     r = requests.get(f"{API}/", timeout=15)
     assert r.status_code == 200
     assert r.json().get("status") == "ok"
@@ -50,26 +48,26 @@ def test_health_root():
 
 # ---------- Auth ----------
 class TestAuth:
-    def test_admin_login_sets_cookie(self, admin_session):
+    def test_admin_login_sets_cookie(self, admin_session) -> None:
         # session fixture already validated cookie + login
         assert admin_session.cookies.get("access_token")
 
-    def test_me_returns_user(self, admin_session):
+    def test_me_returns_user(self, admin_session) -> None:
         r = admin_session.get(f"{API}/auth/me", timeout=15)
         assert r.status_code == 200
         data = r.json()
         assert data["email"] == ADMIN_EMAIL
         assert data["role"] == "admin"
 
-    def test_me_unauthenticated(self):
+    def test_me_unauthenticated(self) -> None:
         r = requests.get(f"{API}/auth/me", timeout=15)
         assert r.status_code == 401
 
-    def test_login_invalid_password(self):
+    def test_login_invalid_password(self) -> None:
         r = requests.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": "wrong"}, timeout=15)
         assert r.status_code == 401
 
-    def test_register_default_seeds(self, new_user_session):
+    def test_register_default_seeds(self, new_user_session) -> None:
         # Default categories should be seeded (10)
         r = new_user_session.get(f"{API}/categories", timeout=15)
         assert r.status_code == 200
@@ -81,21 +79,21 @@ class TestAuth:
         accs = r.json()
         assert any(a["name"] == "Main Bank" for a in accs)
 
-    def test_register_duplicate(self, new_user_session):
+    def test_register_duplicate(self, new_user_session) -> None:
         email = new_user_session.email  # type: ignore
         r = requests.post(f"{API}/auth/register", json={
             "email": email, "password": "Passw0rd!", "name": "Dup"
         }, timeout=15)
         assert r.status_code == 400
 
-    def test_patch_me_currency(self, new_user_session):
+    def test_patch_me_currency(self, new_user_session) -> None:
         r = new_user_session.patch(f"{API}/auth/me", json={"currency": "INR"}, timeout=15)
         assert r.status_code == 200
         assert r.json()["currency"] == "INR"
         # Switch back
         new_user_session.patch(f"{API}/auth/me", json={"currency": "USD"}, timeout=15)
 
-    def test_logout_clears_cookie(self):
+    def test_logout_clears_cookie(self) -> None:
         s = requests.Session()
         s.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=15)
         assert s.cookies.get("access_token")
@@ -108,7 +106,7 @@ class TestAuth:
 
 # ---------- Accounts ----------
 class TestAccounts:
-    def test_create_get_patch_delete(self, new_user_session):
+    def test_create_get_patch_delete(self, new_user_session) -> None:
         s = new_user_session
         r = s.post(f"{API}/accounts", json={"name": "TEST_Cash", "type": "cash", "opening_balance": 100}, timeout=15)
         assert r.status_code == 200
@@ -134,7 +132,7 @@ class TestAccounts:
 
 # ---------- Clients ----------
 class TestClients:
-    def test_crud(self, new_user_session):
+    def test_crud(self, new_user_session) -> None:
         s = new_user_session
         r = s.post(f"{API}/clients", json={"name": "TEST_Client", "email": "c@x.com"}, timeout=15)
         assert r.status_code == 200
@@ -153,7 +151,7 @@ class TestClients:
 
 # ---------- Categories ----------
 class TestCategories:
-    def test_crud(self, new_user_session):
+    def test_crud(self, new_user_session) -> None:
         s = new_user_session
         r = s.post(f"{API}/categories", json={"name": "TEST_Cat", "type": "expense"}, timeout=15)
         assert r.status_code == 200
@@ -169,7 +167,7 @@ class TestCategories:
 
 # ---------- Transactions ----------
 class TestTransactions:
-    def test_transaction_affects_account_balance(self, new_user_session):
+    def test_transaction_affects_account_balance(self, new_user_session) -> None:
         s = new_user_session
         # Find Main Bank account
         accs = s.get(f"{API}/accounts", timeout=15).json()
@@ -216,7 +214,7 @@ class TestTransactions:
 
 # ---------- Invoices ----------
 class TestInvoices:
-    def test_invoice_totals_and_status(self, new_user_session):
+    def test_invoice_totals_and_status(self, new_user_session) -> None:
         s = new_user_session
         # Create client
         cid = s.post(f"{API}/clients", json={"name": "TEST_Invoice_Client"}, timeout=15).json()["id"]
@@ -258,14 +256,14 @@ class TestInvoices:
 
 # ---------- Dashboard ----------
 class TestDashboard:
-    def test_summary(self, admin_session):
+    def test_summary(self, admin_session) -> None:
         r = admin_session.get(f"{API}/dashboard/summary", timeout=15)
         assert r.status_code == 200
         data = r.json()
         for k in ("total_balance", "month_income", "month_expense", "month_cashflow", "outstanding_invoices", "currency"):
             assert k in data
 
-    def test_cashflow(self, admin_session):
+    def test_cashflow(self, admin_session) -> None:
         r = admin_session.get(f"{API}/dashboard/cashflow", params={"months": 6}, timeout=15)
         assert r.status_code == 200
         data = r.json()
@@ -274,7 +272,7 @@ class TestDashboard:
         for d in data:
             assert "month" in d and "income" in d and "expense" in d
 
-    def test_expense_by_category(self, admin_session):
+    def test_expense_by_category(self, admin_session) -> None:
         r = admin_session.get(f"{API}/dashboard/expense-by-category", timeout=15)
         assert r.status_code == 200
         assert isinstance(r.json(), list)

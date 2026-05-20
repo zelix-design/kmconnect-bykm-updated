@@ -1,22 +1,21 @@
 """Iteration 3 tests: campus-visit invoice fields + credit_amount in totals."""
-import os
 import uuid
 import requests
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
-API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "admin@finflow.com"
-ADMIN_PASSWORD = "Admin@123"
+from tests._creds import api_base, admin_credentials
+
+API = api_base()
+ADMIN_EMAIL, ADMIN_PASSWORD = admin_credentials()
 
 
-def admin_session():
+def admin_session() -> requests.Session:
     s = requests.Session()
     r = s.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200, r.text
     return s
 
 
-def _get_or_create_client(s):
+def _get_or_create_client(s: requests.Session) -> str:
     r = s.get(f"{API}/clients", timeout=15)
     assert r.status_code == 200
     items = r.json()
@@ -28,7 +27,7 @@ def _get_or_create_client(s):
 
 
 # --- Create invoice with campus visit fields + credit ---
-def test_create_invoice_with_campus_fields_and_credit():
+def test_create_invoice_with_campus_fields_and_credit() -> None:
     s = admin_session()
     cid = _get_or_create_client(s)
     payload = {
@@ -77,7 +76,7 @@ def test_create_invoice_with_campus_fields_and_credit():
 
 
 # --- Total with tax + credit ---
-def test_invoice_total_with_tax_and_credit():
+def test_invoice_total_with_tax_and_credit() -> None:
     s = admin_session()
     cid = _get_or_create_client(s)
     payload = {
@@ -100,7 +99,7 @@ def test_invoice_total_with_tax_and_credit():
 
 
 # --- PATCH updates new fields and recomputes total ---
-def test_patch_invoice_updates_credit_and_recomputes():
+def test_patch_invoice_updates_credit_and_recomputes() -> None:
     s = admin_session()
     cid = _get_or_create_client(s)
     create_payload = {
@@ -133,7 +132,7 @@ def test_patch_invoice_updates_credit_and_recomputes():
 
 
 # --- Legacy invoice (no campus fields) still listed & editable ---
-def test_legacy_invoice_without_campus_fields_works():
+def test_legacy_invoice_without_campus_fields_works() -> None:
     s = admin_session()
     cid = _get_or_create_client(s)
     # Create a "legacy-style" invoice without the new optional fields
@@ -168,7 +167,7 @@ def test_legacy_invoice_without_campus_fields_works():
 
 
 # --- Seeded campus-visit invoice exists ---
-def test_seed_campus_visit_invoice_present():
+def test_seed_campus_visit_invoice_present() -> None:
     s = admin_session()
     r = s.get(f"{API}/invoices", timeout=15)
     assert r.status_code == 200

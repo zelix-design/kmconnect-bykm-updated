@@ -3,17 +3,17 @@
 - Students: fees_plan auto-schedule rows + summarize.total_fees
 - PATCH fees_plan reconcile (preserve manual + payment-referenced)
 """
-import os
 import pytest
 import requests
 
-BASE = os.environ.get("REACT_APP_BACKEND_URL").rstrip("/")
-EMAIL = "admin@finflow.com"
-PASSWORD = "Admin@123"
+from tests._creds import backend_url, admin_credentials
+
+BASE = backend_url().rstrip("/")
+EMAIL, PASSWORD = admin_credentials()
 
 
 @pytest.fixture(scope="module")
-def client():
+def client() -> requests.Session:
     s = requests.Session()
     r = s.post(f"{BASE}/api/auth/login", json={"email": EMAIL, "password": PASSWORD})
     assert r.status_code == 200, r.text
@@ -22,7 +22,7 @@ def client():
 
 # ---------- Clients ----------
 class TestClients:
-    def test_create_client_with_type(self, client):
+    def test_create_client_with_type(self, client) -> None:
         r = client.post(f"{BASE}/api/clients", json={
             "name": "TEST_IT10_SubAgent",
             "client_type": "sub_agent_associate",
@@ -47,21 +47,21 @@ class TestClients:
         # Cleanup
         client.delete(f"{BASE}/api/clients/{data['id']}")
 
-    def test_create_client_no_type_optional(self, client):
+    def test_create_client_no_type_optional(self, client) -> None:
         r = client.post(f"{BASE}/api/clients", json={"name": "TEST_IT10_NoType"})
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["client_type"] is None
         client.delete(f"{BASE}/api/clients/{data['id']}")
 
-    def test_invalid_client_type_rejected(self, client):
+    def test_invalid_client_type_rejected(self, client) -> None:
         r = client.post(f"{BASE}/api/clients", json={
             "name": "TEST_IT10_BadType",
             "client_type": "junk_value",
         })
         assert r.status_code == 422
 
-    def test_list_clients_returns_legacy_no_type(self, client):
+    def test_list_clients_returns_legacy_no_type(self, client) -> None:
         # Create then directly read via list
         r = client.post(f"{BASE}/api/clients", json={"name": "TEST_IT10_Legacy"})
         cid = r.json()["id"]
@@ -75,7 +75,7 @@ class TestClients:
 # ---------- Students fees_plan ----------
 class TestStudentsFeesPlan:
     @pytest.fixture
-    def student_id(self, client):
+    def student_id(self, client) -> None:
         payload = {
             "name": "TEST_IT10_Student",
             "course": "B.Tech",
@@ -99,7 +99,7 @@ class TestStudentsFeesPlan:
         yield sid
         client.delete(f"{BASE}/api/students/{sid}")
 
-    def test_auto_generated_schedules(self, client, student_id):
+    def test_auto_generated_schedules(self, client, student_id) -> None:
         r = client.get(f"{BASE}/api/students/{student_id}")
         s = r.json()
         scheds = s.get("schedules", [])
@@ -113,7 +113,7 @@ class TestStudentsFeesPlan:
         ykeys = {sc["year_key"] for sc in plan_rows}
         assert ykeys == {"year_1", "year_2", "year_3"}
 
-    def test_summarize_total_fees(self, client, student_id):
+    def test_summarize_total_fees(self, client, student_id) -> None:
         r = client.get(f"{BASE}/api/students/{student_id}")
         s = r.json()
         fp = s.get("fees_plan")
@@ -121,7 +121,7 @@ class TestStudentsFeesPlan:
         # 100k+120k+130k - 25k scholarship = 325000
         assert fp["total_fees"] == 325000
 
-    def test_patch_reconcile_update_inplace(self, client, student_id):
+    def test_patch_reconcile_update_inplace(self, client, student_id) -> None:
         # Get current schedule IDs
         s = client.get(f"{BASE}/api/students/{student_id}").json()
         before_ids = {sc["year_key"]: sc["id"] for sc in s["schedules"] if sc.get("source") == "fees_plan"}
@@ -146,7 +146,7 @@ class TestStudentsFeesPlan:
         # total_fees recomputed: 150+120+130-25 = 375k
         assert s2["fees_plan"]["total_fees"] == 375000
 
-    def test_patch_reconcile_add_and_remove(self, client, student_id):
+    def test_patch_reconcile_add_and_remove(self, client, student_id) -> None:
         s = client.get(f"{BASE}/api/students/{student_id}").json()
         # Add year_4, remove year_3 (set null)
         new_plan = {
@@ -165,7 +165,7 @@ class TestStudentsFeesPlan:
         labels = {sc["label"]: sc["amount"] for sc in s2["schedules"] if sc.get("source") == "fees_plan"}
         assert labels.get("4th Year") == 140000
 
-    def test_patch_preserves_referenced_year(self, client, student_id):
+    def test_patch_preserves_referenced_year(self, client, student_id) -> None:
         # Add a payment that references year_2 schedule
         s = client.get(f"{BASE}/api/students/{student_id}").json()
         y1_sched = next(sc for sc in s["schedules"] if sc.get("year_key") == "year_1")
@@ -196,7 +196,7 @@ class TestStudentsFeesPlan:
         assert y1["amount"] == 0.0
         assert y1["id"] == y1_sched["id"]
 
-    def test_patch_existing_student_without_fees_plan_does_not_corrupt(self, client):
+    def test_patch_existing_student_without_fees_plan_does_not_corrupt(self, client) -> None:
         # Create a student WITHOUT fees_plan, add manual schedule, then PATCH without fees_plan
         r = client.post(f"{BASE}/api/students", json={
             "name": "TEST_IT10_Legacy", "status": "inquiry",
@@ -224,7 +224,7 @@ class TestStudentsFeesPlan:
 
 
 class TestStudentNoFeesPlan:
-    def test_create_student_without_fees_plan(self, client):
+    def test_create_student_without_fees_plan(self, client) -> None:
         r = client.post(f"{BASE}/api/students", json={
             "name": "TEST_IT10_NoPlan", "status": "inquiry",
         })

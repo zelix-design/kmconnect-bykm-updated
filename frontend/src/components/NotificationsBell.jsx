@@ -40,14 +40,18 @@ export default function NotificationsBell() {
     try {
       const { data } = await api.get("/notifications/unread-count");
       setUnread(data?.count || 0);
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error("[notifications] unread fetch failed:", err?.message || err);
+    }
   }, [user]);
 
   const loadList = useCallback(async () => {
     try {
       const { data } = await api.get("/notifications?limit=25");
       setItems(data || []);
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error("[notifications] list fetch failed:", err?.message || err);
+    }
   }, []);
 
   // Initial fetch + polling
@@ -84,7 +88,11 @@ export default function NotificationsBell() {
 
   const onClickItem = async (n) => {
     if (!n.read) {
-      try { await api.post(`/notifications/${n.id}/read`); } catch { /* ignore */ }
+      try {
+        await api.post(`/notifications/${n.id}/read`);
+      } catch (err) {
+        console.error("[notifications] mark-read failed:", err?.message || err);
+      }
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
       setUnread((u) => Math.max(0, u - 1));
     }
@@ -93,14 +101,22 @@ export default function NotificationsBell() {
   };
 
   const onMarkAll = async () => {
-    try { await api.post("/notifications/read-all"); } catch { /* ignore */ }
+    try {
+      await api.post("/notifications/read-all");
+    } catch (err) {
+      console.error("[notifications] mark-all failed:", err?.message || err);
+    }
     setItems((prev) => prev.map((x) => ({ ...x, read: true })));
     setUnread(0);
   };
 
   const onDelete = async (e, n) => {
     e.stopPropagation();
-    try { await api.delete(`/notifications/${n.id}`); } catch { /* ignore */ }
+    try {
+      await api.delete(`/notifications/${n.id}`);
+    } catch (err) {
+      console.error("[notifications] delete failed:", err?.message || err);
+    }
     setItems((prev) => prev.filter((x) => x.id !== n.id));
     if (!n.read) setUnread((u) => Math.max(0, u - 1));
   };

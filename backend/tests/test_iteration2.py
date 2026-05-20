@@ -1,24 +1,23 @@
 """Iteration 2 tests: new default categories, dashboard date-range filters, idempotency."""
-import os
 import uuid
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://paymate-43.preview.emergentagent.com").rstrip("/")
-API = f"{BASE_URL}/api"
-ADMIN_EMAIL = "admin@finflow.com"
-ADMIN_PASSWORD = "Admin@123"
+from tests._creds import api_base, admin_credentials
+
+API = api_base()
+ADMIN_EMAIL, ADMIN_PASSWORD = admin_credentials()
 
 REQUIRED_NEW_EXPENSE_CATS = {"Rent", "Fuel Exp", "Toll", "Cab Exp", "Train/Bus Booking", "Food", "Other"}
 
 
-def admin_login():
+def admin_login() -> requests.Session:
     s = requests.Session()
     r = s.post(f"{API}/auth/login", json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD}, timeout=30)
     assert r.status_code == 200
     return s
 
 
-def test_admin_has_all_new_default_categories():
+def test_admin_has_all_new_default_categories() -> None:
     s = admin_login()
     r = s.get(f"{API}/categories", timeout=15)
     assert r.status_code == 200
@@ -31,7 +30,7 @@ def test_admin_has_all_new_default_categories():
     assert not missing, f"Missing default categories for admin: {missing}"
 
 
-def test_new_user_has_all_new_default_categories():
+def test_new_user_has_all_new_default_categories() -> None:
     s = requests.Session()
     email = f"test_iter2_{uuid.uuid4().hex[:8]}@example.com"
     r = s.post(f"{API}/auth/register", json={
@@ -45,7 +44,7 @@ def test_new_user_has_all_new_default_categories():
         assert (n, "expense") in names, f"new user missing category: {n}"
 
 
-def test_categories_idempotent_no_duplicates_for_admin():
+def test_categories_idempotent_no_duplicates_for_admin() -> None:
     """Backfill should not create duplicates on restart. Check admin has each default exactly once."""
     s = admin_login()
     r = s.get(f"{API}/categories", timeout=15)
@@ -56,7 +55,7 @@ def test_categories_idempotent_no_duplicates_for_admin():
     assert not dups, f"Duplicate default categories detected: {dups}"
 
 
-def test_dashboard_summary_accepts_start_end():
+def test_dashboard_summary_accepts_start_end() -> None:
     s = admin_login()
     r = s.get(f"{API}/dashboard/summary", params={"start": "2025-01-01", "end": "2025-12-31"}, timeout=15)
     assert r.status_code == 200
@@ -67,7 +66,7 @@ def test_dashboard_summary_accepts_start_end():
     assert isinstance(data["month_income"], (int, float))
 
 
-def test_dashboard_summary_date_filter_isolates_data():
+def test_dashboard_summary_date_filter_isolates_data() -> None:
     """Create a transaction inside one window and verify only it counts."""
     s = admin_login()
     # Pick Main Bank or first account
@@ -95,7 +94,7 @@ def test_dashboard_summary_date_filter_isolates_data():
         s.delete(f"{API}/transactions/{tx['id']}", timeout=15)
 
 
-def test_dashboard_expense_by_category_accepts_start_end():
+def test_dashboard_expense_by_category_accepts_start_end() -> None:
     s = admin_login()
     r = s.get(f"{API}/dashboard/expense-by-category",
               params={"start": "2025-01-01", "end": "2025-12-31"}, timeout=15)
@@ -103,7 +102,7 @@ def test_dashboard_expense_by_category_accepts_start_end():
     assert isinstance(r.json(), list)
 
 
-def test_dashboard_expense_by_category_date_filter_isolates():
+def test_dashboard_expense_by_category_date_filter_isolates() -> None:
     s = admin_login()
     cats = s.get(f"{API}/categories", timeout=15).json()
     food = next((c for c in cats if c["name"] == "Food" and c["type"] == "expense"), None)

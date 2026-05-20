@@ -301,7 +301,7 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {byCat.map((entry, i) => (<Cell key={i} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
+                      {byCat.map((entry) => (<Cell key={`${entry.name}-${entry.color}`} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
@@ -422,7 +422,7 @@ function StudentsOverview({ students, currency, range }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {statusPie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                      {statusPie.map((e) => (<Cell key={`status-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
@@ -547,7 +547,7 @@ function ClientsOverview({ clients, students }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                      {typePie.map((e) => (<Cell key={`tp-st-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
@@ -699,7 +699,7 @@ function LedgerOverview({ ledger, students, currency }) {
                     <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {topAgents.map((a, i) => (<Cell key={i} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
+                      {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -715,7 +715,7 @@ function LedgerOverview({ ledger, students, currency }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
-                      {typePie.map((e, i) => (<Cell key={i} fill={e.color} />))}
+                      {typePie.map((e) => (<Cell key={`tp-ag-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
                   </PieChart>
