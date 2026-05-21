@@ -6,6 +6,11 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import logging
+import os
+import subprocess
+import time
+from datetime import datetime, timezone
+
 from fastapi import FastAPI, APIRouter
 from starlette.middleware.cors import CORSMiddleware
 
@@ -40,6 +45,48 @@ health = APIRouter(prefix="/api", tags=["health"])
 @health.get("/")
 async def root() -> dict[str, str]:
     return {"service": "FinFlow", "status": "ok"}
+
+
+# Resolve the commit SHA once at import time. Prefer the env var Emergent sets
+# at deploy-time; fall back to `git rev-parse` for local/dev runs.
+def _resolve_commit() -> str:
+    sha = os.environ.get("GIT_COMMIT_SHA") or os.environ.get("COMMIT_SHA")
+    if sha:
+        return sha[:12]
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short=12", "HEAD"],
+            cwd=ROOT_DIR.parent, stderr=subprocess.DEVNULL, timeout=2,
+        )
+        return out.decode().strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+COMMIT_SHA = _resolve_commit()
+BOOTED_AT = datetime.now(timezone.utc).isoformat()
+
+
+@health.get("/healthz")
+async def healthz() -> dict:
+    """Liveness + DB connectivity probe for Emergent uptime checks."""
+    started = time.perf_counter()
+    db_ok = False
+    db_error: str | None = None
+    try:
+        await db.command("ping")
+        db_ok = True
+    except Exception as exc:  # narrow: any driver/network failure is "degraded"
+        db_error = str(exc)
+    latency_ms = round((time.perf_counter() - started) * 1000, 2)
+    return {
+        "service": "FinFlow",
+        "status": "ok" if db_ok else "degraded",
+        "db": {"connected": db_ok, "latency_ms": latency_ms, "error": db_error},
+        "commit": COMMIT_SHA,
+        "booted_at": BOOTED_AT,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 app.include_router(health)
