@@ -129,8 +129,8 @@ export default function PublicApplication() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 text-xs font-medium mb-3">
             <Sparkle size={12} weight="fill" /> Online Admission · 2026 intake
           </div>
-          <h1 className="font-display text-2xl sm:text-4xl tracking-tight text-foreground leading-tight">FinFlow by KM Foundation</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-2 px-2">Student Admission Application — six quick steps · about 5 minutes</p>
+          <h1 className="font-display text-2xl sm:text-4xl tracking-tight text-foreground leading-tight">Student Application Form</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2 px-2">KM Foundation · six quick steps · about 5 minutes</p>
         </header>
 
         {referrer && (
