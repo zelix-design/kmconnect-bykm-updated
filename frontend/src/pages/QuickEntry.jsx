@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowDownRight, ArrowUpRight, Plus, Check, ArrowLeft,
-  Receipt, ReceiptX, Student as StudentIcon, CurrencyInr,
+  Receipt, ReceiptX, Student as StudentIcon, CurrencyInr, ClipboardText,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -51,6 +51,7 @@ export default function QuickEntry() {
   const nav = useNavigate();
   const currency = user?.currency || "USD";
   const isOfficeAdmin = user?.role === "office_admin";
+  const isSuper = user?.role === "super_admin";
   const [view, setView] = useState("hub"); // "hub" | "transaction"
 
   const [mode, setMode] = useState("debit"); // debit = expense (money out), credit = income (money in)
@@ -161,6 +162,16 @@ export default function QuickEntry() {
             subtitle="Record a student fee receipt"
             onClick={() => nav("/students?action=log_payment")}
           />
+          {isSuper && (
+            <HubCard
+              testId="qe-paste-application"
+              icon={ClipboardText}
+              palette="amber"
+              title="Paste Application"
+              subtitle="Auto-parse a pasted student detail blob"
+              onClick={() => nav("/students?paste=1")}
+            />
+          )}
         </div>
       </div>
     );

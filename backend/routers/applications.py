@@ -10,17 +10,18 @@ Extra application data (parents, address, academic records, payment, reference)
 is preserved as a nested ``application`` sub-document on the student doc.
 """
 from typing import Optional, Literal
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 
 from db import db
-from auth_lib import gen_id, now_iso
+from auth_lib import gen_id, now_iso, get_current_user
 
 # Re-use the notifier so super-admins get pinged in real time.
 from routers.notifications import notify_super_admins
 
 
 router = APIRouter(prefix="/api/public", tags=["public"])
+admin_router = APIRouter(prefix="/api/applications", tags=["applications"])
 
 
 # ---------- Pydantic models (mirror the 6-step wizard) ----------
@@ -119,9 +120,14 @@ async def _resolve_owner_user_id() -> str:
     raise HTTPException(503, "Admin account not provisioned yet")
 
 
-def _build_student_doc(app: ApplicationIn, owner_id: str) -> dict:
+def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_form") -> dict:
     """Translate the application payload → a row that fits the existing
-    ``students`` schema, with the full application preserved on the side."""
+    ``students`` schema, with the full application preserved on the side.
+
+    ``source`` distinguishes between public form submissions (``public_form``)
+    and admin-pasted entries (``admin_paste``) so the UI can badge them
+    appropriately.
+    """
     payment_amt = float(app.payment.registration_amount or 0)
     payments_list: list[dict] = []
     if payment_amt > 0:
@@ -165,7 +171,7 @@ def _build_student_doc(app: ApplicationIn, owner_id: str) -> dict:
         "payments": payments_list,
         # Preserve the entire application payload for the PDF & admin view.
         "application": app.model_dump(),
-        "application_source": "public_form",
+        "application_source": source,
         "application_submitted_at": now_iso(),
     }
 
@@ -250,4 +256,27 @@ async def get_referrer(client_id: str) -> dict:
         "type": _CLIENT_TYPE_TO_REF.get(c.get("client_type"), "other"),
         "contact_number": c.get("phone") or "",
         "place": c.get("office", "").replace("KM_", "KM ") if c.get("office") else (c.get("company") or ""),
+    }
+
+
+
+# ---------- Authenticated admin paste endpoint ----------
+
+@admin_router.post("/admin", status_code=201)
+async def admin_submit_application(payload: ApplicationIn, user: dict = Depends(get_current_user)) -> dict:
+    """Create an inquiry student from an admin-pasted/edited application.
+
+    Mirrors the public submission flow but:
+    - requires authentication (super_admin only),
+    - tags ``application_source="admin_paste"`` so the UI can badge it,
+    - owner is the current super admin (not the seeded fallback).
+    """
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    doc = _build_student_doc(payload, owner_id=user["id"], source="admin_paste")
+    await db.students.insert_one(doc)
+    return {
+        "id": doc["id"],
+        "reference_code": doc["id"][:8].upper(),
+        "submitted_at": doc["application_submitted_at"],
     }

@@ -29,6 +29,7 @@ app.include_router(users.router)
 app.include_router(expense_requests.router)
 app.include_router(notifications.router)
 app.include_router(applications.router)
+app.include_router(applications.admin_router)
 app.include_router(colleges.router)
 app.include_router(colleges.public_router)
 

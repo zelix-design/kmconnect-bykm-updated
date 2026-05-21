@@ -105,6 +105,11 @@ export default function HeaderCard({
                   <FileText size={11} weight="duotone" /> From online application
                 </span>
               )}
+              {s.application_source === "admin_paste" && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-100/70 dark:bg-orange-500/15 text-orange-800 dark:text-orange-300 uppercase tracking-wider" data-testid="badge-pasted-application">
+                  <ClipboardText size={11} weight="duotone" /> Pasted application
+                </span>
+              )}
             </div>
             {s.notes && <p className="mt-3 text-sm text-muted-foreground">{s.notes}</p>}
           </div>
@@ -124,7 +129,7 @@ export default function HeaderCard({
             <Button variant="outline" onClick={onExportPdf} data-testid="export-student-pdf">
               <FilePdf size={14} className="mr-1.5" /> PDF
             </Button>
-            {s.application_source === "public_form" && s.application && (
+            {(s.application_source === "public_form" || s.application_source === "admin_paste") && s.application && (
               <Button variant="outline" onClick={onExportApplicationPdf} data-testid="export-application-pdf">
                 <ClipboardText size={14} className="mr-1.5" /> Application PDF
               </Button>

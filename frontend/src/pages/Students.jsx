@@ -9,13 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import StudentCard from "@/components/students/StudentCard";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
+import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -52,6 +53,8 @@ export default function Students() {
   // Super admin: client picker dialog before opening the student form
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
+  // Paste-application dialog (super admin only)
+  const [pasteOpen, setPasteOpen] = useState(false);
   const openAddStudent = () => {
     // Reset form to blank
     setForm({ ...emptyForm(), reference: "" });
@@ -82,7 +85,15 @@ export default function Students() {
   const newFlag = searchParams.get("new");
   const staffParam = searchParams.get("staff");
   const action = searchParams.get("action");
+  const pasteFlag = searchParams.get("paste");
   useEffect(() => {
+    if (pasteFlag === "1" && isSuper) {
+      setPasteOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("paste");
+      setSearchParams(next, { replace: true });
+      return;
+    }
     if (newFlag === "1") {
       if (staffParam) {
         // Came from "Add an admission" with a pre-selected staff → open form direct
@@ -99,7 +110,7 @@ export default function Students() {
       next.delete("staff");
       setSearchParams(next, { replace: true });
     }
-  }, [newFlag, staffParam, searchParams, setSearchParams]);
+  }, [newFlag, staffParam, pasteFlag, isSuper, searchParams, setSearchParams]);
 
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
@@ -174,6 +185,18 @@ export default function Students() {
             >
               <FileXls size={16} className="mr-1.5" /> Export XLSX
             </Button>
+            {allowEdit && isSuper && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPasteOpen(true)}
+                className="h-10"
+                data-testid="paste-application-btn"
+                title="Paste an application text to auto-fill a new student"
+              >
+                <ClipboardText size={16} className="mr-1.5" /> Paste application
+              </Button>
+            )}
             {allowEdit && (
               <Button onClick={openAddStudent} data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
@@ -260,6 +283,15 @@ export default function Students() {
           onPick={pickClientAndEnrol}
           onSkip={skipPicker}
         />
+
+        {/* Paste-application dialog (super admin only) */}
+        {isSuper && (
+          <PasteApplicationDialog
+            open={pasteOpen}
+            onOpenChange={setPasteOpen}
+            onCreated={() => { load(); }}
+          />
+        )}
       </header>
 
       {/* Filters */}
