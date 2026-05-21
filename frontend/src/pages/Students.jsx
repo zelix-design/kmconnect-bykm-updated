@@ -15,6 +15,7 @@ import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import StudentCard from "@/components/students/StudentCard";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
+import CollegeSelect from "@/components/CollegeSelect";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -188,7 +189,15 @@ export default function Students() {
               <div><Label>Student Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="st-name" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Course</Label><Input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="B.Tech CSE" data-testid="st-course" /></div>
-                <div><Label>College</Label><Input value={form.college} onChange={(e) => setForm({ ...form, college: e.target.value })} placeholder="IIT Delhi" data-testid="st-college" /></div>
+                <div>
+                  <Label>College</Label>
+                  <CollegeSelect
+                    value={form.college}
+                    onChange={(name) => setForm({ ...form, college: name })}
+                    testid="st-college"
+                    placeholder="Pick a college"
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {form.reference ? (

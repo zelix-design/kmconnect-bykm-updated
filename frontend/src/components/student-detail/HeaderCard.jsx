@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText, GraduationCap } from "@phosphor-icons/react";
 import { formatDate } from "@/lib/format";
 import FeesPlanFields, { emptyFeesPlan } from "@/components/FeesPlanFields";
+import CollegeSelect from "@/components/CollegeSelect";
 import { STATUS_OPTIONS } from "./constants";
 
 const STATUS_STYLES = {
@@ -38,7 +39,15 @@ export default function HeaderCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><Label>Name</Label><Input value={header.name} onChange={(e) => setHeader({ ...header, name: e.target.value })} /></div>
             <div><Label>Course</Label><Input value={header.course} onChange={(e) => setHeader({ ...header, course: e.target.value })} /></div>
-            <div><Label>College</Label><Input value={header.college} onChange={(e) => setHeader({ ...header, college: e.target.value })} /></div>
+            <div>
+              <Label>College</Label>
+              <CollegeSelect
+                value={header.college}
+                onChange={(name) => setHeader({ ...header, college: name })}
+                testid="hdr-college"
+                placeholder="Pick a college"
+              />
+            </div>
             <div>
               <Label>Reference</Label>
               <Select

@@ -17,6 +17,7 @@ import {
   PAYMENT_MODES, REFERENCE_TYPES, INDIAN_STATES,
   emptyApplication, validateStep,
 } from "@/lib/applicationSchema";
+import CollegeSelect from "@/components/CollegeSelect";
 
 const ICONS = { User, GraduationCap, Phone, Books, Receipt, UserCircle };
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/public`;
@@ -27,6 +28,7 @@ export default function PublicApplication() {
   const [step, setStep] = useState(0);
   const [app, setApp] = useState(() => emptyApplication());
   const [courses, setCourses] = useState([]);
+  const [colleges, setColleges] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null);
   const [referrer, setReferrer] = useState(null);
@@ -37,6 +39,12 @@ export default function PublicApplication() {
       .catch((err) => {
         console.error("[apply] courses fetch failed:", err?.message || err);
         setCourses([]);
+      });
+    axios.get(`${API}/colleges`)
+      .then((r) => setColleges(r.data?.colleges || []))
+      .catch((err) => {
+        console.error("[apply] colleges fetch failed:", err?.message || err);
+        setColleges([]);
       });
   }, []);
 
@@ -147,7 +155,7 @@ export default function PublicApplication() {
 
         <Card className="p-5 sm:p-8 border border-border bg-card rounded-xl shadow-lg shadow-amber-500/5">
           {stepKey === "basic_info" && <StepBasic app={app} setField={setField} />}
-          {stepKey === "course" && <StepCourse app={app} setField={setField} courses={courses} />}
+          {stepKey === "course" && <StepCourse app={app} setField={setField} courses={courses} colleges={colleges} />}
           {stepKey === "communication" && <StepCommunication app={app} setField={setField} />}
           {stepKey === "academic" && <StepAcademic app={app} setNested={setNested} />}
           {stepKey === "payment" && <StepPayment app={app} setField={setField} />}
@@ -259,22 +267,43 @@ function StepBasic({ app, setField }) {
 }
 
 // ---- Step 2: Course ----
-function StepCourse({ app, setField, courses }) {
+function StepCourse({ app, setField, courses, colleges }) {
   const f = app.course;
+  // If a college is selected and has courses, prefer that scoped list.
+  const selectedCollege = (colleges || []).find((c) => c.name === f.preferred_college);
+  const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
+  const courseOptions = collegeCourses.length > 0 ? collegeCourses : courses;
   return (
     <div>
       <SectionTitle eyebrow="Section B" title="Course & Admission" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Preferred College">
+          {(colleges?.length || 0) > 0 ? (
+            <CollegeSelect
+              value={f.preferred_college}
+              onChange={(name) => {
+                setField("course", "preferred_college", name);
+                // Reset the course if the new college doesn't offer it
+                const nextCollege = (colleges || []).find((c) => c.name === name);
+                if (nextCollege && f.interested_course && !(nextCollege.courses || []).includes(f.interested_course)) {
+                  setField("course", "interested_course", "");
+                }
+              }}
+              testid="co-college"
+              placeholder="Pick a college"
+              colleges={colleges}
+            />
+          ) : (
+            <Select value={f.preferred_college} onValueChange={(v) => setField("course", "preferred_college", v)}>
+              <SelectTrigger data-testid="co-college"><SelectValue /></SelectTrigger>
+              <SelectContent>{PARTNER_COLLEGES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          )}
+        </Field>
         <Field label="Interested Course" required>
           <Select value={f.interested_course} onValueChange={(v) => setField("course", "interested_course", v)}>
             <SelectTrigger data-testid="co-course"><SelectValue placeholder="Pick a course" /></SelectTrigger>
-            <SelectContent>{courses.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-        <Field label="Preferred College">
-          <Select value={f.preferred_college} onValueChange={(v) => setField("course", "preferred_college", v)}>
-            <SelectTrigger data-testid="co-college"><SelectValue /></SelectTrigger>
-            <SelectContent>{PARTNER_COLLEGES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            <SelectContent>{courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         <Field label="Academic Year">

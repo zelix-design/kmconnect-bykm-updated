@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 22 — Colleges master-data feature (catalogue page + bulk upload + CollegeSelect integration on Students/StudentDetail/PublicApplication). Backend: 8/8 test_colleges.py PASS. Frontend Playwright covered all 13 review-request scenarios — all PASS. Found one minor React 'unique key' warning on /apply because /api/public/colleges omits the id field; recommend backend projection include id. No blocking bugs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/public/colleges", "issue": "Projection drops 'id' (returns only name/courses/place). Downstream CollegeSelect uses c.id for React key and data-testid suffix — triggers a React 'unique key' warning on the public /apply form. Add 'id': 1 to the projection."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "backend_results": {
+    "test_colleges.py::test_create_and_list_college": "PASS",
+    "test_colleges.py::test_duplicate_name_rejected": "PASS — 409 returned for case-insensitive duplicate",
+    "test_colleges.py::test_update_and_delete": "PASS",
+    "test_colleges.py::test_office_admin_cannot_write": "PASS — GET=200 office, POST=403",
+    "test_colleges.py::test_bulk_upload_csv": "PASS — created_count=2, duplicates_count=1, blank row skipped, ';' delimiter respected",
+    "test_colleges.py::test_bulk_upload_rejects_non_csv": "PASS — 400 on .txt",
+    "test_colleges.py::test_template_download": "PASS — returns CSV header name,courses,place",
+    "test_colleges.py::test_public_colleges_no_auth": "PASS — anonymous GET works"
+  },
+  "frontend_results": {
+    "super_admin_login_and_nav_to_/colleges": "PASS — sidebar nav-colleges visible only to super_admin",
+    "colleges_page_renders_with_add_and_bulk_buttons": "PASS — add-college-btn + bulk-upload-btn visible",
+    "add_college_Acme_University_with_3_courses_Mumbai": "PASS — card rendered with 3 amber chips and place",
+    "edit_college_rename_Acme_v2_reflects_on_card": "PASS",
+    "duplicate_name_case_insensitive_returns_409": "PASS — toast error fired, dialog stays open",
+    "delete_college_via_trash_btn": "PASS — confirm dialog accepted, card removed",
+    "bulk_upload_template_csv_button_present": "PASS — download-template-btn visible",
+    "bulk_upload_2_new_1_duplicate_returns_correct_counts": "PASS — created_count=2, duplicates_count=1 shown in bulk-result panel",
+    "search_filter_by_name_place_course": "PASS — typing 'Acme' narrows the grid to 1 card",
+    "students_add_st-college_popover_loads_catalogue": "PASS — search input + per-college options present, picking option updates trigger label",
+    "studentdetail_edit_hdr-college_dropdown_swap": "PASS — hdr-college appears in edit-mode with search input and 6 options",
+    "public_apply_co-college_dropdown_with_dynamic_catalogue": "PASS — co-college popover shows 6 colleges from /api/public/colleges (not fallback static list)",
+    "interested_course_narrows_to_selected_college_courses": "PASS — picking ZTest College (courses ['B.Tech CSE','MBA']) yielded exactly those 2 options in co-course Radix Select",
+    "office_admin_nav_colleges_hidden": "PASS — sidebar entry not rendered",
+    "office_admin_direct_/colleges_renders_no_access_panel": "PASS — colleges-no-access shown; write buttons absent",
+    "office_admin_sees_st-college_dropdown_loaded_from_/api/colleges": "PASS — 6 colleges loaded via authenticated GET"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_colleges.py",
+    "/app/test_reports/pytest/iteration22_colleges.xml"
+  ],
+  "action_items": [
+    "(LOW) Include 'id' in the projection of /api/public/colleges so CollegeSelect can use a stable React key on the public /apply form. Currently triggers a 'Each child in a list should have a unique key prop' warning (cosmetic, no functional impact). Patch: in routers/colleges.py public_colleges() change projection to {'_id': 0, 'id': 1, 'name': 1, 'courses': 1, 'place': 1}.",
+    "(OPTIONAL) CollegeSelect could fallback to using the college name as key when id is absent — defensive fix in /app/frontend/src/components/CollegeSelect.jsx line 127: key={c.id || c.name}."
+  ],
+  "critical_code_review_comments": [
+    "routers/colleges.py: solid design — single name_lower index, case-insensitive duplicate check, bulk upload snapshots existing names once (no N+1), supports ',' and ';' delimiters in courses cell, blank-name rows are reported in skipped_blank_rows. Good UX.",
+    "Public endpoint correctly mounted via separate public_router (no auth dep). Office Admin can read /api/colleges (drives dropdown) — write ops are super_admin-gated through _require_super_admin(). Matches the requested permission model.",
+    "Colleges.jsx (super_admin write UI) and CollegeSelect.jsx (reusable combobox) both have comprehensive data-testid coverage and amber/orange theming matches Tailwind 'btn-amber' / amber-700 conventions used elsewhere.",
+    "PublicApplication.jsx line 275: courseOptions correctly falls back to the static courses list when the chosen college has no courses defined — sensible UX. The 'reset interested_course if not in new college's catalog' on college change (lines 287-291) prevents stale invalid submissions.",
+    "Minor: CollegeSelect key={c.id} should defensively support `c.id || c.name` since the public endpoint currently returns no id."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (16/16 scenarios)"},
+  "test_credentials": "admin@finflow.com / Admin@123 (super_admin) and blr1@finflow.com / Office@123 (office_admin) — both valid.",
+  "seed_data_creation": "Created and then cleaned up: 'Acme University', 'Acme University v2', 'Bulk College One', 'Bulk College Two', 'ZTest College'. All PYTEST_* leftovers from test_colleges.py also wiped. Verified via DELETE /api/colleges/{id} returning 200.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Colleges feature is functionally complete and stable. The only outstanding nit is the missing 'id' in /api/public/colleges projection — fix is a one-line backend change. CollegeSelect is reused on 3 screens (Students new-admission, StudentDetail header edit, PublicApplication step 2) and works in both authenticated (uses /api/colleges) and public (uses preset list from /api/public/colleges) modes. The Interested Course narrowing on /apply only fires when the selected college has courses on file; otherwise it falls back to the static course list (intentional).",
+  "rca of the issue": "React 'unique key' warning on /apply: /api/public/colleges projection excludes id → CollegeSelect maps colleges to <button key={c.id}> where c.id is undefined → React fires warning for each option. Reproduction: open /apply in incognito, advance to Step 2, click Preferred College dropdown → console emits warning. Mitigation: include id in the public projection OR use `key={c.id || c.name}` in CollegeSelect."
+}

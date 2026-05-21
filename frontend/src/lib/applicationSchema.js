@@ -77,7 +77,7 @@ export function emptyApplication() {
     },
     course: {
       interested_course: "",
-      preferred_college: "Any partner college",
+      preferred_college: "",
       academic_year: "",
       admission_type: "management",
     },

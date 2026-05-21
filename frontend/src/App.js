@@ -23,6 +23,7 @@ import ClientDetail from "@/pages/ClientDetail";
 import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
 import PublicApplication from "@/pages/PublicApplication";
+import Colleges from "@/pages/Colleges";
 import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/clients/:id" element={<PermGate page="clients"><ClientDetail /></PermGate>} />
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
+            <Route path="/colleges" element={<Colleges />} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
             <Route path="/categories" element={<Categories />} />

@@ -7,7 +7,7 @@ import NotificationsBell from "@/components/NotificationsBell";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
-  ShieldCheck, ReceiptX,
+  ShieldCheck, ReceiptX, Buildings,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -21,6 +21,7 @@ const ALL_NAV = [
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices", roles: ["super_admin"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients", perm: "clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students", perm: "students" },
+  { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
@@ -37,6 +38,7 @@ const PAGE_TITLES = {
   "/invoices": "Invoices",
   "/clients": "Clients",
   "/students": "Students",
+  "/colleges": "Colleges",
   "/agents": "Sub-agent Ledger",
   "/categories": "Categories",
   "/settings": "Settings",
