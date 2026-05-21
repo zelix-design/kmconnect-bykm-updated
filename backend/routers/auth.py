@@ -1,4 +1,6 @@
 """Authentication endpoints: register / login / me / logout / update settings."""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from db import db
@@ -11,6 +13,7 @@ from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISS
 from seed import seed_user_defaults
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+log = logging.getLogger("auth")
 
 
 @router.post("/register")
@@ -51,24 +54,34 @@ async def register(payload: RegisterIn):
 @router.post("/login", response_model=UserOut)
 async def login(payload: LoginIn, response: Response):
     email = payload.email.lower().strip()
-    # Lockout check FIRST so bad actors can't keep guessing during a lock window
-    await check_lockout(email)
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        await record_failed_attempt(email)
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    status = user.get("approval_status", "approved")
-    if status == "pending":
-        raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")
-    if status == "rejected":
-        raise HTTPException(status_code=403, detail="Your access request was rejected. Please contact the super admin.")
-    # Successful login → wipe the failed-attempt counter
-    await clear_failed_attempts(email)
-    token = create_access_token(user["id"], email)
-    set_auth_cookie(response, token)
-    user.pop("password_hash", None)
-    user.pop("_id", None)
-    return user
+    try:
+        # Lockout check FIRST so bad actors can't keep guessing during a lock window
+        await check_lockout(email)
+        user = await db.users.find_one({"email": email})
+        if not user or not verify_password(payload.password, user["password_hash"]):
+            await record_failed_attempt(email)
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        status = user.get("approval_status", "approved")
+        if status == "pending":
+            raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")
+        if status == "rejected":
+            raise HTTPException(status_code=403, detail="Your access request was rejected. Please contact the super admin.")
+        # Successful login → wipe the failed-attempt counter
+        await clear_failed_attempts(email)
+        token = create_access_token(user["id"], email)
+        set_auth_cookie(response, token)
+        user.pop("password_hash", None)
+        user.pop("_id", None)
+        return user
+    except HTTPException:
+        raise
+    except Exception as exc:  # log opaque crashes so prod ops can debug
+        log.exception("[auth/login] unexpected error for email=%r", email)
+        # Surface the exception class so a 500 isn't a black box.
+        raise HTTPException(
+            status_code=500,
+            detail=f"Login failed: {type(exc).__name__}: {exc}",
+        )
 
 
 @router.post("/logout")

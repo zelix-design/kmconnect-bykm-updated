@@ -19,11 +19,28 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    """Return True iff ``plain`` matches the bcrypt ``hashed``. Returns False
+    instead of raising for malformed/empty hashes — so a corrupted row in
+    Mongo can't take down ``/api/auth/login`` with an HTTP 500."""
+    if not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def get_jwt_secret() -> str:
-    return os.environ["JWT_SECRET"]
+    secret = os.environ.get("JWT_SECRET")
+    if not secret:
+        # Surface a clear, actionable 500 instead of KeyError → opaque crash.
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail="JWT_SECRET env var is missing on the server. "
+                   "Set JWT_SECRET in the deployment environment and redeploy.",
+        )
+    return secret
 
 
 def now_iso() -> str:
