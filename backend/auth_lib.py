@@ -44,13 +44,39 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
+def _cookie_settings() -> tuple[bool, str]:
+    """Return ``(secure, samesite)`` for the auth cookie.
+
+    Defaults to ``secure=True, samesite="none"`` so it works on every
+    deployed Emergent environment (preview + production + custom domains),
+    where the frontend may end up cross-origin from the backend.
+
+    For local HTTP dev set ``AUTH_COOKIE_SECURE=false`` and
+    ``AUTH_COOKIE_SAMESITE=lax`` in backend/.env."""
+    secure_env = (os.environ.get("AUTH_COOKIE_SECURE") or "").lower()
+    if secure_env in {"true", "1", "yes"}:
+        secure = True
+    elif secure_env in {"false", "0", "no"}:
+        secure = False
+    else:
+        secure = True  # deployed default
+    samesite = (os.environ.get("AUTH_COOKIE_SAMESITE") or "none").lower()
+    if samesite not in {"none", "lax", "strict"}:
+        samesite = "none"
+    # ``SameSite=None`` is only valid with ``Secure``; enforce that pairing.
+    if samesite == "none" and not secure:
+        secure = True
+    return secure, samesite
+
+
 def set_auth_cookie(response: Response, token: str) -> None:
+    secure, samesite = _cookie_settings()
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=secure,
+        samesite=samesite,
         max_age=60 * 60 * 24 * 7,
         path="/",
     )
