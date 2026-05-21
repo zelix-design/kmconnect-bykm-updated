@@ -95,9 +95,8 @@ frontend/node_modules/.cache/default-development/8.pack
 frontend/node_modules/.cache/default-development/10.pack
 -e 
 # Environment and credential files
-.env
-.env.*
-*.env
+# (.env files intentionally NOT ignored — required for Emergent deployment.
+# Real secrets are injected at deploy-time by the platform.)
 credentials.json
 *.pem
 *.key
