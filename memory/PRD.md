@@ -301,6 +301,17 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
+## Implementation status — 2026-02-22 (iteration 29: Paste Application — auto-parse student blob)
+- [x] **New "Paste application" button** on Students page header (super_admin only, before "Add student") + new amber **"Paste Application"** tile on Quick Entry (super_admin only, navigates to `/students?paste=1` which auto-opens the dialog).
+- [x] **Two-step dialog** (`PasteApplicationDialog.jsx`):
+  - Step 1: Textarea + "Load sample" + "Parse details" — accepts a free-text "Key : Value" blob (the WhatsApp/SMS/email format users receive from sub-agents).
+  - Step 2: Review with editable fields organised into 4 sections (Candidate / Course / Parents & Address / Academic 10th & 12th). Uses `CollegeSelect` for the Preferred College so the catalogue is reused.
+  - Hostel/Bus + Community lines preserved as `reference.notes`.
+- [x] **Pure parser** (`/lib/parseStudentText.js`) — order-sensitive alias matching, DOB `DD/MM/YYYY → YYYY-MM-DD`, gender F/M, mobile last-10-digits, mark strips `%`, multi-line address support, captures unmatched lines into `_meta.unmatched`.
+- [x] **Backend**: new `POST /api/applications/admin` (super_admin only) creates an inquiry student with `application_source="admin_paste"` + full application sub-doc — Application PDF works out of the box. 3 new pytest tests pass.
+- [x] **StudentDetail** — orange **"PASTED APPLICATION"** badge for the new source; Application PDF button now surfaces for both `public_form` and `admin_paste` sources.
+- [x] **100% regression** — iteration_23.json: 9/9 frontend scenarios pass, no UI bugs, no integration issues. Validation toast aggregated into a single description-style toast (less noise on multiple missing fields).
+
 ## Implementation status — 2026-02-21 (iteration 28: Colleges master-data catalogue + bulk CSV)
 - [x] **New "Colleges" page** (`/colleges`) for super admin only — Network section in sidebar (under Students, super_admin-gated). Amber/orange theme cards with name, place, course chips, edit/delete actions, search by name/place/course.
 - [x] **Backend**: `/api/colleges` router (GET — any authenticated user; POST/PATCH/DELETE — super_admin only). Case-insensitive duplicate guard via `name_lower` unique index. `POST /api/colleges/bulk` accepts CSV (`name,courses,place`) with `,` and `;` as course delimiters, skips blank rows + reports duplicates_sample. `GET /api/colleges/template` returns a downloadable sample CSV.

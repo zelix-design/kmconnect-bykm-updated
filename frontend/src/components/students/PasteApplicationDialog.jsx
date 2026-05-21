@@ -122,7 +122,16 @@ export default function PasteApplicationDialog({ open, onOpenChange, onCreated }
 
   const save = async () => {
     const errors = validate();
-    if (errors.length) { errors.forEach((e) => toast.error(e)); return; }
+    if (errors.length) {
+      if (errors.length === 1) {
+        toast.error(errors[0]);
+      } else {
+        toast.error(`Please fill ${errors.length} required field(s)`, {
+          description: errors.join(" · "),
+        });
+      }
+      return;
+    }
     setSaving(true);
     try {
       const payload = buildApplicationPayload(parsed);
