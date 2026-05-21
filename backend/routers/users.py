@@ -116,15 +116,13 @@ async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dic
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: str, user: dict = Depends(get_current_user)):
-    """Permanently delete a non-super-admin user and *only their auth row* (their
-    data remains for audit). Super admin cannot delete themselves."""
+    """Permanently delete a user row. Self-deletion is blocked; any other
+    user (including additional super admins) can be removed by a super admin."""
     _require_super_admin(user)
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if target.get("role") == "super_admin":
-        raise HTTPException(status_code=400, detail="Cannot delete another super admin")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}

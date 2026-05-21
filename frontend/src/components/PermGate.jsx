@@ -5,18 +5,27 @@ import { canView } from "@/lib/perm";
 import { toast } from "sonner";
 
 /**
- * Wrap a protected route's element with <PermGate page="students">.
- * When the current user has `none` access on that page, redirects to /
- * with a friendly toast. Super admins always pass.
+ * Wrap a protected route's element with one of:
+ *   <PermGate page="students">         — gated by per-page permission
+ *   <PermGate roles={["super_admin"]}> — gated by role (page-permission map ignored)
+ * When the current user fails the check we redirect to / with a friendly toast.
+ * Super admins always pass the per-page check.
  */
-export default function PermGate({ page, children }) {
+export default function PermGate({ page, roles, children }) {
   const { user } = useAuth();
   const location = useLocation();
-  const allowed = !user || user === false || canView(user, page);
+  let allowed = true;
+  if (user && user !== false) {
+    if (roles && roles.length) {
+      allowed = roles.includes(user.role);
+    } else if (page) {
+      allowed = canView(user, page);
+    }
+  }
 
   useEffect(() => {
     if (user && user !== false && !allowed) {
-      toast.error(`You don't have access to this page anymore.`);
+      toast.error("You don't have access to this page anymore.");
     }
   }, [user, allowed]);
 

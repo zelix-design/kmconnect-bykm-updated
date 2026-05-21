@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { PERMISSION_PAGES, PERMISSION_LEVELS, defaultPermissions } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +36,8 @@ const STATUS_STYLE = {
 };
 
 export default function Users() {
+  const { user: currentUser } = useAuth();
+  const isSuper = currentUser?.role === "super_admin";
   const [tab, setTab] = useState("pending");
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
@@ -136,7 +139,7 @@ export default function Users() {
         password: f.password,
         name: f.name.trim(),
         role: f.role,
-        currency: f.currency,
+        currency: f.currency || "INR",
         ...(f.role === "office_admin" ? { office: f.office } : {}),
       };
       const { data } = await api.post("/users", payload);
@@ -187,14 +190,16 @@ export default function Users() {
               data-testid="users-search"
             />
           </div>
-          <Button
-            type="button"
-            onClick={() => { setCreateForm(emptyNewUser()); setShowPwd(false); setCreateOpen(true); }}
-            className="h-10 btn-amber border-0 shrink-0"
-            data-testid="create-user-btn"
-          >
-            <UserPlus size={16} className="mr-1.5" /> Create user
-          </Button>
+          {isSuper && (
+            <Button
+              type="button"
+              onClick={() => { setCreateForm(emptyNewUser()); setShowPwd(false); setCreateOpen(true); }}
+              className="h-10 btn-amber border-0 shrink-0"
+              data-testid="create-user-btn"
+            >
+              <UserPlus size={16} className="mr-1.5" /> Create user
+            </Button>
+          )}
         </div>
       </div>
 

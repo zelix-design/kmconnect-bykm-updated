@@ -70,8 +70,6 @@ export default function ConvertToEnrolledDialog({
     setRemarks("");
     api.get("/accounts").then((r) => {
       setAccounts(r.data || []);
-      // Pre-select the first account for convenience
-      if (r.data?.[0]?.id) setAccountId(r.data[0].id);
     }).catch((err) => {
       console.error("[convert-dialog] accounts:", err);
     });
