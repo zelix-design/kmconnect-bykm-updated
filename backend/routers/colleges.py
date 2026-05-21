@@ -128,6 +128,67 @@ async def csv_template(user: dict = Depends(get_current_user)) -> str:
     return buf.getvalue()
 
 
+# ---------- Bulk-upload helpers (kept small for testability + readability) ----------
+
+
+def _decode_csv(raw: bytes) -> str:
+    """UTF-8 with BOM stripping, falling back to latin-1 — covers Excel exports."""
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1", errors="ignore")
+
+
+def _resolve_headers(fieldnames: list[str] | None) -> tuple[str, str | None, str | None]:
+    """Map the user's CSV headers to our canonical column names, tolerating
+    capitalisation and accepting `course` / `location` as synonyms.
+
+    Returns ``(name_header, courses_header, place_header)`` and raises 400 when
+    the mandatory ``name`` column is missing or the file has no header row."""
+    if fieldnames is None:
+        raise HTTPException(400, "CSV is empty")
+    norm = {(h or "").strip().lower(): h for h in fieldnames}
+    name_h = norm.get("name")
+    if not name_h:
+        raise HTTPException(400, "CSV must include a 'name' column")
+    courses_h = norm.get("courses") or norm.get("course")
+    place_h = norm.get("place") or norm.get("location")
+    return name_h, courses_h, place_h
+
+
+def _split_courses_cell(cell: str) -> list[str]:
+    """Split a courses cell on both ``;`` and ``,`` so users can quote
+    comma-containing course names with a semicolon delimiter when needed."""
+    parts: list[str] = []
+    for chunk in (cell or "").split(";"):
+        parts.extend(chunk.split(","))
+    return parts
+
+
+def _build_college_doc(
+    *, raw_name: str, courses_cell: str, place: str, user_id: str,
+) -> dict:
+    """Build the Mongo doc for a single CSV row (used by the bulk endpoint)."""
+    return {
+        "id": gen_id(),
+        "name": raw_name,
+        "name_lower": raw_name.lower(),
+        "courses": _normalize_courses(_split_courses_cell(courses_cell)),
+        "place": (place or "").strip(),
+        "created_at": now_iso(),
+        "created_by": user_id,
+    }
+
+
+async def _existing_name_set() -> set[str]:
+    """Snapshot all lower-cased college names so we don't issue one query per row."""
+    out: set[str] = set()
+    async for d in db.colleges.find({}, {"name_lower": 1, "_id": 0}):
+        if d.get("name_lower"):
+            out.add(d["name_lower"])
+    return out
+
+
 @router.post("/bulk", status_code=201)
 async def bulk_upload(
     file: UploadFile = File(...),
@@ -135,42 +196,27 @@ async def bulk_upload(
 ) -> dict:
     """Bulk-add colleges from a CSV file with header ``name,courses,place``.
 
-    - ``courses`` cell may hold a comma-separated list (use a semicolon to keep
-      commas inside the cell, e.g. ``"B.Tech CSE; B.Tech ECE"``). We accept both
-      and split on ``,`` and ``;`` so the user template is forgiving.
-    - Rows with an empty ``name`` are skipped.
-    - Rows whose name already exists are skipped (case-insensitive) and counted
-      under ``duplicates`` in the response so the user knows.
+    - ``courses`` accepts both ``,`` and ``;`` as delimiters so the user can
+      quote commas inside a course label when needed.
+    - Rows with an empty ``name`` are skipped (and their 1-based line numbers
+      returned under ``skipped_blank_rows``).
+    - Names already in the DB or earlier in the same file are skipped and
+      surfaced under ``duplicates_*``.
     """
     _require_super_admin(user)
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are supported")
-    raw = await file.read()
-    try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1", errors="ignore")
+    text = _decode_csv(await file.read())
     reader = csv.DictReader(io.StringIO(text))
-    # Tolerate header capitalisation differences.
-    if reader.fieldnames is None:
-        raise HTTPException(400, "CSV is empty")
-    norm_map = {(h or "").strip().lower(): h for h in reader.fieldnames}
-    name_h = norm_map.get("name")
-    courses_h = norm_map.get("courses") or norm_map.get("course")
-    place_h = norm_map.get("place") or norm_map.get("location")
-    if not name_h:
-        raise HTTPException(400, "CSV must include a 'name' column")
+    name_h, courses_h, place_h = _resolve_headers(reader.fieldnames)
 
+    existing_lower = await _existing_name_set()
+    seen_in_file: set[str] = set()
     created: list[dict] = []
     duplicates: list[str] = []
     skipped_rows: list[int] = []
-    # Snapshot existing lowercase names so a single huge file doesn't issue a query per row.
-    existing_lower = set()
-    async for d in db.colleges.find({}, {"name_lower": 1, "_id": 0}):
-        if d.get("name_lower"):
-            existing_lower.add(d["name_lower"])
-    seen_in_file: set[str] = set()
-    for idx, row in enumerate(reader, start=2):  # start=2 → 1-based with header
+
+    for idx, row in enumerate(reader, start=2):  # start=2 → header is line 1
         raw_name = str(row.get(name_h) or "").strip()
         if not raw_name:
             skipped_rows.append(idx)
@@ -179,22 +225,12 @@ async def bulk_upload(
         if lower in existing_lower or lower in seen_in_file:
             duplicates.append(raw_name)
             continue
-        raw_courses = str(row.get(courses_h) or "") if courses_h else ""
-        # Allow ';' as an alternate delimiter inside the courses cell.
-        courses_parts: list[str] = []
-        for chunk in raw_courses.split(";"):
-            courses_parts.extend(chunk.split(","))
-        place_val = str(row.get(place_h) or "").strip() if place_h else ""
-        doc = {
-            "id": gen_id(),
-            "name": raw_name,
-            "name_lower": lower,
-            "courses": _normalize_courses(courses_parts),
-            "place": place_val,
-            "created_at": now_iso(),
-            "created_by": user["id"],
-        }
-        created.append(doc)
+        created.append(_build_college_doc(
+            raw_name=raw_name,
+            courses_cell=str(row.get(courses_h) or "") if courses_h else "",
+            place=str(row.get(place_h) or "") if place_h else "",
+            user_id=user["id"],
+        ))
         seen_in_file.add(lower)
 
     if created:

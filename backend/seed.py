@@ -51,10 +51,33 @@ async def seed_user_defaults(user_id: str) -> None:
 
 async def seed_admin_and_backfill() -> None:
     """Idempotent: ensures admin user exists, password is fresh, and every user
-    has the full default category set."""
+    has the full default category set.
+
+    Migration: if ``ADMIN_EMAIL`` has changed (e.g. moving from a placeholder
+    domain to a real one) and no user yet matches the new email, but the
+    legacy ``admin@finflow.com`` row exists as super_admin, we *migrate* that
+    row's email + password instead of creating a duplicate super admin.
+    """
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@finflow.com").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
+
+    # One-time migration of the seeded admin email/password (idempotent: only
+    # runs when the new email isn't claimed yet AND the legacy one is present).
+    if existing is None and admin_email != "admin@finflow.com":
+        legacy = await db.users.find_one({"email": "admin@finflow.com"})
+        if legacy and legacy.get("role") == "super_admin":
+            await db.users.update_one(
+                {"id": legacy["id"]},
+                {"$set": {
+                    "email": admin_email,
+                    "password_hash": hash_password(admin_password),
+                    "approval_status": "approved",
+                    "role": "super_admin",
+                }},
+            )
+            existing = await db.users.find_one({"email": admin_email})
+
     if existing is None:
         user_id = gen_id()
         await db.users.insert_one({

@@ -413,63 +413,107 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
     return _summarize(doc)
 
 
+_AGENT_TYPES = {"sub_agent", "associate", "km"}
+
+
+def _new_ledger_bucket(kind: str, name: str) -> dict:
+    return {
+        "type": kind, "name": name,
+        "total_received": 0.0, "paid_to_college": 0.0, "sc_adjusted": 0.0,
+        "holding": 0.0, "payments_count": 0, "students": set(),
+    }
+
+
+def _finalise_ledger_row(row: dict) -> dict:
+    """Round monetary totals, derive holding + students_count, expand the
+    students set to a list so the row is JSON-serialisable."""
+    row["holding"] = round(
+        row["total_received"] - row["paid_to_college"] - row["sc_adjusted"], 2
+    )
+    row["total_received"] = round(row["total_received"], 2)
+    row["paid_to_college"] = round(row["paid_to_college"], 2)
+    row["sc_adjusted"] = round(row["sc_adjusted"], 2)
+    row["students_count"] = len(row["students"])
+    row["students"] = list(row["students"])
+    return row
+
+
 @router.get("/agent-ledger")
 async def agent_ledger(user: dict = Depends(get_current_user)):
     """Aggregate payments routed through sub-agents / associates / KMs.
 
     Returns a row per (received_in.type, received_in.name) combo with totals."""
-    user_id = user["id"]
-    students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
-
+    students = await db.students.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
     ledger: dict[tuple, dict] = {}
-
-    def bucket(kind: str, name: str) -> dict:
-        key = (kind, (name or "—").strip() or "—")
-        if key not in ledger:
-            ledger[key] = {
-                "type": kind,
-                "name": key[1],
-                "total_received": 0.0,
-                "paid_to_college": 0.0,
-                "sc_adjusted": 0.0,
-                "holding": 0.0,
-                "payments_count": 0,
-                "students": set(),
-            }
-        return ledger[key]
 
     for st in students:
         payments = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
         for p in payments:
             received = p.get("received_in") or {}
             r_type = received.get("type")
-            if r_type not in {"sub_agent", "associate", "km"}:
+            if r_type not in _AGENT_TYPES:
                 continue
-            row = bucket(r_type, received.get("name") or "—")
+            name = (received.get("name") or "—").strip() or "—"
+            key = (r_type, name)
+            row = ledger.setdefault(key, _new_ledger_bucket(r_type, name))
+            paid, sc = _split_adjustments(p)
             row["total_received"] += float(p.get("amount") or 0)
+            row["paid_to_college"] += paid
+            row["sc_adjusted"] += sc
             row["payments_count"] += 1
             row["students"].add(st["id"])
-            for adj in p.get("adjustments") or []:
-                kind = adj.get("kind")
-                amt = float(adj.get("amount") or 0)
-                if kind == "paid_to_college":
-                    row["paid_to_college"] += amt
-                elif kind == "sc_adjusted":
-                    row["sc_adjusted"] += amt
 
-    out = []
-    for row in ledger.values():
-        row["holding"] = round(
-            row["total_received"] - row["paid_to_college"] - row["sc_adjusted"], 2
-        )
-        row["total_received"] = round(row["total_received"], 2)
-        row["paid_to_college"] = round(row["paid_to_college"], 2)
-        row["sc_adjusted"] = round(row["sc_adjusted"], 2)
-        row["students_count"] = len(row["students"])
-        row["students"] = list(row["students"])
-        out.append(row)
+    out = [_finalise_ledger_row(row) for row in ledger.values()]
     out.sort(key=lambda r: r["total_received"], reverse=True)
     return out
+
+
+def _payment_matches_agent(payment: dict, type_: str, name: str) -> bool:
+    """True when the payment was routed through the (type, name) agent.
+    Centralised so the agent_ledger + agent_payments handlers can share it."""
+    r = payment.get("received_in") or {}
+    if r.get("type") != type_:
+        return False
+    return (r.get("name") or "—").strip() == name
+
+
+def _split_adjustments(payment: dict) -> tuple[float, float]:
+    """Return ``(paid_to_college_total, sc_adjusted_total)`` for one payment."""
+    paid = 0.0
+    sc = 0.0
+    for a in (payment.get("adjustments") or []):
+        amt = float(a.get("amount") or 0)
+        if a.get("kind") == "paid_to_college":
+            paid += amt
+        elif a.get("kind") == "sc_adjusted":
+            sc += amt
+    return paid, sc
+
+
+def _agent_payment_row(
+    student: dict, payment: dict, paid_to_college: float, sc_adjusted: float,
+) -> dict:
+    """Project a single payment into the flat row shape returned by /agent-ledger/payments."""
+    sch = next(
+        (sc for sc in (student.get("schedules") or []) if sc.get("id") == payment.get("schedule_id")),
+        None,
+    )
+    return {
+        "payment_id": payment["id"],
+        "date": payment.get("date"),
+        "amount": round(float(payment.get("amount") or 0), 2),
+        "fee_type": payment.get("fee_type"),
+        "schedule_label": sch["label"] if sch else None,
+        "remarks": payment.get("remarks") or "",
+        "has_adjustment": bool(payment.get("has_adjustment")),
+        "adjustments": payment.get("adjustments") or [],
+        "student_id": student["id"],
+        "student_name": student.get("name"),
+        "course": student.get("course"),
+        "college": student.get("college"),
+        "paid_to_college": round(paid_to_college, 2),
+        "sc_adjusted": round(sc_adjusted, 2),
+    }
 
 
 @router.get("/agent-ledger/payments")
@@ -484,72 +528,33 @@ async def agent_payments(
     breakdown of adjustments (paid_to_college / sc_adjusted)."""
     if type not in {"sub_agent", "associate", "km"}:
         raise HTTPException(400, "type must be one of sub_agent, associate, km")
-    user_id = user["id"]
-    students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
-
-    rows = []
-    totals = {
-        "total_received": 0.0,
-        "paid_to_college": 0.0,
-        "sc_adjusted": 0.0,
-        "payments_count": 0,
-        "students_count": 0,
-    }
-    student_set = set()
+    students = await db.students.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
 
     target = name.strip()
+    rows: list[dict] = []
+    student_ids: set[str] = set()
+    total_received = paid_to_college_total = sc_adjusted_total = 0.0
+
     for st in students:
         payments = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
         for p in payments:
-            r = p.get("received_in") or {}
-            if r.get("type") != type:
+            if not _payment_matches_agent(p, type, target):
                 continue
-            if (r.get("name") or "—").strip() != target:
-                continue
-            paid_to_college = sum(
-                float(a.get("amount") or 0)
-                for a in (p.get("adjustments") or [])
-                if a.get("kind") == "paid_to_college"
-            )
-            sc_adjusted = sum(
-                float(a.get("amount") or 0)
-                for a in (p.get("adjustments") or [])
-                if a.get("kind") == "sc_adjusted"
-            )
-            totals["total_received"] += float(p.get("amount") or 0)
-            totals["paid_to_college"] += paid_to_college
-            totals["sc_adjusted"] += sc_adjusted
-            totals["payments_count"] += 1
-            student_set.add(st["id"])
-            sch = next(
-                (sc for sc in (st.get("schedules") or []) if sc.get("id") == p.get("schedule_id")),
-                None,
-            )
-            rows.append({
-                "payment_id": p["id"],
-                "date": p.get("date"),
-                "amount": round(float(p.get("amount") or 0), 2),
-                "fee_type": p.get("fee_type"),
-                "schedule_label": sch["label"] if sch else None,
-                "remarks": p.get("remarks") or "",
-                "has_adjustment": bool(p.get("has_adjustment")),
-                "adjustments": p.get("adjustments") or [],
-                "student_id": st["id"],
-                "student_name": st.get("name"),
-                "course": st.get("course"),
-                "college": st.get("college"),
-                "paid_to_college": round(paid_to_college, 2),
-                "sc_adjusted": round(sc_adjusted, 2),
-            })
+            paid, sc = _split_adjustments(p)
+            total_received += float(p.get("amount") or 0)
+            paid_to_college_total += paid
+            sc_adjusted_total += sc
+            student_ids.add(st["id"])
+            rows.append(_agent_payment_row(st, p, paid, sc))
 
-    totals["students_count"] = len(student_set)
-    totals["total_received"] = round(totals["total_received"], 2)
-    totals["paid_to_college"] = round(totals["paid_to_college"], 2)
-    totals["sc_adjusted"] = round(totals["sc_adjusted"], 2)
-    totals["holding"] = round(
-        totals["total_received"] - totals["paid_to_college"] - totals["sc_adjusted"], 2
-    )
-
+    totals = {
+        "total_received": round(total_received, 2),
+        "paid_to_college": round(paid_to_college_total, 2),
+        "sc_adjusted": round(sc_adjusted_total, 2),
+        "holding": round(total_received - paid_to_college_total - sc_adjusted_total, 2),
+        "payments_count": len(rows),
+        "students_count": len(student_ids),
+    }
     rows.sort(key=lambda r: r["date"] or "", reverse=True)
     return {"type": type, "name": target, "totals": totals, "payments": rows}
 

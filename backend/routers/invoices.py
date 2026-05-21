@@ -302,6 +302,40 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(get_current_user)
 
 
 @router.get("/{invoice_id}/payments")
+def _previous_sc_payment_row(invoice: dict) -> tuple[dict | None, float, str | None]:
+    """Materialise the 'Previous payment towards SC' row from the invoice itself.
+    Returns ``(row_or_none, amount, date)`` — amount + date are returned so the
+    caller can deduplicate the auto-mirrored income transaction."""
+    psp = invoice.get("previous_sc_payment") or {}
+    if not psp.get("has"):
+        return None, 0.0, None
+    try:
+        amount = float(psp.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    date = psp.get("date") or invoice.get("issue_date")
+    if amount <= 0:
+        return None, 0.0, date
+    row = {
+        "date": date,
+        "mode": psp.get("mode") or "bank_transfer",
+        "amount": round(amount, 2),
+        "label": "Previous payment towards SC",
+        "source": "previous_sc_payment",
+    }
+    return row, amount, date
+
+
+def _is_mirrored_psp_tx(tx: dict, invoice_id: str, psp_amount: float, psp_date: str | None) -> bool:
+    """True when this income tx is the auto-mirrored copy of the invoice's
+    previous_sc_payment (so we don't double-count it in the PDF timeline)."""
+    return bool(
+        tx.get("linked_sc_payment_invoice_id") == invoice_id
+        and abs(round(float(tx.get("amount") or 0), 2) - round(psp_amount, 2)) < 0.01
+        and tx.get("date") == psp_date
+    )
+
+
 async def invoice_payments(invoice_id: str, user: dict = Depends(get_current_user)):
     """Return all payments received against an invoice — for the PDF payments
     timeline. Combines `previous_sc_payment` (SC invoices) with any auto-logged
@@ -313,27 +347,11 @@ async def invoice_payments(invoice_id: str, user: dict = Depends(get_current_use
     if not inv:
         raise HTTPException(404, "Invoice not found")
 
-    payments: list = []
-    # 1) Previous SC payment recorded on the invoice itself
-    psp = inv.get("previous_sc_payment") or {}
-    psp_amount = 0.0
-    psp_date = None
-    if psp.get("has"):
-        try:
-            psp_amount = float(psp.get("amount") or 0)
-        except (TypeError, ValueError):
-            psp_amount = 0.0
-        psp_date = psp.get("date") or inv.get("issue_date")
-        if psp_amount > 0:
-            payments.append({
-                "date": psp_date,
-                "mode": psp.get("mode") or "bank_transfer",
-                "amount": round(psp_amount, 2),
-                "label": "Previous payment towards SC",
-                "source": "previous_sc_payment",
-            })
+    payments: list[dict] = []
+    psp_row, psp_amount, psp_date = _previous_sc_payment_row(inv)
+    if psp_row:
+        payments.append(psp_row)
 
-    # 2) Any income transactions tied to this invoice
     income_txs = await db.transactions.find(
         {
             "user_id": user["id"],
@@ -347,18 +365,12 @@ async def invoice_payments(invoice_id: str, user: dict = Depends(get_current_use
     ).sort("date", 1).to_list(200)
 
     for tx in income_txs:
-        amount = round(float(tx.get("amount") or 0), 2)
-        # Skip the auto-mirrored psp transaction to avoid double-counting.
-        if (
-            tx.get("linked_sc_payment_invoice_id") == invoice_id
-            and abs(amount - round(psp_amount, 2)) < 0.01
-            and tx.get("date") == psp_date
-        ):
+        if _is_mirrored_psp_tx(tx, invoice_id, psp_amount, psp_date):
             continue
         payments.append({
             "date": tx.get("date"),
             "mode": "bank_transfer",  # mode isn't stored on tx; safe default
-            "amount": amount,
+            "amount": round(float(tx.get("amount") or 0), 2),
             "label": tx.get("description") or "Payment received",
             "source": "transaction",
         })

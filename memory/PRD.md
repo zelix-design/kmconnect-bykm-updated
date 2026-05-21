@@ -301,6 +301,17 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
+## Implementation status — 2026-02-24 (iteration 31: complexity hotspot cleanup + Recharts memoization)
+- [x] Verified two **false-positive** claims from the automated report — `ruff F821/F823/F811` finds **zero** undefined Python variables; official `eslint-plugin-react-hooks/exhaustive-deps` finds **zero** missing dependencies. The report's heuristics were over-eager (flagging stable imports like `axios`, `URLSearchParams`, `api` as deps).
+- [x] **Refactored 4 genuine cyclomatic-complexity hotspots** with new pure helpers:
+  - `routers/colleges.py::bulk_upload`: 26 → 16 (-38%). Extracted `_decode_csv`, `_resolve_headers`, `_split_courses_cell`, `_build_college_doc`, `_existing_name_set`.
+  - `routers/students.py::agent_payments`: 27 → 9 (-67%). Extracted `_payment_matches_agent`, `_split_adjustments`, `_agent_payment_row`.
+  - `routers/students.py::agent_ledger`: 15 → 11 (-27%). Extracted `_new_ledger_bucket`, `_finalise_ledger_row`. Re-uses `_split_adjustments`.
+  - `routers/invoices.py::invoice_payments`: 18 → 10 (-44%). Extracted `_previous_sc_payment_row`, `_is_mirrored_psp_tx`.
+- [x] **Dashboard Recharts memoization** — hoisted `CHART_TICK`, `CHART_TOOLTIP_STYLE`, `CHART_MARGIN_*` to module-level constants so every render passes the same object reference, letting Recharts skip child re-renders.
+- [x] **44/44 pytest cases still pass** — no behavior change, only structural extraction.
+- [x] **Skipped** the report's "split Users.jsx / StudentDetail.jsx / NotificationsBell" recommendations — these components are well-tested in production; splitting them is risky with no functional gain.
+
 ## Implementation status — 2026-02-23 (iteration 30: Convert flow simplified + Create User feature + super-only route gating)
 - [x] **ConvertToEnrolledDialog rewrite** — dropped year_1-4 + scholarship fields. Now captures SC + enrollment date + payment block (Amount/Date/Mode/Fee type/Account/Remarks). Payment is REQUIRED. Dialog does BOTH the PATCH /students/{id} (status→enrolled, sc_out_fixed, enrollment_date) AND POST /students/{id}/payments internally. Live preview footer shows the after-conversion SC + payment with an emerald ENROLLED chip.
 - [x] **Account auto-pick removed** for bank_transfer/upi/cheque/card modes so the "Pick the account to credit" validation is UI-reachable.

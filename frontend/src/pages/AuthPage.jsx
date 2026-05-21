@@ -194,13 +194,6 @@ export default function AuthPage({ mode }) {
             )}
           </div>
           )}
-
-          {isLogin && (
-            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-3 border border-border">
-              <span className="font-medium">Demo:</span>{" "}
-              <span className="font-mono text-foreground">admin@finflow.com</span> · <span className="font-mono text-foreground">Admin@123</span>
-            </div>
-          )}
         </div>
       </div>
     </div>

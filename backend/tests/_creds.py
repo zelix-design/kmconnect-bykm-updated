@@ -42,11 +42,29 @@ def api_base() -> str:
     return f"{backend_url().rstrip('/')}/api"
 
 
+def _read_backend_env_var(key: str) -> str | None:
+    env_file = Path("/app/backend/.env")
+    if not env_file.exists():
+        return None
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        if line.startswith(f"{key}="):
+            val = line.split("=", 1)[1].strip()
+            return val.strip('"').strip("'")
+    return None
+
+
 def admin_credentials() -> Tuple[str, str]:
-    """(email, password) for the seeded super-admin."""
+    """(email, password) for the seeded super-admin.
+    Falls back to the ADMIN_EMAIL/ADMIN_PASSWORD values in backend/.env so
+    rotating the seeded credentials doesn't break test runs."""
     return (
-        os.getenv("TEST_ADMIN_EMAIL", "admin@finflow.com"),
-        os.getenv("TEST_ADMIN_PASSWORD", "Admin@123"),
+        os.getenv("TEST_ADMIN_EMAIL")
+        or _read_backend_env_var("ADMIN_EMAIL")
+        or "admin@kmfoundation.online",
+        os.getenv("TEST_ADMIN_PASSWORD")
+        or _read_backend_env_var("ADMIN_PASSWORD")
+        or "Admin@786",
     )
 
 

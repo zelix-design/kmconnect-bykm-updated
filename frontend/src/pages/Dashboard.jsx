@@ -29,6 +29,20 @@ const TILES = [
   { key: "clients", label: "Clients", icon: UsersThree, palette: "sky" },
   { key: "ledger", label: "Ledger", icon: Notebook, palette: "violet" },
 ];
+
+// Module-level Recharts style constants — referencing the same object on every
+// render lets Recharts memoize correctly and stops the child re-render avalanche.
+const CHART_TICK = { fill: "hsl(var(--muted-foreground))", fontSize: 12 };
+const CHART_TOOLTIP_STYLE = {
+  background: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: 6,
+  fontSize: 12,
+  color: "hsl(var(--foreground))",
+};
+const CHART_MARGIN_SM = { top: 12, right: 8, left: 4, bottom: 0 };
+const CHART_MARGIN_TIGHT = { top: 4, right: 4, left: 4, bottom: 0 };
+
 export default function Dashboard() {
   const { user } = useAuth();
   // Office admins get their bespoke dashboard
@@ -282,9 +296,9 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                   <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="100%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
+                <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
                 <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
                 <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
               </AreaChart>
@@ -303,7 +317,7 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                     <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {byCat.map((entry) => (<Cell key={`${entry.name}-${entry.color}`} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -406,9 +420,9 @@ function StudentsOverview({ students, currency, range }) {
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-enroll" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -424,7 +438,7 @@ function StudentsOverview({ students, currency, range }) {
                     <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {statusPie.map((e) => (<Cell key={`status-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -531,9 +545,9 @@ function ClientsOverview({ clients, students }) {
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-client" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.35} /><stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} /></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -549,7 +563,7 @@ function ClientsOverview({ clients, students }) {
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {typePie.map((e) => (<Cell key={`tp-st-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -681,9 +695,9 @@ function LedgerOverview({ ledger, students, currency }) {
               <AreaChart data={trend}>
                 <defs><linearGradient id="grad-ledger" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35} /><stop offset="100%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient></defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
+                <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
                 <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -697,7 +711,7 @@ function LedgerOverview({ ledger, students, currency }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                     <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
                     <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} formatter={(v) => formatMoney(v, currency)} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                       {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
                     </Bar>
@@ -717,7 +731,7 @@ function LedgerOverview({ ledger, students, currency }) {
                     <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
                       {typePie.map((e) => (<Cell key={`tp-ag-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 6, fontSize: 12, color: "hsl(var(--foreground))" }} />
+                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
