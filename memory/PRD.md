@@ -301,6 +301,15 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
+## Implementation status — 2026-02-23 (iteration 30: Convert flow simplified + Create User feature + super-only route gating)
+- [x] **ConvertToEnrolledDialog rewrite** — dropped year_1-4 + scholarship fields. Now captures SC + enrollment date + payment block (Amount/Date/Mode/Fee type/Account/Remarks). Payment is REQUIRED. Dialog does BOTH the PATCH /students/{id} (status→enrolled, sc_out_fixed, enrollment_date) AND POST /students/{id}/payments internally. Live preview footer shows the after-conversion SC + payment with an emerald ENROLLED chip.
+- [x] **Account auto-pick removed** for bank_transfer/upi/cheque/card modes so the "Pick the account to credit" validation is UI-reachable.
+- [x] **Create User feature** — new `POST /api/users` (super_admin only). Body: { email, password>=6, name, role: super_admin|office_admin, office (required for office_admin), currency }. Created users are `approval_status='approved'`. Office admins get default permissions = all 8 pages set to `edit`. Frontend dialog in `/users` (data-testid='create-user-dialog') with eye-toggle password, role-conditional Office vs Currency select, amber warning for super_admin role.
+- [x] **Role-based route gating** — `PermGate` now accepts `roles={['super_admin']}` prop (alongside the existing `page` prop). Applied to `/users` and `/colleges` so office_admins are redirected with a toast. Create User button additionally hidden via `isSuper && ...` in Users.jsx for defence-in-depth.
+- [x] **delete_user guard relaxed** — only self-deletion blocked. Other super admins (including newly-created ones) can now be removed so cleanup/management works.
+- [x] **Backend tests** — 6 new pytest cases in `tests/test_create_user.py` (create office_admin + super_admin, default permissions, duplicate 409, missing office 400, office_admin write 403, short password 422). 44/44 total tests pass.
+- [x] **E2E** — iteration_24.json (85%, 2 HIGH issues found) → iteration_25.json (100% pass after fixes). All 7 verification points green.
+
 ## Implementation status — 2026-02-22 (iteration 29: Paste Application — auto-parse student blob)
 - [x] **New "Paste application" button** on Students page header (super_admin only, before "Add student") + new amber **"Paste Application"** tile on Quick Entry (super_admin only, navigates to `/students?paste=1` which auto-opens the dialog).
 - [x] **Two-step dialog** (`PasteApplicationDialog.jsx`):
