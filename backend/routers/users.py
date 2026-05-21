@@ -1,9 +1,14 @@
 """User management — super_admin only. Approve / reject office-admin signups."""
+from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, Field
 
 from db import db
-from auth_lib import get_current_user
-from models import UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS
+from auth_lib import get_current_user, hash_password, gen_id, now_iso
+from models import (
+    UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS,
+    OfficeCode,
+)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -21,6 +26,47 @@ async def list_users(user: dict = Depends(get_current_user), status: str | None 
         q["approval_status"] = status
     docs = await db.users.find(q, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
     return docs
+
+
+class CreateUserIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6)
+    name: str = Field(min_length=1)
+    role: Literal["super_admin", "office_admin"] = "office_admin"
+    office: Optional[OfficeCode] = None  # required when role=office_admin
+    business_name: Optional[str] = None
+    currency: Literal["USD", "INR"] = "INR"
+
+
+@router.post("", status_code=201)
+async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_user)):
+    """Super-admin creates a user directly (skips self-registration flow).
+    Office admins are created already approved with default permissions so
+    they can sign in immediately."""
+    _require_super_admin(user)
+    if payload.role == "office_admin" and not payload.office:
+        raise HTTPException(400, "Office is required for office admin")
+    existing = await db.users.find_one({"email": payload.email.lower()})
+    if existing:
+        raise HTTPException(409, "A user with this email already exists")
+    doc = {
+        "id": gen_id(),
+        "email": str(payload.email).lower(),
+        "password_hash": hash_password(payload.password),
+        "name": payload.name.strip(),
+        "business_name": payload.business_name or "",
+        "currency": payload.currency,
+        "role": payload.role,
+        "office": payload.office if payload.role == "office_admin" else None,
+        "approval_status": "approved",
+        "created_at": now_iso(),
+        "created_by_admin": user["id"],
+    }
+    # Office admins get the full edit map by default — super admins ignore it.
+    if payload.role == "office_admin":
+        doc["permissions"] = dict(DEFAULT_PERMISSIONS)
+    await db.users.insert_one(doc)
+    return await db.users.find_one({"id": doc["id"]}, {"_id": 0, "password_hash": 0})
 
 
 @router.patch("/{user_id}/approval")

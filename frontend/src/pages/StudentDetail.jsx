@@ -251,45 +251,6 @@ export default function StudentDetail() {
     }
   };
 
-  const handleConvertToEnrolled = async (patch) => {
-    try {
-      // PATCH /students/{id} expects the full StudentIn body. Merge the
-      // existing student state with the convert dialog's updates so we don't
-      // accidentally wipe name/course/college/reference/notes.
-      const payload = {
-        name: s.name,
-        course: s.course || "",
-        college: s.college || "",
-        reference: s.reference || "",
-        notes: s.notes || "",
-        sc_out_fixed: s.sc_out_fixed || 0,
-        status: s.status,
-        enrollment_date: s.enrollment_date || null,
-        fees_plan: s.fees_plan || null,
-        ...patch,
-      };
-      const { data } = await api.patch(`/students/${id}`, payload);
-      setS(data);
-      setHeader((h) => ({
-        ...h,
-        status: data.status,
-        sc_out_fixed: data.sc_out_fixed,
-        enrollment_date: data.enrollment_date || h.enrollment_date,
-        fees_plan: feesPlanFromApi(data.fees_plan),
-      }));
-      toast.success("Converted to enrolled · schedules generated");
-    } catch (err) {
-      const detail = err.response?.data?.detail;
-      const msg = typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((d) => d?.msg || JSON.stringify(d)).join(" · ")
-          : "Conversion failed";
-      toast.error(msg);
-      throw err;
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in" data-testid="student-detail">
       <Link to="/students" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground" data-testid="back-to-list">
@@ -510,7 +471,7 @@ export default function StudentDetail() {
         onOpenChange={setConvertOpen}
         student={s}
         currency={currency}
-        onSave={handleConvertToEnrolled}
+        onConverted={() => { load(); }}
       />
     </div>
   );

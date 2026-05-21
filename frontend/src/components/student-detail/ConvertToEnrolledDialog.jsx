@@ -1,56 +1,145 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
-import { GraduationCap, CheckCircle } from "@phosphor-icons/react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { GraduationCap, CheckCircle, CurrencyInr } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { formatMoney } from "@/lib/format";
 
 /**
  * One-click "Convert to enrolled student" dialog.
- * Opens from the Student Detail header when status === "inquiry".
  *
- * On save → PATCHes the student with status="enrolled", sc_out_fixed, and a
- * full fees_plan. Backend auto-reconciles the schedules from the fees_plan.
+ * Simplified flow: capture a payment + SC amount → flip status to enrolled.
+ * Logs the payment via POST /students/{id}/payments AND PATCHes the student
+ * (status, sc_out_fixed, enrollment_date) in one click. Payment is required.
  */
-export default function ConvertToEnrolledDialog({ open, onOpenChange, student, currency, onSave }) {
+
+const MODES = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "upi", label: "UPI" },
+  { value: "cheque", label: "Cheque" },
+  { value: "card", label: "Card" },
+  { value: "other", label: "Other" },
+];
+
+const FEE_TYPES = [
+  { value: "booking_admission", label: "Booking / Admission" },
+  { value: "tution", label: "Tuition" },
+  { value: "other", label: "Other" },
+];
+
+// Modes that need an internal account (everything except plain cash).
+const NEEDS_ACCOUNT = new Set(["bank_transfer", "upi", "cheque", "card"]);
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+export default function ConvertToEnrolledDialog({
+  open, onOpenChange, student, currency, onConverted,
+}) {
   const [sc, setSc] = useState("");
-  const [y1, setY1] = useState("");
-  const [y2, setY2] = useState("");
-  const [y3, setY3] = useState("");
-  const [y4, setY4] = useState("");
-  const [hasScholarship, setHasScholarship] = useState(false);
-  const [scholarship, setScholarship] = useState("");
-  const [enrollmentDate, setEnrollmentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [enrollmentDate, setEnrollmentDate] = useState(today);
+  const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(today);
+  const [mode, setMode] = useState("cash");
+  const [feeType, setFeeType] = useState("booking_admission");
+  const [accountId, setAccountId] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const [accounts, setAccounts] = useState([]);
   const [saving, setSaving] = useState(false);
 
-  const total = ["year_1","year_2","year_3","year_4"].reduce(
-    (s, _, i) => s + (parseFloat([y1, y2, y3, y4][i]) || 0), 0,
-  ) - (hasScholarship ? (parseFloat(scholarship) || 0) : 0);
+  useEffect(() => {
+    if (!open) return;
+    // Reset state on open so re-opens are clean
+    setSc(String(student?.sc_out_fixed || ""));
+    setEnrollmentDate(student?.enrollment_date || today());
+    setAmount("");
+    setPaymentDate(today());
+    setMode("cash");
+    setFeeType("booking_admission");
+    setAccountId("");
+    setRemarks("");
+    api.get("/accounts").then((r) => {
+      setAccounts(r.data || []);
+      // Pre-select the first account for convenience
+      if (r.data?.[0]?.id) setAccountId(r.data[0].id);
+    }).catch((err) => {
+      console.error("[convert-dialog] accounts:", err);
+    });
+  }, [open, student]);
+
+  const needsAccount = NEEDS_ACCOUNT.has(mode);
+  const previewAmount = parseFloat(amount) || 0;
+  const previewSc = parseFloat(sc) || 0;
+
+  const validate = () => {
+    const errs = [];
+    if (!sc || parseFloat(sc) <= 0) errs.push("SC Earned must be greater than zero");
+    if (!amount || parseFloat(amount) <= 0) errs.push("Payment amount is required");
+    if (!paymentDate) errs.push("Payment date is required");
+    if (needsAccount && !accountId) errs.push("Pick the account to credit");
+    return errs;
+  };
 
   const submit = async () => {
-    if (!sc || parseFloat(sc) <= 0) return;
-    if (!y1 || parseFloat(y1) <= 0) return;
+    const errs = validate();
+    if (errs.length) {
+      toast.error(errs.length === 1 ? errs[0] : `Fix ${errs.length} field(s)`, {
+        description: errs.length > 1 ? errs.join(" · ") : undefined,
+      });
+      return;
+    }
     setSaving(true);
     try {
-      await onSave({
+      // 1) PATCH the student → flip status, set SC, keep everything else.
+      const patchPayload = {
+        name: student.name,
+        course: student.course || "",
+        college: student.college || "",
+        reference: student.reference || "",
+        notes: student.notes || "",
         status: "enrolled",
         sc_out_fixed: parseFloat(sc) || 0,
         enrollment_date: enrollmentDate,
-        fees_plan: {
-          installment_mode: "yearly",
-          package_status: "admission_tuition",
-          year_1: parseFloat(y1) || 0,
-          year_2: parseFloat(y2) || 0,
-          year_3: parseFloat(y3) || 0,
-          year_4: parseFloat(y4) || 0,
-          has_scholarship: hasScholarship,
-          scholarship_amount: hasScholarship ? (parseFloat(scholarship) || 0) : 0,
-        },
-      });
+        fees_plan: student.fees_plan || null,
+      };
+      await api.patch(`/students/${student.id}`, patchPayload);
+
+      // 2) POST the payment. received_in shape mirrors the PaymentDialog.
+      const receivedIn = mode === "cash"
+        ? { type: "cash", name: null, account_id: accountId || null }
+        : { type: "bank", name: null, account_id: accountId };
+      const paymentPayload = {
+        date: paymentDate,
+        amount: parseFloat(amount) || 0,
+        fee_type: feeType,
+        received_in: receivedIn,
+        has_adjustment: false,
+        adjustments: [],
+        schedule_id: null,
+        remarks: (remarks || "").trim() || `Payment via ${mode.replace("_", " ")}`,
+      };
+      await api.post(`/students/${student.id}/payments`, paymentPayload);
+
+      toast.success("Converted to enrolled · payment logged");
+      onConverted?.();
       onOpenChange(false);
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      toast.error(
+        typeof detail === "string" ? detail
+        : Array.isArray(detail) ? detail.map((d) => d?.msg || JSON.stringify(d)).join(" · ")
+        : "Conversion failed"
+      );
     } finally {
       setSaving(false);
     }
@@ -58,14 +147,18 @@ export default function ConvertToEnrolledDialog({ open, onOpenChange, student, c
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="convert-enrolled-dialog">
+      <DialogContent
+        className="bg-card max-w-xl max-h-[92vh] overflow-y-auto"
+        data-testid="convert-enrolled-dialog"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <GraduationCap size={18} weight="duotone" className="text-emerald-700 dark:text-emerald-400" />
             Convert {student?.name?.split(" ")[0] || "this student"} to enrolled
           </DialogTitle>
           <DialogDescription>
-            Sets status → <span className="font-medium text-emerald-700 dark:text-emerald-400">Enrolled</span>, records the SC and fees plan, and auto-generates the year-wise schedules.
+            Log the booking/admission payment + SC amount, and we'll flip the status to{" "}
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">Enrolled</span> in one click.
           </DialogDescription>
         </DialogHeader>
 
@@ -90,53 +183,91 @@ export default function ConvertToEnrolledDialog({ open, onOpenChange, student, c
             </div>
           </div>
 
-          <Card className="p-4 bg-muted/30 border border-border space-y-3">
-            <p className="label-eyebrow">Fees plan</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">1st Year <span className="text-rose-600">*</span></Label>
-                <Input type="number" step="0.01" required value={y1} onChange={(e) => setY1(e.target.value)} placeholder="0.00" data-testid="cv-y1" />
-              </div>
-              <div>
-                <Label className="text-xs">2nd Year</Label>
-                <Input type="number" step="0.01" value={y2} onChange={(e) => setY2(e.target.value)} placeholder="0.00" data-testid="cv-y2" />
-              </div>
-              <div>
-                <Label className="text-xs">3rd Year</Label>
-                <Input type="number" step="0.01" value={y3} onChange={(e) => setY3(e.target.value)} placeholder="0.00" data-testid="cv-y3" />
-              </div>
-              <div>
-                <Label className="text-xs">4th Year</Label>
-                <Input type="number" step="0.01" value={y4} onChange={(e) => setY4(e.target.value)} placeholder="0.00" data-testid="cv-y4" />
-              </div>
+          <Card className="p-4 bg-muted/30 border border-border space-y-3" data-testid="cv-payment-block">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-md bg-amber-gradient-soft border border-amber-500/30 flex items-center justify-center">
+                <CurrencyInr size={14} className="text-amber-700 dark:text-amber-400" />
+              </span>
+              <p className="label-eyebrow">Log payment</p>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer pt-1">
-              <Checkbox checked={hasScholarship} onCheckedChange={(v) => setHasScholarship(!!v)} data-testid="cv-has-scholarship" />
-              <span className="text-sm">Apply scholarship (reduces 1st-year fees + SC Earned)</span>
-            </label>
-            {hasScholarship && (
-              <div className="pl-7">
-                <Label className="text-xs">Scholarship amount</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label>Amount <span className="text-rose-600">*</span></Label>
                 <Input
-                  type="number" step="0.01"
-                  value={scholarship}
-                  onChange={(e) => setScholarship(e.target.value)}
+                  type="number" step="0.01" required value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  data-testid="cv-scholarship-amount"
+                  data-testid="cv-amount"
                 />
               </div>
-            )}
+              <div>
+                <Label>Payment date <span className="text-rose-600">*</span></Label>
+                <Input
+                  type="date" required value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  data-testid="cv-pay-date"
+                />
+              </div>
+              <div>
+                <Label>Mode <span className="text-rose-600">*</span></Label>
+                <Select value={mode} onValueChange={setMode}>
+                  <SelectTrigger data-testid="cv-mode"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Fee type</Label>
+                <Select value={feeType} onValueChange={setFeeType}>
+                  <SelectTrigger data-testid="cv-fee-type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FEE_TYPES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>
+                  Credit to account {needsAccount && <span className="text-rose-600">*</span>}
+                  {!needsAccount && <span className="text-muted-foreground text-[11px] ml-1">(optional for cash)</span>}
+                </Label>
+                <Select value={accountId || "_none"} onValueChange={(v) => setAccountId(v === "_none" ? "" : v)}>
+                  <SelectTrigger data-testid="cv-account"><SelectValue placeholder="Pick an account" /></SelectTrigger>
+                  <SelectContent>
+                    {!needsAccount && <SelectItem value="_none">— None —</SelectItem>}
+                    {accounts.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>{a.name} <span className="text-muted-foreground text-xs">({a.type})</span></SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <Label>Remarks (optional)</Label>
+                <Textarea
+                  rows={2}
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="e.g. UTR 1234567890 · received from parent"
+                  data-testid="cv-remarks"
+                />
+              </div>
+            </div>
           </Card>
 
           <div className="flex items-center justify-between rounded-md bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/70 dark:border-emerald-500/30 p-3">
-            <span className="text-xs text-emerald-800 dark:text-emerald-300">Total fees after scholarship</span>
-            <span className="font-display text-base tabular-nums text-emerald-800 dark:text-emerald-300" data-testid="cv-total-preview">
-              {formatMoney(Math.max(0, total), currency)}
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-400 font-semibold">After conversion</p>
+              <p className="text-xs text-emerald-800 dark:text-emerald-300 mt-0.5">
+                SC <strong>{formatMoney(previewSc, currency)}</strong> · Payment <strong>{formatMoney(previewAmount, currency)}</strong> logged
+              </p>
+            </div>
+            <span className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] uppercase tracking-wider font-semibold">
+              Enrolled
             </span>
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            After conversion the Payments tab and Schedule tab become fully active — schedules are auto-generated and any existing registration payment carries over.
+            You can still add fee schedules and additional payments from the Student detail page after conversion.
           </p>
         </div>
 
@@ -145,7 +276,7 @@ export default function ConvertToEnrolledDialog({ open, onOpenChange, student, c
           <Button
             type="button"
             onClick={submit}
-            disabled={saving || !sc || !y1}
+            disabled={saving}
             className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
             data-testid="cv-submit"
           >

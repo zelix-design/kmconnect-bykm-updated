@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend testing for (A) Convert-to-enrolled dialog rewrite and (B) Create-user flow on /users page. Convert flow fully passed (new fields present, old removed, validation works, cash + bank_transfer paths convert successfully, status flips to ENROLLED, payment row logged, Convert button disappears). Create-user dialog works for office_admin role (eye toggle, required-field HTML validation, dialog closes, switches to Approved tab, duplicate email shows 409 toast, new office_admin can immediately sign in with reduced sidebar). Two issues found: (1) super_admin role creation fails with 422 'Input should be USD or INR' even though currency default is INR; (2) Office_admin can still navigate to /users and SEES the Create-user button (POST is correctly 403-blocked at API, but PermGate does NOT block the page or hide the button).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/users", "issue": "When called from Create User dialog with role=super_admin (frontend sends {email, password, name, role:'super_admin', currency:'INR'}), backend returns 422 with detail 'Input should be USD or INR'. Office_admin creation with identical currency value works. Either currency validation is mismatched for super_admin path, or the Pydantic Literal is being hit with an unexpected value. Suggest logging the actual received body for this case."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Users.jsx + PermGate route guard", "issue": "Office_admin role can navigate directly to /users and the page renders fully, including the [data-testid=create-user-btn]. The sidebar correctly hides the Team link, but route-level PermGate / role gating is missing. Hide the page (redirect or 403 view) and at minimum conditionally render the Create user button only when currentUser.role === 'super_admin'.", "selector": "[data-testid=create-user-btn]", "priority": "HIGH"},
+      {"component": "Users.jsx > Create user dialog (super_admin path)", "issue": "Creating a super_admin user fails — dialog stays open and toast shows 'Input should be USD or INR'. Confirmed via network log (422). Likely an issue with the currency payload (e.g. value being overwritten or omitted by the Select component when role switches). Verify the actual POST body the form ships when role=super_admin.", "selector": "[data-testid=cu-save]", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix super_admin user creation 422: inspect the actual JSON body sent from Users.jsx submitCreate when role=super_admin — currency may be arriving as something other than 'INR'/'USD' (null, undefined, or stale form state). Log request body server-side or add console.log in submitCreate to confirm.",
+    "Gate the /users route via PermGate (or a role check) so office_admin cannot navigate to it; also wrap the Create user button in a `currentUser.role === 'super_admin'` conditional so it's never rendered for non-super_admin users even if they reach the page.",
+    "Optional: in ConvertToEnrolledDialog, consider not auto-selecting the first account when mode requires one — keeps the 'pick the account to credit' validation reachable from the UI (currently the auto-pick masks the error path)."
+  ],
+  "critical_code_review_comments": [
+    "Users.jsx hard-codes OFFICE_OPTIONS (KM_BLR/KM_TCR/KM_KMLY) at module scope while the rest of the app uses an OfficeCode enum from /app/backend or shared lib. Extract to a shared constant to avoid drift when a new office is added.",
+    "ConvertToEnrolledDialog defaults accountId to the first account from /accounts unconditionally. For cash mode this is fine (the payload omits account_id), but it means the bank-transfer 'Pick the account to credit' validation can only fire if the user explicitly opens the picker and clears it — defeats the purpose. Default to empty string and let the user pick.",
+    "Users.jsx Create user dialog uses an uncontrolled reset pattern (setCreateForm on open AND on close AND on submit success). Consider consolidating reset logic into a single effect on `createOpen` to avoid stale state edge cases — the super_admin 422 may be a symptom of this.",
+    "Backend POST /api/users (per the spec) does not appear to have a backend test that exercises the exact JSON shape the frontend sends for super_admin (with currency but no office). The 6 new pytest cases cover the path but apparently with a different body shape. Add one test that mirrors the frontend payload verbatim."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only review)", "frontend": "85%"},
+  "test_credentials": "Used admin@finflow.com / Admin@123 (super_admin). Office admin temporary users created and cleaned up.",
+  "seed_data_creation": "Created+deleted: students 871bbc3f… (QA Convert Test), 0425a9a7… (QA Convert Bank); users qa-new-office@finflow.com (office_admin) and qa-tmp-office@finflow.com (office_admin). qa-super-var@finflow.com was never persisted (422). All test data cleaned up at end.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Convert dialog passes all functional checks (new fields present, old absent, both cash & bank_transfer create payments and flip status, validation toasts fire). Re-test focus areas after main agent fixes: (a) /users page must redirect or show 403 when accessed by an office_admin (use qa-tmp-office@finflow.com or blr1@finflow.com to verify); (b) Create-user button must not render for non-super_admin even if the page is reachable; (c) super_admin creation via the dialog must return 200 with currency=INR default — verify by creating qa-super-var@finflow.com and confirming it can log in.",
+  "rca of the issue": "Super_admin 422: frontend POST /api/users body is built as {email, password, name, role:'super_admin', currency:'INR'}. Backend returned 'Input should be USD or INR' which is the Pydantic Literal['USD','INR'] validator on the `currency` field. Possible root causes: (1) f.currency is undefined at submit time because the Currency Select didn't initialize createForm.currency on role switch — but emptyNewUser() does set currency:'INR' so this should hold; (2) The Select's onValueChange may have been triggered with a non-canonical value before submit; (3) Backend may have a stricter validator on super_admin path. Investigate by adding console.log(payload) in submitCreate. PermGate gap: /users route in App router likely lacks the super_admin-only guard; Users.jsx itself renders Create user button unconditionally regardless of currentUser.role."
+}

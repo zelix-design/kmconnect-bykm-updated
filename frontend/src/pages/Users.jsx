@@ -9,8 +9,22 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass, Lock, ShieldCheck } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass, Lock, ShieldCheck, UserPlus, Eye, EyeSlash } from "@phosphor-icons/react";
+
+const OFFICE_OPTIONS = [
+  { value: "KM_BLR", label: "KM BLR" },
+  { value: "KM_TCR", label: "KM TCR" },
+  { value: "KM_KMLY", label: "KM KMLY" },
+];
+
+const emptyNewUser = () => ({
+  email: "", password: "", name: "",
+  role: "office_admin", office: "KM_BLR", currency: "INR",
+});
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -30,6 +44,10 @@ export default function Users() {
   const [permTarget, setPermTarget] = useState(null);     // user obj when permissions dialog is open
   const [permDraft, setPermDraft] = useState({});         // working permission map
   const [permSaving, setPermSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState(emptyNewUser);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
 
   const load = async (status) => {
     setLoading(true);
@@ -99,6 +117,43 @@ export default function Users() {
     }
   };
 
+  const submitCreate = async (e) => {
+    e?.preventDefault();
+    const f = createForm;
+    if (!f.email.trim() || !f.password || !f.name.trim()) {
+      toast.error("Email, password and name are required"); return;
+    }
+    if (f.password.length < 6) {
+      toast.error("Password must be at least 6 characters"); return;
+    }
+    if (f.role === "office_admin" && !f.office) {
+      toast.error("Pick the office for the office admin"); return;
+    }
+    setCreateSaving(true);
+    try {
+      const payload = {
+        email: f.email.trim().toLowerCase(),
+        password: f.password,
+        name: f.name.trim(),
+        role: f.role,
+        currency: f.currency,
+        ...(f.role === "office_admin" ? { office: f.office } : {}),
+      };
+      const { data } = await api.post("/users", payload);
+      toast.success(`${data.name} created · can sign in immediately`);
+      setCreateOpen(false);
+      setCreateForm(emptyNewUser());
+      setShowPwd(false);
+      // Show approved tab so the new user is visible (super_admin role always goes there too)
+      setTab("approved");
+      load("approved");
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Create failed");
+    } finally {
+      setCreateSaving(false);
+    }
+  };
+
   const filtered = users.filter((u) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -119,17 +174,27 @@ export default function Users() {
         <div>
           <p className="label-eyebrow">Access control</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight">Team & approvals</h1>
-          <p className="text-sm text-muted-foreground mt-1">Approve new office-admin signups and manage access.</p>
+          <p className="text-sm text-muted-foreground mt-1">Approve new office-admin signups, create users directly, and manage access.</p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search name or email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-            data-testid="users-search"
-          />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search name or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+              data-testid="users-search"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={() => { setCreateForm(emptyNewUser()); setShowPwd(false); setCreateOpen(true); }}
+            className="h-10 btn-amber border-0 shrink-0"
+            data-testid="create-user-btn"
+          >
+            <UserPlus size={16} className="mr-1.5" /> Create user
+          </Button>
         </div>
       </div>
 
@@ -282,6 +347,137 @@ export default function Users() {
               {permSaving ? "Saving…" : "Save permissions"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create user dialog */}
+      <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) { setCreateForm(emptyNewUser()); setShowPwd(false); } }}>
+        <DialogContent className="max-w-lg" data-testid="create-user-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-display">
+              <UserPlus size={18} weight="duotone" className="text-orange-600 dark:text-orange-400" />
+              Create user
+            </DialogTitle>
+            <DialogDescription>
+              Add a user directly — they'll be approved immediately and can sign in with the password you set.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitCreate} className="space-y-4">
+            <div>
+              <Label>Full name <span className="text-rose-600">*</span></Label>
+              <Input
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                placeholder="Jane Doe"
+                data-testid="cu-name"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label>Email <span className="text-rose-600">*</span></Label>
+                <Input
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  placeholder="user@finflow.com"
+                  data-testid="cu-email"
+                  required
+                />
+              </div>
+              <div>
+                <Label>Password <span className="text-rose-600">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showPwd ? "text" : "password"}
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                    placeholder="Min 6 characters"
+                    data-testid="cu-password"
+                    required
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((v) => !v)}
+                    data-testid="cu-toggle-pwd"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    title={showPwd ? "Hide password" : "Show password"}
+                  >
+                    {showPwd ? <EyeSlash size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Share this password with the user securely.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <Label>Role <span className="text-rose-600">*</span></Label>
+                <Select
+                  value={createForm.role}
+                  onValueChange={(v) => setCreateForm({ ...createForm, role: v })}
+                >
+                  <SelectTrigger data-testid="cu-role"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="office_admin">Office Admin</SelectItem>
+                    <SelectItem value="super_admin">Super Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {createForm.role === "office_admin" ? (
+                <div>
+                  <Label>Office <span className="text-rose-600">*</span></Label>
+                  <Select
+                    value={createForm.office}
+                    onValueChange={(v) => setCreateForm({ ...createForm, office: v })}
+                  >
+                    <SelectTrigger data-testid="cu-office"><SelectValue placeholder="Pick office" /></SelectTrigger>
+                    <SelectContent>
+                      {OFFICE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label>Currency</Label>
+                  <Select
+                    value={createForm.currency}
+                    onValueChange={(v) => setCreateForm({ ...createForm, currency: v })}
+                  >
+                    <SelectTrigger data-testid="cu-currency"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="INR">INR (₹)</SelectItem>
+                      <SelectItem value="USD">USD ($)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {createForm.role === "super_admin" ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-gradient-soft p-3 text-xs flex items-start gap-2.5" data-testid="cu-super-warning">
+                <ShieldCheck size={16} weight="fill" className="text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+                <span className="text-foreground">
+                  <strong>Super Admin</strong> gets full access to every page across all offices and can manage other users. Use sparingly.
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-md border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-500/10 p-3 text-xs flex items-start gap-2.5">
+                <CheckCircle size={16} weight="fill" className="text-emerald-700 dark:text-emerald-400 mt-0.5 shrink-0" />
+                <span className="text-foreground">
+                  Office admins are created with <strong>all 8 pages set to edit</strong>. Fine-tune via the Permissions button on their card after creation.
+                </span>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createSaving} className="btn-amber border-0" data-testid="cu-save">
+                <UserPlus size={14} className="mr-1.5" />
+                {createSaving ? "Creating…" : "Create user"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
