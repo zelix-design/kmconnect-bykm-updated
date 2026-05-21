@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import api from "@/lib/api";
+import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,7 @@ export default function StudentDetail() {
       };
       const { data } = await api.patch(`/students/${id}`, payload);
       setS(data); setEditHeader(false); toast.success("Saved");
-    } catch (err) { toast.error(err.response?.data?.detail || "Failed"); }
+    } catch (err) { toast.error(formatApiError(err.response?.data?.detail) || "Failed"); }
   };
 
   const removeStudent = async () => {
@@ -121,9 +121,27 @@ export default function StudentDetail() {
     },
   });
 
+  const validateAdjustments = (adjustments, hasAdjustment) => {
+    if (!hasAdjustment) return null;
+    if (!adjustments?.length) return "Add at least one adjustment row, or uncheck 'This payment has an adjustment'.";
+    for (let i = 0; i < adjustments.length; i++) {
+      const a = adjustments[i];
+      const rowLabel = `Adjustment #${i + 1}`;
+      if (!a.payment_date) return `${rowLabel}: pick a payment date.`;
+      if (!(parseFloat(a.amount) > 0)) return `${rowLabel}: enter an amount greater than zero.`;
+      if (a.kind === "sc_adjusted") {
+        if (!a.sub_agent_type) return `${rowLabel}: pick Sub Agent / Associate / KM.`;
+        if (!a.sub_agent_name?.trim()) return `${rowLabel}: name is required for SC-adjusted rows.`;
+      }
+    }
+    return null;
+  };
+
   const submitPay = async (e) => {
     e.preventDefault();
     const f = payDlg.form;
+    const adjErr = validateAdjustments(f.adjustments, f.has_adjustment);
+    if (adjErr) { toast.error(adjErr); return; }
     const payload = {
       date: f.date,
       amount: parseFloat(f.amount) || 0,
@@ -152,7 +170,7 @@ export default function StudentDetail() {
         : await api.post(`/students/${id}/payments`, payload);
       setS(data); setPayDlg({ ...payDlg, open: false }); toast.success("Saved");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed");
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed");
     }
   };
   const removePay = async (pid) => {
@@ -178,6 +196,10 @@ export default function StudentDetail() {
     if (!f.create_schedule && !f.log_payment) {
       toast.error("Select at least one of Schedule or Payment");
       return;
+    }
+    if (f.log_payment) {
+      const adjErr = validateAdjustments(f.payment.adjustments, f.payment.has_adjustment);
+      if (adjErr) { toast.error(adjErr); return; }
     }
     try {
       let scheduleId = f.existing_schedule_id || null;
@@ -227,7 +249,7 @@ export default function StudentDetail() {
       setEntryDlg({ open: false, form: emptyEntry() });
       toast.success("Entry saved");
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed");
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed");
     }
   };
 

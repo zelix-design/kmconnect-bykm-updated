@@ -34,6 +34,8 @@ export default function PublicApplication() {
   const [referrer, setReferrer] = useState(null);
 
   useEffect(() => {
+    const prevTitle = document.title;
+    document.title = "Student Application Form";
     axios.get(`${API}/courses`)
       .then((r) => setCourses(r.data?.courses || []))
       .catch((err) => {
@@ -46,6 +48,7 @@ export default function PublicApplication() {
         console.error("[apply] colleges fetch failed:", err?.message || err);
         setColleges([]);
       });
+    return () => { document.title = prevTitle; };
   }, []);
 
   // If the form was opened via a referral link (?ref=<client_id>), fetch the
