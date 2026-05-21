@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText } from "@phosphor-icons/react";
+import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText, GraduationCap } from "@phosphor-icons/react";
 import { formatDate } from "@/lib/format";
 import FeesPlanFields, { emptyFeesPlan } from "@/components/FeesPlanFields";
 import { STATUS_OPTIONS } from "./constants";
@@ -29,6 +29,7 @@ export default function HeaderCard({
   onAddEntry,
   onExportPdf,
   onExportApplicationPdf,
+  onConvertToEnrolled,
 }) {
   return (
     <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
@@ -99,6 +100,15 @@ export default function HeaderCard({
             {s.notes && <p className="mt-3 text-sm text-muted-foreground">{s.notes}</p>}
           </div>
           <div className="flex gap-2 flex-wrap">
+            {s.status === "inquiry" && (
+              <Button
+                onClick={onConvertToEnrolled}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                data-testid="convert-enrolled-btn"
+              >
+                <GraduationCap size={14} className="mr-1.5" /> Convert to enrolled
+              </Button>
+            )}
             <Button onClick={onAddEntry} className="btn-amber border-0" data-testid="add-entry-btn">
               <Plus size={14} className="mr-1.5" /> Add entry
             </Button>

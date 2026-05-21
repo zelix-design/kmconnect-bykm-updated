@@ -297,6 +297,27 @@
 - [x] **27 new unit tests** + 100% regression on iteration_21.json.
 
 ## Implementation status — 2026-02-20 (iteration 26: Public admission application form + Application PDF)
+- [x] **Public `/apply` route** — 6-step wizard (Basic Info · Course · Communication · Academic · Payment · Reference). No auth required. Amber theme, per-step validation, success screen with shareable reference code.
+- [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
+- [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
+
+## Implementation status — 2026-02-20 (iteration 27: Convert-to-enrolled + PDF/form polish)
+- [x] **One-click "Convert to enrolled student"** — new `ConvertToEnrolledDialog` opens from Student Detail header *only when status === inquiry*. Captures SC amount, year-wise fees (year_1–4), optional scholarship, and enrollment date. On submit PATCHes the student (merging existing fields so `name/course/college/reference/notes` aren't wiped) → backend reconciles schedules from the fees_plan in one shot.
+  - Live "Total fees after scholarship" preview inside the dialog.
+  - Convert button auto-hides post-enrollment.
+- [x] **Application PDF — Sections E/F removed + tighter alignment**:
+  - Now renders **only** Section A (Candidate Details), B (Course), C (Parents & Address), D (Academic). Payment + Reference live inside the admin views.
+  - Strict 4-column layout with fixed widths (label 105pt, value 144pt) so every label/value lines up across all sections.
+  - Address now spans a full row (no awkward 2-column wrap).
+  - Academic table column widths rebalanced so "Percentage" no longer wraps mid-word.
+- [x] **Mobile form alignment fixes** (PublicApplication):
+  - Container padding reduced on mobile (`py-6 px-3`).
+  - Card padding lighter on mobile (`p-5` instead of `p-6`).
+  - Stepper labels now visible at all widths (was hidden < sm) so users see what step they're on. Step circles slightly smaller (`w-8 h-8`).
+  - Back / Continue buttons stack vertically on mobile (full-width tap targets), revert to side-by-side on `sm+`.
+  - SectionTitle h2 down-sized for mobile (`text-lg sm:text-2xl`).
+  - Field wrapper gets `min-w-0` so long values don't blow out the grid.
+- [x] **Error toast hardening** — convert handler now flattens Pydantic 422 detail arrays into a string so the toast can render (was crashing with "Objects are not valid as a React child").
 - [x] **Public `/apply` route** — 6-step wizard (Basic Info · Course · Communication · Academic · Payment · Reference) with stepper UI, amber gradient, per-step validation, success screen with shareable reference code. No auth required.
 - [x] **Backend** — new `routers/applications.py` exposes:
   - `POST /api/public/applications` (status 201) → creates a `students` row owned by the first super-admin, status=`inquiry`, with the whole application payload preserved under `application` sub-doc and `application_source="public_form"`. Optional registration_amount is auto-logged as a booking_admission payment with "pending verification" remarks. Fires super-admin notification.

@@ -223,3 +223,31 @@ async def list_courses() -> dict:
             "Other",
         ]
     }
+
+
+# Map our internal client_type → the form's reference_type enum.
+_CLIENT_TYPE_TO_REF = {
+    "staff": "staff",
+    "sub_agent_associate": "sub_agent",
+    "associate_consultant": "associate",
+    "km_blr_office": "km",
+    "km_tcr_office": "km",
+    "km_kmly_office": "km",
+}
+
+
+@router.get("/referrer/{client_id}")
+async def get_referrer(client_id: str) -> dict:
+    """Public lookup for the referral landing page. Returns the bare-minimum
+    info needed to pre-fill the Reference section of the application form.
+    404 if the client doesn't exist."""
+    c = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Referrer not found")
+    return {
+        "id": c["id"],
+        "name": c.get("name") or "",
+        "type": _CLIENT_TYPE_TO_REF.get(c.get("client_type"), "other"),
+        "contact_number": c.get("phone") or "",
+        "place": c.get("office", "").replace("KM_", "KM ") if c.get("office") else (c.get("company") or ""),
+    }

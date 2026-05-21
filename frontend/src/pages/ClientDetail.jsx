@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple } from "@phosphor-icons/react";
+import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { clientTypeLabel } from "@/pages/Clients";
 import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
@@ -100,7 +100,20 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
-          <div className="flex gap-2 self-start">
+          <div className="flex gap-2 self-start flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const url = `${window.location.origin}/apply?ref=${c.id}`;
+                navigator.clipboard.writeText(url).then(
+                  () => toast.success("Referral link copied", { description: url }),
+                  () => window.prompt("Copy this referral link:", url),
+                );
+              }}
+              data-testid="copy-referral-link"
+            >
+              <LinkIcon size={14} className="mr-1.5" /> Copy referral link
+            </Button>
             <Button
               variant="outline"
               onClick={() => downloadClientStatementPDF({ detail: data, user })}

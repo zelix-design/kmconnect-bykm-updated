@@ -7,9 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast, Toaster } from "sonner";
 import axios from "axios";
+import { useSearchParams } from "react-router-dom";
 import {
   User, GraduationCap, Phone, Books, Receipt, UserCircle,
-  ArrowRight, ArrowLeft, CheckCircle, Sparkle, Copy,
+  ArrowRight, ArrowLeft, CheckCircle, Sparkle, Copy, LockSimple,
 } from "@phosphor-icons/react";
 import {
   STEPS, GENDERS, PARTNER_COLLEGES, ADMISSION_TYPES, BOARDS,
@@ -21,11 +22,14 @@ const ICONS = { User, GraduationCap, Phone, Books, Receipt, UserCircle };
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/public`;
 
 export default function PublicApplication() {
+  const [searchParams] = useSearchParams();
+  const referrerId = searchParams.get("ref");
   const [step, setStep] = useState(0);
   const [app, setApp] = useState(() => emptyApplication());
   const [courses, setCourses] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null);
+  const [referrer, setReferrer] = useState(null);
 
   useEffect(() => {
     axios.get(`${API}/courses`)
@@ -35,6 +39,34 @@ export default function PublicApplication() {
         setCourses([]);
       });
   }, []);
+
+  // If the form was opened via a referral link (?ref=<client_id>), fetch the
+  // referrer details and pre-fill (+ lock) the Reference step so the applicant
+  // can't accidentally change attribution.
+  useEffect(() => {
+    if (!referrerId) return;
+    let cancelled = false;
+    axios.get(`${API}/referrer/${referrerId}`)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setReferrer(data);
+        setApp((prev) => ({
+          ...prev,
+          reference: {
+            ...prev.reference,
+            type: data.type || prev.reference.type,
+            name: data.name || prev.reference.name,
+            contact_number: data.contact_number || prev.reference.contact_number,
+            place: data.place || prev.reference.place,
+          },
+        }));
+      })
+      .catch((err) => {
+        console.error("[apply] referrer fetch failed:", err?.message || err);
+        // Stay silent — applicant can still fill the form manually.
+      });
+    return () => { cancelled = true; };
+  }, [referrerId]);
 
   const stepKey = STEPS[step].key;
   const setField = (section, key, value) => setApp((prev) => ({
@@ -82,37 +114,55 @@ export default function PublicApplication() {
   if (submitted) return <SubmittedView submitted={submitted} app={app} onAgain={() => { setSubmitted(null); setApp(emptyApplication()); setStep(0); }} />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-stone-950 dark:via-stone-950 dark:to-stone-900 py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-stone-950 dark:via-stone-950 dark:to-stone-900 py-6 sm:py-8 px-3 sm:px-4">
       <Toaster position="top-center" richColors />
       <div className="max-w-3xl mx-auto" data-testid="public-apply-page">
-        <header className="text-center mb-8">
+        <header className="text-center mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 text-xs font-medium mb-3">
             <Sparkle size={12} weight="fill" /> Online Admission · 2026 intake
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight text-foreground">FinFlow by KM Foundation</h1>
-          <p className="text-sm text-muted-foreground mt-2">Student Admission Application — six quick steps · about 5 minutes</p>
+          <h1 className="font-display text-2xl sm:text-4xl tracking-tight text-foreground leading-tight">FinFlow by KM Foundation</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-2 px-2">Student Admission Application — six quick steps · about 5 minutes</p>
         </header>
+
+        {referrer && (
+          <div
+            data-testid="referrer-banner"
+            className="mb-4 rounded-lg border border-amber-200/70 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 p-3 flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-full bg-amber-gradient text-white text-sm font-semibold flex items-center justify-center shrink-0">
+              {(referrer.name || "?")[0].toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.15em] text-amber-700 dark:text-amber-400 font-semibold">Referred by</p>
+              <p className="text-sm font-medium text-foreground truncate">{referrer.name}</p>
+            </div>
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-card text-muted-foreground shrink-0">
+              <LockSimple size={11} weight="duotone" /> auto-tagged
+            </span>
+          </div>
+        )}
 
         <Stepper step={step} setStep={setStep} app={app} />
 
-        <Card className="p-6 sm:p-8 border border-border bg-card rounded-xl shadow-lg shadow-amber-500/5">
+        <Card className="p-5 sm:p-8 border border-border bg-card rounded-xl shadow-lg shadow-amber-500/5">
           {stepKey === "basic_info" && <StepBasic app={app} setField={setField} />}
           {stepKey === "course" && <StepCourse app={app} setField={setField} courses={courses} />}
           {stepKey === "communication" && <StepCommunication app={app} setField={setField} />}
           {stepKey === "academic" && <StepAcademic app={app} setNested={setNested} />}
           {stepKey === "payment" && <StepPayment app={app} setField={setField} />}
-          {stepKey === "reference" && <StepReference app={app} setField={setField} />}
+          {stepKey === "reference" && <StepReference app={app} setField={setField} referrer={referrer} />}
 
-          <div className="mt-8 flex justify-between gap-3">
-            <Button type="button" variant="outline" onClick={prev} disabled={step === 0} data-testid="apply-prev">
+          <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
+            <Button type="button" variant="outline" onClick={prev} disabled={step === 0} data-testid="apply-prev" className="w-full sm:w-auto">
               <ArrowLeft size={14} className="mr-1.5" /> Back
             </Button>
             {step < STEPS.length - 1 ? (
-              <Button type="button" onClick={next} className="btn-amber border-0" data-testid="apply-next">
+              <Button type="button" onClick={next} className="btn-amber border-0 w-full sm:w-auto" data-testid="apply-next">
                 Continue <ArrowRight size={14} className="ml-1.5" />
               </Button>
             ) : (
-              <Button type="button" onClick={submit} disabled={submitting} className="btn-amber border-0" data-testid="apply-submit">
+              <Button type="button" onClick={submit} disabled={submitting} className="btn-amber border-0 w-full sm:w-auto" data-testid="apply-submit">
                 {submitting ? "Submitting…" : "Submit application"}
                 <CheckCircle size={14} className="ml-1.5" />
               </Button>
@@ -120,7 +170,7 @@ export default function PublicApplication() {
           </div>
         </Card>
 
-        <p className="text-xs text-center text-muted-foreground mt-6">
+        <p className="text-[11px] sm:text-xs text-center text-muted-foreground mt-6 px-4">
           Your details are private and will only be reviewed by the admissions team.
         </p>
       </div>
@@ -132,7 +182,7 @@ export default function PublicApplication() {
 function Stepper({ step, setStep }) {
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-between gap-1 sm:gap-2" data-testid="apply-stepper">
+      <div className="flex items-center justify-between gap-0.5 sm:gap-2" data-testid="apply-stepper">
         {STEPS.map((s, i) => {
           const Icon = ICONS[s.icon];
           const done = i < step;
@@ -144,18 +194,20 @@ function Stepper({ step, setStep }) {
                 onClick={() => i <= step && setStep(i)}
                 disabled={i > step}
                 data-testid={`stepper-${s.key}`}
-                className={`flex flex-col items-center gap-1 group ${i > step ? "cursor-not-allowed opacity-60" : ""}`}
+                className={`flex flex-col items-center gap-1 group min-w-0 shrink-0 ${i > step ? "cursor-not-allowed opacity-60" : ""}`}
               >
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all border-2 ${
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all border-2 ${
                   active ? "bg-amber-gradient text-white border-amber-500 shadow-md shadow-amber-500/30 scale-110"
                   : done ? "bg-emerald-500 text-white border-emerald-500"
                   : "bg-card text-muted-foreground border-border"
                 }`}>
-                  {done ? <CheckCircle size={16} weight="fill" /> : <Icon size={16} weight="duotone" />}
+                  {done ? <CheckCircle size={14} weight="fill" /> : <Icon size={14} weight="duotone" />}
                 </div>
-                <span className={`text-[10px] sm:text-xs hidden sm:block ${active ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s.label}</span>
+                <span className={`text-[9px] sm:text-xs leading-tight text-center max-w-[60px] sm:max-w-none truncate ${
+                  active ? "text-foreground font-medium" : "text-muted-foreground"
+                }`}>{s.label}</span>
               </button>
-              {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 ${i < step ? "bg-emerald-500" : "bg-border"}`} />}
+              {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mb-5 ${i < step ? "bg-emerald-500" : "bg-border"}`} />}
             </React.Fragment>
           );
         })}
@@ -343,26 +395,33 @@ function StepPayment({ app, setField }) {
 }
 
 // ---- Step 6: Reference ----
-function StepReference({ app, setField }) {
+function StepReference({ app, setField, referrer }) {
   const f = app.reference;
+  const locked = !!referrer; // arriving via /apply?ref=<id> → reference is fixed
   return (
     <div>
-      <SectionTitle eyebrow="Section F" title="Reference / How did you hear about us?" subtitle="Optional — helps us route your application faster." />
+      <SectionTitle
+        eyebrow="Section F"
+        title={locked ? "Reference (auto-filled)" : "Reference / How did you hear about us?"}
+        subtitle={locked
+          ? `Your application will be attributed to ${referrer.name}. You can still add a note below.`
+          : "Optional — helps us route your application faster."}
+      />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Reference Type">
-          <Select value={f.type} onValueChange={(v) => setField("reference", "type", v)}>
+          <Select value={f.type} onValueChange={(v) => setField("reference", "type", v)} disabled={locked}>
             <SelectTrigger data-testid="rf-type"><SelectValue /></SelectTrigger>
             <SelectContent>{REFERENCE_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         <Field label="Reference Name">
-          <Input value={f.name} onChange={(e) => setField("reference", "name", e.target.value)} placeholder="Person / office name" data-testid="rf-name" />
+          <Input value={f.name} onChange={(e) => setField("reference", "name", e.target.value)} placeholder="Person / office name" readOnly={locked} data-testid="rf-name" className={locked ? "bg-muted/40 cursor-not-allowed" : ""} />
         </Field>
         <Field label="Contact Number">
-          <Input value={f.contact_number} onChange={(e) => setField("reference", "contact_number", e.target.value.replace(/\D/g, "").slice(0, 10))} data-testid="rf-contact" />
+          <Input value={f.contact_number} onChange={(e) => setField("reference", "contact_number", e.target.value.replace(/\D/g, "").slice(0, 10))} readOnly={locked && !!f.contact_number} data-testid="rf-contact" className={locked && f.contact_number ? "bg-muted/40 cursor-not-allowed" : ""} />
         </Field>
         <Field label="Place">
-          <Input value={f.place} onChange={(e) => setField("reference", "place", e.target.value)} data-testid="rf-place" />
+          <Input value={f.place} onChange={(e) => setField("reference", "place", e.target.value)} readOnly={locked && !!f.place} data-testid="rf-place" className={locked && f.place ? "bg-muted/40 cursor-not-allowed" : ""} />
         </Field>
         <Field label="Additional Notes" wide>
           <Textarea rows={3} value={f.notes} onChange={(e) => setField("reference", "notes", e.target.value)} placeholder="Anything our admissions team should know" data-testid="rf-notes" />
@@ -408,14 +467,14 @@ function SectionTitle({ eyebrow, title, subtitle }) {
   return (
     <div className="mb-5">
       <p className="label-eyebrow">{eyebrow}</p>
-      <h2 className="font-display text-xl sm:text-2xl mt-1">{title}</h2>
-      {subtitle && <p className="text-xs text-muted-foreground mt-1.5">{subtitle}</p>}
+      <h2 className="font-display text-lg sm:text-2xl mt-1 leading-tight">{title}</h2>
+      {subtitle && <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>}
     </div>
   );
 }
 function Field({ label, required, wide, children }) {
   return (
-    <div className={wide ? "sm:col-span-2" : undefined}>
+    <div className={wide ? "sm:col-span-2 min-w-0" : "min-w-0"}>
       <Label className="text-xs">{label}{required && <span className="text-rose-600 ml-0.5">*</span>}</Label>
       <div className="mt-1.5">{children}</div>
     </div>
