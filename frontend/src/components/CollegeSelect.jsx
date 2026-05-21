@@ -124,9 +124,9 @@ export default function CollegeSelect({
             filtered.map((c) => (
               <button
                 type="button"
-                key={c.id}
+                key={c.id || c.name}
                 onClick={() => pick(c)}
-                data-testid={`${testid}-opt-${c.id}`}
+                data-testid={`${testid}-opt-${c.id || c.name}`}
                 className={`w-full text-left px-3 py-2 text-sm hover:bg-orange-500/10 hover:text-orange-700 dark:hover:text-orange-300 transition-colors flex items-start gap-2 ${
                   value === c.name ? "bg-orange-50/60 dark:bg-orange-500/10" : ""
                 }`}

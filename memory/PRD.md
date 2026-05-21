@@ -301,8 +301,20 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
+## Implementation status — 2026-02-21 (iteration 28: Colleges master-data catalogue + bulk CSV)
+- [x] **New "Colleges" page** (`/colleges`) for super admin only — Network section in sidebar (under Students, super_admin-gated). Amber/orange theme cards with name, place, course chips, edit/delete actions, search by name/place/course.
+- [x] **Backend**: `/api/colleges` router (GET — any authenticated user; POST/PATCH/DELETE — super_admin only). Case-insensitive duplicate guard via `name_lower` unique index. `POST /api/colleges/bulk` accepts CSV (`name,courses,place`) with `,` and `;` as course delimiters, skips blank rows + reports duplicates_sample. `GET /api/colleges/template` returns a downloadable sample CSV.
+- [x] **Public catalogue**: `GET /api/public/colleges` (unauthenticated) feeds the `/apply` form.
+- [x] **CollegeSelect** combobox (`/components/CollegeSelect.jsx`) — searchable Popover with options, accepts an optional preset list (used by the unauthenticated public form). Reused on 3 surfaces: (1) Students Add dialog, (2) StudentDetail edit header, (3) PublicApplication Step 2.
+- [x] **Smart course narrowing on /apply**: when a college is picked, the Interested Course dropdown narrows to only that college's offerings (falls back to the static course list if the college has no courses on file).
+- [x] **Backend tests** — new `tests/test_colleges.py` (8 tests: CRUD, duplicate guard, office_admin write block, bulk upload, template, public endpoint, non-CSV rejection). All pass.
+- [x] **Frontend regression** — iteration_22.json: 16/16 scenarios pass, no UI bugs, no integration issues. One LOW-priority React key warning surfaced + fixed (added `id` to public projection + defensive `key={c.id || c.name}`).
+
 ## Implementation status — 2026-02-20 (iteration 27: Convert-to-enrolled + PDF/form polish)
 - [x] **One-click "Convert to enrolled student"** — new `ConvertToEnrolledDialog` opens from Student Detail header *only when status === inquiry*. Captures SC amount, year-wise fees (year_1–4), optional scholarship, and enrollment date. On submit PATCHes the student (merging existing fields so `name/course/college/reference/notes` aren't wiped) → backend reconciles schedules from the fees_plan in one shot.
+- [x] **Application PDF — Sections E/F removed + tighter alignment** — strict 4-column layout (label 105pt, value 144pt), address spans full row, Academic columns rebalanced so "Percentage" no longer wraps.
+- [x] **Mobile form alignment fixes** on `/apply` — lighter padding, visible stepper labels, stacked Back/Continue buttons on mobile, sized-down section title.
+- [x] **Error toast hardening** on convert handler — Pydantic 422 details flattened to a string.
   - Live "Total fees after scholarship" preview inside the dialog.
   - Convert button auto-hides post-enrollment.
 - [x] **Application PDF — Sections E/F removed + tighter alignment**:

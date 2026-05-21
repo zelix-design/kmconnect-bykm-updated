@@ -220,6 +220,6 @@ public_router = APIRouter(prefix="/api/public", tags=["public"])
 async def public_colleges() -> dict:
     """Lightweight, unauthenticated catalogue used by the public application form."""
     items = await db.colleges.find(
-        {}, {"_id": 0, "name": 1, "courses": 1, "place": 1}
+        {}, {"_id": 0, "id": 1, "name": 1, "courses": 1, "place": 1}
     ).sort("name", 1).to_list(2000)
     return {"colleges": items}
