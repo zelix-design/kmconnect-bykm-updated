@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { parseStudentText, buildApplicationPayload } from "@/lib/parseStudentText";
 import CollegeSelect from "@/components/CollegeSelect";
+import { COLLEGE_PLACES } from "@/lib/places";
 
 const GENDERS = [
   { value: "male", label: "Male" },
@@ -81,6 +82,7 @@ export default function PasteApplicationDialog({ open, onOpenChange, onCreated }
   const [parsed, setParsed] = useState(null);
   const [unmatched, setUnmatched] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [pastePlace, setPastePlace] = useState("");
 
   const reset = () => { setStep("paste"); setRawText(""); setParsed(null); setUnmatched([]); };
   const close = () => { reset(); onOpenChange?.(false); };
@@ -274,16 +276,32 @@ export default function PasteApplicationDialog({ open, onOpenChange, onCreated }
             <div>
               <SectionHead icon={Books} eyebrow="Section B" title="Course" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Interested course" required>
-                  <Input value={parsed.course.interested_course} onChange={(e) => setCO("interested_course", e.target.value)} data-testid="pa-course" />
+                <Field label="Place / City">
+                  <Select
+                    value={pastePlace || "_all"}
+                    onValueChange={(v) => {
+                      const next = v === "_all" ? "" : v;
+                      setPastePlace(next);
+                    }}
+                  >
+                    <SelectTrigger data-testid="pa-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all">Any city</SelectItem>
+                      {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Preferred college">
                   <CollegeSelect
                     value={parsed.course.preferred_college}
                     onChange={(name) => setCO("preferred_college", name)}
                     testid="pa-college"
-                    placeholder="Pick a college"
+                    placeholder={pastePlace ? `Pick a college in ${pastePlace}` : "Pick a college"}
+                    placeFilter={pastePlace}
                   />
+                </Field>
+                <Field label="Interested course" required>
+                  <Input value={parsed.course.interested_course} onChange={(e) => setCO("interested_course", e.target.value)} data-testid="pa-course" />
                 </Field>
                 <Field label="Academic year">
                   <Input value={parsed.course.academic_year} onChange={(e) => setCO("academic_year", e.target.value)} placeholder="e.g. 2026-2027" data-testid="pa-year" />

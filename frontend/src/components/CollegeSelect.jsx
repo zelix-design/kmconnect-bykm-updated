@@ -22,6 +22,7 @@ export default function CollegeSelect({
   placeholder = "Pick a college",
   testid = "college-select",
   colleges: presetList,
+  placeFilter,
 }) {
   const [list, setList] = useState(presetList || []);
   const [loading, setLoading] = useState(!presetList);
@@ -40,14 +41,22 @@ export default function CollegeSelect({
   }, [presetList]);
 
   const filtered = useMemo(() => {
-    if (!q) return list;
+    let pool = list;
+    // Narrow by place if a filter is supplied. "Other" means "anything that
+    // isn't one of the 10 canonical cities" — but we keep it strict on equality
+    // for canonical names. The caller can pass an empty/null value to disable.
+    if (placeFilter) {
+      const target = placeFilter.toLowerCase();
+      pool = pool.filter((c) => (c.place || "").trim().toLowerCase() === target);
+    }
+    if (!q) return pool;
     const term = q.toLowerCase();
-    return list.filter((c) =>
+    return pool.filter((c) =>
       (c.name || "").toLowerCase().includes(term)
       || (c.place || "").toLowerCase().includes(term)
       || (c.courses || []).some((co) => co.toLowerCase().includes(term))
     );
-  }, [list, q]);
+  }, [list, q, placeFilter]);
 
   const pick = (c) => {
     onChange?.(c.name);

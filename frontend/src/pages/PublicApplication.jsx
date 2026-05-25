@@ -18,6 +18,7 @@ import {
   emptyApplication, validateStep,
 } from "@/lib/applicationSchema";
 import CollegeSelect from "@/components/CollegeSelect";
+import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 
 const ICONS = { User, GraduationCap, Phone, Books, Receipt, UserCircle };
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/public`;
@@ -276,10 +277,38 @@ function StepCourse({ app, setField, courses, colleges }) {
   const selectedCollege = (colleges || []).find((c) => c.name === f.preferred_college);
   const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
   const courseOptions = collegeCourses.length > 0 ? collegeCourses : courses;
+  // Place filter narrows the College dropdown to one city.
+  const [place, setPlace] = React.useState(() => {
+    if (!selectedCollege?.place) return "";
+    const norm = normalizePlace(selectedCollege.place);
+    return COLLEGE_PLACES.includes(norm) ? norm : "";
+  });
   return (
     <div>
       <SectionTitle eyebrow="Section B" title="Course & Admission" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Place / City">
+          <Select
+            value={place || "_all"}
+            onValueChange={(v) => {
+              const next = v === "_all" ? "" : v;
+              setPlace(next);
+              // If current college isn't in the new place, clear the selection
+              if (next && selectedCollege) {
+                const cnorm = normalizePlace(selectedCollege.place || "");
+                if (cnorm.toLowerCase() !== next.toLowerCase()) {
+                  setField("course", "preferred_college", "");
+                }
+              }
+            }}
+          >
+            <SelectTrigger data-testid="co-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">Any city</SelectItem>
+              {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </Field>
         <Field label="Preferred College">
           {(colleges?.length || 0) > 0 ? (
             <CollegeSelect
@@ -293,8 +322,9 @@ function StepCourse({ app, setField, courses, colleges }) {
                 }
               }}
               testid="co-college"
-              placeholder="Pick a college"
+              placeholder={place ? `Pick a college in ${place}` : "Pick a college"}
               colleges={colleges}
+              placeFilter={place}
             />
           ) : (
             <Select value={f.preferred_college} onValueChange={(v) => setField("course", "preferred_college", v)}>

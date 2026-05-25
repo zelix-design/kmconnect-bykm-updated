@@ -301,6 +301,22 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
+## Implementation status — 2026-02-25 (iteration 32: Place catalogue + Deal-with field)
+- [x] **10 partner cities** as a shared catalogue (`/lib/places.js`): Bangalore, Mangalore, Mysore, Erode, Salem, Coimbatore, Chennai, Kochi, Thrissur, Malappuram — plus an "Other" escape hatch.
+- [x] **Colleges page**:
+  - Place filter chips above the search, with per-city counts (e.g. "Bangalore 3 · Coimbatore 1 · Other 2").
+  - Add/Edit dialog now uses a Place Select (10 cities + Other) with an inline text input that appears for "Other".
+  - New **Deal with** text field captured into the model + bulk CSV (`deal_with` column).
+  - Card shows "Place · 👤 Deal with" line and the search box now matches deal-with too.
+  - `normalizePlace()` auto-tidies legacy aliases on next save (blr → Bangalore, mysuru → Mysore, cochin → Kochi, etc.).
+- [x] **Place-aware College pickers** — `CollegeSelect` accepts an optional `placeFilter` prop and narrows its options on the fly. Hooked up on:
+  - Public `/apply` Step 2 (new "Place / City" select sits before "Preferred College")
+  - Admin Paste Application dialog (Section B)
+  - Students Add dialog (new place row above Course/College)
+- [x] **Backend**: `CollegeIn.deal_with: Optional[str]`, persistence on POST/PATCH, CSV template + bulk upload now expose the column. Public projection includes `deal_with` so the apply form can see it.
+- [x] **Pytest** — all 44 existing tests still pass (no breaking changes to wire format).
+- [x] **E2E** — smoke verified: place chips work, Add dialog saves with place + deal_with, Bangalore filter narrows from 6 → 3 cards, public form's college picker honors the place selection.
+
 ## Implementation status — 2026-02-24 (iteration 31: complexity hotspot cleanup + Recharts memoization)
 - [x] Verified two **false-positive** claims from the automated report — `ruff F821/F823/F811` finds **zero** undefined Python variables; official `eslint-plugin-react-hooks/exhaustive-deps` finds **zero** missing dependencies. The report's heuristics were over-eager (flagging stable imports like `axios`, `URLSearchParams`, `api` as deps).
 - [x] **Refactored 4 genuine cyclomatic-complexity hotspots** with new pure helpers:

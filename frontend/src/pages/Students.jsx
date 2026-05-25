@@ -16,6 +16,7 @@ import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/compon
 import StudentCard from "@/components/students/StudentCard";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
+import { COLLEGE_PLACES } from "@/lib/places";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 
 const STATUS_OPTIONS = [
@@ -210,6 +211,26 @@ export default function Students() {
             </DialogHeader>
             <form onSubmit={submit} className="space-y-4">
               <div><Label>Student Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="st-name" /></div>
+              <div>
+                <Label>Place / City</Label>
+                <Select
+                  value={form.collegePlace || "_all"}
+                  onValueChange={(v) => {
+                    const next = v === "_all" ? "" : v;
+                    setForm((prev) => {
+                      const out = { ...prev, collegePlace: next };
+                      // Clear college if it isn't in the new place
+                      return out;
+                    });
+                  }}
+                >
+                  <SelectTrigger data-testid="st-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_all">Any city</SelectItem>
+                    {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Course</Label><Input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="B.Tech CSE" data-testid="st-course" /></div>
                 <div>
@@ -218,7 +239,8 @@ export default function Students() {
                     value={form.college}
                     onChange={(name) => setForm({ ...form, college: name })}
                     testid="st-college"
-                    placeholder="Pick a college"
+                    placeholder={form.collegePlace ? `Pick a college in ${form.collegePlace}` : "Pick a college"}
+                    placeFilter={form.collegePlace}
                   />
                 </div>
               </div>

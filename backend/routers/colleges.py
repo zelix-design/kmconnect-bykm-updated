@@ -27,6 +27,7 @@ class CollegeIn(BaseModel):
     name: str = Field(min_length=1)
     courses: List[str] = Field(default_factory=list)
     place: Optional[str] = ""
+    deal_with: Optional[str] = ""
 
 
 def _require_super_admin(user: dict) -> None:
@@ -76,6 +77,7 @@ async def create_college(payload: CollegeIn, user: dict = Depends(get_current_us
         "name_lower": name.lower(),
         "courses": _normalize_courses(payload.courses),
         "place": (payload.place or "").strip(),
+        "deal_with": (payload.deal_with or "").strip(),
         "created_at": now_iso(),
         "created_by": user["id"],
     }
@@ -99,6 +101,7 @@ async def update_college(college_id: str, payload: CollegeIn, user: dict = Depen
         "name_lower": name.lower(),
         "courses": _normalize_courses(payload.courses),
         "place": (payload.place or "").strip(),
+        "deal_with": (payload.deal_with or "").strip(),
         "updated_at": now_iso(),
     }
     res = await db.colleges.update_one({"id": college_id}, {"$set": patch})
@@ -122,9 +125,9 @@ async def csv_template(user: dict = Depends(get_current_user)) -> str:
     _require_super_admin(user)
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["name", "courses", "place"])
-    w.writerow(["ABC College of Engineering", "B.Tech CSE, B.Tech ECE, MBA", "Bangalore"])
-    w.writerow(["XYZ Institute of Science", "B.Sc Physics, B.Sc Chemistry", "Chennai"])
+    w.writerow(["name", "courses", "place", "deal_with"])
+    w.writerow(["ABC College of Engineering", "B.Tech CSE, B.Tech ECE, MBA", "Bangalore", "Mr. Ravi"])
+    w.writerow(["XYZ Institute of Science", "B.Sc Physics, B.Sc Chemistry", "Chennai", ""])
     return buf.getvalue()
 
 
@@ -139,12 +142,13 @@ def _decode_csv(raw: bytes) -> str:
         return raw.decode("latin-1", errors="ignore")
 
 
-def _resolve_headers(fieldnames: list[str] | None) -> tuple[str, str | None, str | None]:
+def _resolve_headers(fieldnames: list[str] | None) -> tuple[str, str | None, str | None, str | None]:
     """Map the user's CSV headers to our canonical column names, tolerating
-    capitalisation and accepting `course` / `location` as synonyms.
+    capitalisation and accepting ``course`` / ``location`` as synonyms.
 
-    Returns ``(name_header, courses_header, place_header)`` and raises 400 when
-    the mandatory ``name`` column is missing or the file has no header row."""
+    Returns ``(name_header, courses_header, place_header, deal_with_header)``
+    and raises 400 when the mandatory ``name`` column is missing or the file
+    has no header row."""
     if fieldnames is None:
         raise HTTPException(400, "CSV is empty")
     norm = {(h or "").strip().lower(): h for h in fieldnames}
@@ -153,7 +157,8 @@ def _resolve_headers(fieldnames: list[str] | None) -> tuple[str, str | None, str
         raise HTTPException(400, "CSV must include a 'name' column")
     courses_h = norm.get("courses") or norm.get("course")
     place_h = norm.get("place") or norm.get("location")
-    return name_h, courses_h, place_h
+    deal_h = norm.get("deal_with") or norm.get("dealwith") or norm.get("contact")
+    return name_h, courses_h, place_h, deal_h
 
 
 def _split_courses_cell(cell: str) -> list[str]:
@@ -166,7 +171,7 @@ def _split_courses_cell(cell: str) -> list[str]:
 
 
 def _build_college_doc(
-    *, raw_name: str, courses_cell: str, place: str, user_id: str,
+    *, raw_name: str, courses_cell: str, place: str, deal_with: str, user_id: str,
 ) -> dict:
     """Build the Mongo doc for a single CSV row (used by the bulk endpoint)."""
     return {
@@ -175,6 +180,7 @@ def _build_college_doc(
         "name_lower": raw_name.lower(),
         "courses": _normalize_courses(_split_courses_cell(courses_cell)),
         "place": (place or "").strip(),
+        "deal_with": (deal_with or "").strip(),
         "created_at": now_iso(),
         "created_by": user_id,
     }
@@ -208,7 +214,7 @@ async def bulk_upload(
         raise HTTPException(400, "Only .csv files are supported")
     text = _decode_csv(await file.read())
     reader = csv.DictReader(io.StringIO(text))
-    name_h, courses_h, place_h = _resolve_headers(reader.fieldnames)
+    name_h, courses_h, place_h, deal_h = _resolve_headers(reader.fieldnames)
 
     existing_lower = await _existing_name_set()
     seen_in_file: set[str] = set()
@@ -229,6 +235,7 @@ async def bulk_upload(
             raw_name=raw_name,
             courses_cell=str(row.get(courses_h) or "") if courses_h else "",
             place=str(row.get(place_h) or "") if place_h else "",
+            deal_with=str(row.get(deal_h) or "") if deal_h else "",
             user_id=user["id"],
         ))
         seen_in_file.add(lower)
@@ -256,6 +263,6 @@ public_router = APIRouter(prefix="/api/public", tags=["public"])
 async def public_colleges() -> dict:
     """Lightweight, unauthenticated catalogue used by the public application form."""
     items = await db.colleges.find(
-        {}, {"_id": 0, "id": 1, "name": 1, "courses": 1, "place": 1}
+        {}, {"_id": 0, "id": 1, "name": 1, "courses": 1, "place": 1, "deal_with": 1}
     ).sort("name", 1).to_list(2000)
     return {"colleges": items}

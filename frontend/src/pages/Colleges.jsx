@@ -11,11 +11,15 @@ import {
 } from "@/components/ui/dialog";
 import {
   Plus, PencilSimple, Trash, Buildings, MagnifyingGlass, UploadSimple,
-  DownloadSimple, CheckCircle, Warning, FileCsv,
+  DownloadSimple, CheckCircle, Warning, FileCsv, User,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { COLLEGE_PLACES, placeForSelect, normalizePlace } from "@/lib/places";
 
-const emptyForm = { name: "", courses: "", place: "" };
+const emptyForm = { name: "", courses: "", place: "", deal_with: "" };
 
 function CollegeCard({ c, onEdit, onDelete }) {
   return (
@@ -32,9 +36,18 @@ function CollegeCard({ c, onEdit, onDelete }) {
             <h3 className="font-display text-base font-semibold truncate" data-testid={`col-name-${c.id}`}>
               {c.name}
             </h3>
-            {c.place && (
-              <p className="text-xs text-muted-foreground mt-0.5">{c.place}</p>
-            )}
+            <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {c.place && <span data-testid={`col-place-${c.id}`}>{c.place}</span>}
+              {c.deal_with && (
+                <>
+                  {c.place && <span className="text-muted-foreground/40">·</span>}
+                  <span className="flex items-center gap-1" data-testid={`col-dealwith-${c.id}`}>
+                    <User size={11} weight="duotone" />
+                    {c.deal_with}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex gap-1 shrink-0">
@@ -85,9 +98,12 @@ export default function Colleges() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [placeFilter, setPlaceFilter] = useState(""); // "" = all
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [placeSelect, setPlaceSelect] = useState("");     // canonical or "Other"
+  const [placeOtherText, setPlaceOtherText] = useState(""); // when "Other" is picked
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkFile, setBulkFile] = useState(null);
   const [bulkResult, setBulkResult] = useState(null);
@@ -111,15 +127,22 @@ export default function Colleges() {
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setPlaceSelect("");
+    setPlaceOtherText("");
     setOpen(true);
   };
   const openEdit = (c) => {
     setEditing(c);
+    const norm = normalizePlace(c.place || "");
+    const isCanonical = COLLEGE_PLACES.includes(norm);
     setForm({
       name: c.name || "",
       courses: (c.courses || []).join(", "),
-      place: c.place || "",
+      place: isCanonical ? norm : norm,
+      deal_with: c.deal_with || "",
     });
+    setPlaceSelect(isCanonical ? norm : (norm ? "Other" : ""));
+    setPlaceOtherText(isCanonical ? "" : norm);
     setOpen(true);
   };
 
@@ -127,10 +150,15 @@ export default function Colleges() {
     e.preventDefault();
     const name = form.name.trim();
     if (!name) { toast.error("College name is required"); return; }
+    // Resolve final place value from the select + free-text fallback
+    const finalPlace = placeSelect === "Other"
+      ? placeOtherText.trim()
+      : (placeSelect || "");
     const payload = {
       name,
       courses: form.courses.split(",").map((s) => s.trim()).filter(Boolean),
-      place: form.place.trim(),
+      place: finalPlace,
+      deal_with: form.deal_with.trim(),
     };
     try {
       if (editing) {
@@ -212,14 +240,42 @@ export default function Colleges() {
   };
 
   const filtered = useMemo(() => {
-    if (!q) return list;
+    let pool = list;
+    if (placeFilter) {
+      if (placeFilter === "_other") {
+        pool = pool.filter((c) => {
+          const p = placeForSelect(c.place || "");
+          return p === "Other";
+        });
+      } else {
+        pool = pool.filter((c) =>
+          (c.place || "").trim().toLowerCase() === placeFilter.toLowerCase()
+        );
+      }
+    }
+    if (!q) return pool;
     const term = q.toLowerCase();
-    return list.filter((c) =>
+    return pool.filter((c) =>
       (c.name || "").toLowerCase().includes(term)
       || (c.place || "").toLowerCase().includes(term)
+      || (c.deal_with || "").toLowerCase().includes(term)
       || (c.courses || []).some((co) => co.toLowerCase().includes(term))
     );
-  }, [list, q]);
+  }, [list, q, placeFilter]);
+
+  // Per-place counts for the filter chips (rendered next to each city label).
+  const placeCounts = useMemo(() => {
+    const counts = { _all: list.length, _other: 0 };
+    for (const c of list) {
+      const bucket = placeForSelect(c.place || "");
+      if (bucket && bucket !== "Other" && COLLEGE_PLACES.includes(bucket)) {
+        counts[bucket] = (counts[bucket] || 0) + 1;
+      } else if (bucket === "Other") {
+        counts._other += 1;
+      }
+    }
+    return counts;
+  }, [list]);
 
   // Office admins read-only — they shouldn't even land here, but defense in depth.
   if (!isSuper) {
@@ -264,13 +320,58 @@ export default function Colleges() {
         </div>
       </header>
 
+      {/* Place filter chips */}
+      <div className="flex flex-wrap gap-2" data-testid="place-filter-chips">
+        <button
+          type="button"
+          onClick={() => setPlaceFilter("")}
+          data-testid="place-chip-all"
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+            placeFilter === ""
+              ? "bg-amber-gradient text-white border-transparent"
+              : "bg-card border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+          }`}
+        >
+          All <span className="opacity-70 ml-1">{placeCounts._all || 0}</span>
+        </button>
+        {COLLEGE_PLACES.map((city) => (
+          <button
+            key={city}
+            type="button"
+            onClick={() => setPlaceFilter(city)}
+            data-testid={`place-chip-${city.toLowerCase()}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              placeFilter === city
+                ? "bg-amber-gradient text-white border-transparent"
+                : "bg-card border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+            }`}
+          >
+            {city} <span className="opacity-70 ml-1">{placeCounts[city] || 0}</span>
+          </button>
+        ))}
+        {placeCounts._other > 0 && (
+          <button
+            type="button"
+            onClick={() => setPlaceFilter("_other")}
+            data-testid="place-chip-other"
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+              placeFilter === "_other"
+                ? "bg-amber-gradient text-white border-transparent"
+                : "bg-card border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground"
+            }`}
+          >
+            Other <span className="opacity-70 ml-1">{placeCounts._other}</span>
+          </button>
+        )}
+      </div>
+
       {/* Search */}
       <div className="relative max-w-md">
         <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name, place, or course"
+          placeholder="Search by name, place, course, or deal-with"
           className="pl-9 bg-card"
           data-testid="college-search"
         />
@@ -337,12 +438,43 @@ export default function Colleges() {
             </div>
             <div>
               <Label>Place</Label>
+              <Select
+                value={placeSelect || "_none"}
+                onValueChange={(v) => {
+                  if (v === "_none") { setPlaceSelect(""); setPlaceOtherText(""); }
+                  else setPlaceSelect(v);
+                }}
+              >
+                <SelectTrigger data-testid="col-place-select"><SelectValue placeholder="Pick a city" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {COLLEGE_PLACES.map((city) => (
+                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                  ))}
+                  <SelectItem value="Other">Other…</SelectItem>
+                </SelectContent>
+              </Select>
+              {placeSelect === "Other" && (
+                <Input
+                  value={placeOtherText}
+                  onChange={(e) => setPlaceOtherText(e.target.value)}
+                  placeholder="Type the place name"
+                  className="mt-2"
+                  data-testid="col-place-other"
+                />
+              )}
+            </div>
+            <div>
+              <Label>Deal with</Label>
               <Input
-                value={form.place}
-                onChange={(e) => setForm({ ...form, place: e.target.value })}
-                placeholder="Bangalore"
-                data-testid="col-place-input"
+                value={form.deal_with}
+                onChange={(e) => setForm({ ...form, deal_with: e.target.value })}
+                placeholder='e.g. "Mr. Ravi" or "John from Krupanidhi"'
+                data-testid="col-dealwith-input"
               />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Optional — the contact you usually liaise with at this college.
+              </p>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
