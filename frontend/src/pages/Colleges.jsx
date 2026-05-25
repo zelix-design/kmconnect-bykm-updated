@@ -22,9 +22,15 @@ import { COLLEGE_PLACES, placeForSelect, normalizePlace } from "@/lib/places";
 const emptyForm = { name: "", courses: "", place: "", deal_with: "" };
 
 function CollegeCard({ c, onEdit, onDelete }) {
+  const COLLAPSED_COUNT = 6;
+  const courses = c.courses || [];
+  const [showAll, setShowAll] = React.useState(false);
+  const visible = showAll ? courses : courses.slice(0, COLLAPSED_COUNT);
+  const hidden = Math.max(0, courses.length - visible.length);
+
   return (
     <Card
-      className="p-5 border border-border bg-card rounded-lg shadow-none hover:border-orange-500/40 transition-colors"
+      className="p-5 border border-border bg-card rounded-lg shadow-none hover:border-orange-500/40 transition-colors flex flex-col"
       data-testid={`col-card-${c.id}`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -71,21 +77,42 @@ function CollegeCard({ c, onEdit, onDelete }) {
       </div>
       <div className="mt-3">
         <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1.5">
-          Courses · {c.courses?.length || 0}
+          Courses · {courses.length}
         </p>
-        {c.courses?.length ? (
-          <div className="flex flex-wrap gap-1.5">
-            {c.courses.map((course, idx) => (
+        {courses.length === 0 ? (
+          <p className="text-xs text-muted-foreground italic">No courses listed</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {visible.map((course, idx) => (
               <span
                 key={`${c.id}-course-${idx}`}
                 className="px-2 py-0.5 rounded-full text-[11px] bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/20"
+                title={course}
               >
                 {course}
               </span>
             ))}
+            {hidden > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                data-testid={`col-show-more-${c.id}`}
+                className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-card border border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-colors"
+              >
+                + {hidden} more
+              </button>
+            )}
+            {showAll && courses.length > COLLAPSED_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAll(false)}
+                data-testid={`col-show-less-${c.id}`}
+                className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-card border border-border text-muted-foreground hover:border-orange-500/40 hover:text-foreground transition-colors"
+              >
+                Show less
+              </button>
+            )}
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">No courses listed</p>
         )}
       </div>
     </Card>
@@ -393,7 +420,7 @@ export default function Colleges() {
           <p className="label-eyebrow" data-testid="colleges-count-eyebrow">
             {filtered.length} {filtered.length === 1 ? "college" : "colleges"}
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="colleges-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start" data-testid="colleges-grid">
             {filtered.map((c) => (
               <CollegeCard key={c.id} c={c} onEdit={openEdit} onDelete={remove} />
             ))}
