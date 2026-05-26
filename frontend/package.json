@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@capacitor/android": "6",
+    "@capacitor/cli": "6",
+    "@capacitor/core": "6",
+    "@capacitor/ios": "6",
     "@hookform/resolvers": "^5.0.1",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-accordion": "^1.2.8",
@@ -63,7 +67,13 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "android:sync": "yarn build && cap sync android",
+    "android:open": "cap open android",
+    "android:run": "cap run android",
+    "android:build": "cd android && ./gradlew assembleRelease",
+    "ios:sync": "yarn build && cap sync ios",
+    "ios:open": "cap open ios"
   },
   "browserslist": {
     "production": [

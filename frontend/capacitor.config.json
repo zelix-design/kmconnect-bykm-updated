@@ -1,0 +1,33 @@
+{
+  "appId": "online.kmfoundation.finflow",
+  "appName": "FinFlow",
+  "webDir": "build",
+  "server": {
+    "url": "https://finflow-by-km-updated-2-mp4p.vercel.app",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#fff7ed",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "backgroundColor": "#fff7ed",
+    "scheme": "FinFlow",
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "backgroundColor": "#ea580c",
+      "showSpinner": false,
+      "splashFullScreen": true
+    },
+    "StatusBar": {
+      "style": "DEFAULT",
+      "backgroundColor": "#ea580c"
+    }
+  }
+}

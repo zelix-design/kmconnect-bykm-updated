@@ -1,0 +1,57 @@
+{
+  "name": "FinFlow by KM Foundation",
+  "short_name": "FinFlow",
+  "description": "Track every invoice, expense, and rupee across accounts. Built for founders, consultants and education agents who'd rather build than bookkeep.",
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#ea580c",
+  "background_color": "#fff7ed",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick entry",
+      "short_name": "Quick entry",
+      "description": "Log a credit or debit in one tap",
+      "url": "/quick-entry",
+      "icons": [{ "src": "/pwa-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Students",
+      "short_name": "Students",
+      "description": "Recent enrollments and fees",
+      "url": "/students",
+      "icons": [{ "src": "/pwa-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New invoice",
+      "short_name": "Invoice",
+      "description": "Draft a campus visit or service charge invoice",
+      "url": "/invoices",
+      "icons": [{ "src": "/pwa-icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
