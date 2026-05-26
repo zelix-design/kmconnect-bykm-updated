@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
 import AuthPage from "@/pages/AuthPage";
 import AppShell from "@/pages/AppShell";
@@ -77,6 +78,7 @@ export default function App() {
         </Routes>
         </BrowserRouter>
         <Toaster position="top-right" richColors />
+        <SpeedInsights />
       </AuthProvider>
     </ThemeProvider>
   );
