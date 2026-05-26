@@ -37,6 +37,14 @@ export default function PublicApplication() {
   useEffect(() => {
     const prevTitle = document.title;
     document.title = "Student Application Form";
+    // Swap the favicon → application-form icon on /apply, restore on unmount.
+    const iconEl = document.querySelector('link[rel="icon"]');
+    const appleEl = document.querySelector('link[rel="apple-touch-icon"]');
+    const prevIcon = iconEl?.getAttribute("href");
+    const prevApple = appleEl?.getAttribute("href");
+    const applyIcon = "/application-form-icon.png";
+    if (iconEl) iconEl.setAttribute("href", applyIcon);
+    if (appleEl) appleEl.setAttribute("href", applyIcon);
     axios.get(`${API}/courses`)
       .then((r) => setCourses(r.data?.courses || []))
       .catch((err) => {
@@ -49,7 +57,11 @@ export default function PublicApplication() {
         console.error("[apply] colleges fetch failed:", err?.message || err);
         setColleges([]);
       });
-    return () => { document.title = prevTitle; };
+    return () => {
+      document.title = prevTitle;
+      if (iconEl && prevIcon) iconEl.setAttribute("href", prevIcon);
+      if (appleEl && prevApple) appleEl.setAttribute("href", prevApple);
+    };
   }, []);
 
   // If the form was opened via a referral link (?ref=<client_id>), fetch the
