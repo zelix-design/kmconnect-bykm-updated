@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -34,7 +34,7 @@ export default function ClientDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get(`/clients/${id}/detail`);
@@ -45,8 +45,8 @@ export default function ClientDetail() {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  }, [id, nav]);
+  useEffect(() => { load(); }, [load]);
 
   if (loading || !data) {
     return <div className="p-8 text-sm text-muted-foreground" data-testid="loading">Loading…</div>;

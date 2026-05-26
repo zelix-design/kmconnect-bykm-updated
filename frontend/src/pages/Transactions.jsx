@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
@@ -26,7 +26,7 @@ export default function Transactions() {
   const [editing, setEditing] = useState(null);
   const [filterType, setFilterType] = useState("all");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = filterType !== "all" ? { type: filterType } : {};
     const [t, a, c] = await Promise.all([
       api.get("/transactions", { params }),
@@ -34,8 +34,8 @@ export default function Transactions() {
       api.get("/categories"),
     ]);
     setList(t.data); setAccounts(a.data); setCategories(c.data);
-  };
-  useEffect(() => { load(); }, [filterType]);
+  }, [filterType]);
+  useEffect(() => { load(); }, [load]);
 
   const accountMap = Object.fromEntries(accounts.map(a => [a.id, a]));
   const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
