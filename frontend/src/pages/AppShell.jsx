@@ -174,7 +174,14 @@ export default function AppShell() {
             onClick={() => setMobileOpen(false)}
             data-testid="mobile-drawer-overlay"
           />
-          <aside className="md:hidden fixed top-0 left-0 z-50 w-72 h-full bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] flex flex-col animate-fade-in" data-testid="mobile-drawer">
+          <aside
+            className="md:hidden fixed top-0 left-0 z-50 w-72 h-full bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] flex flex-col animate-fade-in"
+            style={{
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
+            data-testid="mobile-drawer"
+          >
             <SidebarContent user={user} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
           </aside>
         </>
@@ -184,9 +191,11 @@ export default function AppShell() {
       <main className="flex-1 min-w-0 flex flex-col">
         {/* Header */}
         <header
-          className="sticky top-0 z-30 h-16 bg-background/85 backdrop-blur-xl border-b border-border px-4 md:px-8 flex items-center justify-between gap-3"
+          className="sticky top-0 z-30 bg-background/85 backdrop-blur-xl border-b border-border"
+          style={{ paddingTop: "env(safe-area-inset-top)" }}
           data-testid="topbar"
         >
+          <div className="h-16 px-4 md:px-8 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -233,9 +242,13 @@ export default function AppShell() {
               </button>
             </div>
           </div>
+          </div>
         </header>
 
-        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-[1500px] w-full mx-auto">
+        <div
+          className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-[1500px] w-full mx-auto"
+          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1.5rem)" }}
+        >
           <Outlet />
         </div>
       </main>
