@@ -52,7 +52,7 @@ function initialsOf(name) {
   return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
 }
 
-function SidebarContent({ onItemClick, user }) {
+function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
   const navItems = ALL_NAV.filter((i) => {
     if (i.roles && !i.roles.includes(role)) return false;
@@ -95,6 +95,30 @@ function SidebarContent({ onItemClick, user }) {
           </NavLink>
         ))}
       </nav>
+
+      {/* Footer: user info + sign out (mobile drawer only — hidden on desktop where topbar handles it) */}
+      {onLogout && (
+        <div className="md:hidden border-t border-[hsl(var(--sidebar-border))] p-3 space-y-2 shrink-0">
+          <div className="flex items-center gap-3 px-2 py-1.5">
+            <div className="w-9 h-9 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0">
+              {initialsOf(user?.name).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[hsl(var(--sidebar-fg))] truncate" data-testid="drawer-user-name">{user?.name}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--sidebar-muted))] truncate">{user?.role?.replace("_", " ")}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            data-testid="drawer-logout-btn"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-sm font-medium transition-colors"
+          >
+            <SignOut size={16} weight="bold" />
+            Sign out
+          </button>
+        </div>
+      )}
     </>
   );
 }
@@ -151,7 +175,7 @@ export default function AppShell() {
             data-testid="mobile-drawer-overlay"
           />
           <aside className="md:hidden fixed top-0 left-0 z-50 w-72 h-full bg-[hsl(var(--sidebar-bg))] border-r border-[hsl(var(--sidebar-border))] flex flex-col animate-fade-in" data-testid="mobile-drawer">
-            <SidebarContent user={user} onItemClick={() => setMobileOpen(false)} />
+            <SidebarContent user={user} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
           </aside>
         </>
       )}
