@@ -256,69 +256,120 @@ export default function Invoices() {
         {list.length === 0 ? (
           <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-invoices">No invoices yet.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left bg-muted/40 border-b border-border">
-                  <th className="px-6 py-3 label-eyebrow">Invoice</th>
-                  <th className="px-6 py-3 label-eyebrow">Client / Student</th>
-                  <th className="px-6 py-3 label-eyebrow">Date</th>
-                  <th className="px-6 py-3 label-eyebrow">Status</th>
-                  <th className="px-6 py-3 label-eyebrow text-right">Total</th>
-                  <th className="px-6 py-3"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {list.map(inv => (
-                  <tr key={inv.id} className="hover:bg-muted/40" data-testid={`inv-row-${inv.id}`}>
-                    <td className="px-6 py-3.5">
-                      <p className="font-medium">{inv.invoice_number}</p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <>
+            {/* Mobile + tablet card list (up to lg breakpoint) */}
+            <div className="lg:hidden divide-y divide-border" data-testid="inv-mobile-list">
+              {list.map(inv => (
+                <div key={inv.id} className="p-4 space-y-2" data-testid={`inv-row-${inv.id}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{inv.invoice_number}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${inv.invoice_type === "service_charge" ? "bg-indigo-100/60 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400" : "bg-muted text-foreground"}`}>
                           {inv.invoice_type === "service_charge" ? "Service" : "Campus visit"}
                         </span>
-                        {inv.campus_visit_no && <p className="text-xs text-muted-foreground">Visit #{inv.campus_visit_no}</p>}
                         {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">Auto-logged</span>}
                       </div>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <p>{clientMap[inv.client_id]?.name || "—"}</p>
-                      {inv.student_name && <p className="text-xs text-muted-foreground">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}{inv.college ? ` · ${inv.college}` : ""}</p>}
-                      {inv.academic_year && <p className="text-xs text-muted-foreground/70">AY {inv.academic_year}</p>}
-                    </td>
-                    <td className="px-6 py-3.5 text-muted-foreground">{formatDate(inv.issue_date)}</td>
-                    <td className="px-6 py-3.5">
-                      <Select value={inv.status} onValueChange={(v) => updateStatus(inv.id, v)}>
-                        <SelectTrigger className={`h-7 w-28 text-xs ${STATUS_STYLES[inv.status]}`} data-testid={`inv-status-${inv.id}`}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="sent">Sent</SelectItem>
-                          <SelectItem value="paid">Paid</SelectItem>
-                          <SelectItem value="overdue">Overdue</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </td>
-                    <td className="px-6 py-3.5 text-right tabular-nums font-medium">{formatMoney(inv.total, currency)}</td>
-                    <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                    </div>
+                    <p className="text-sm font-semibold tabular-nums whitespace-nowrap">{formatMoney(inv.total, currency)}</p>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <p className="truncate">{clientMap[inv.client_id]?.name || "—"}</p>
+                    {inv.student_name && <p className="truncate">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}</p>}
+                    <p className="tabular-nums">{formatDate(inv.issue_date)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Select value={inv.status} onValueChange={(v) => updateStatus(inv.id, v)}>
+                      <SelectTrigger className={`h-7 w-28 text-xs ${STATUS_STYLES[inv.status]}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="sent">Sent</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-0.5">
                       <button onClick={async () => {
                         let payments = [];
                         try {
                           const { data } = await api.get(`/invoices/${inv.id}/payments`);
                           payments = data?.payments || [];
                         } catch (err) {
-                          // Non-fatal: PDF still generates from invoice.previous_sc_payment fallback.
                           console.error("[invoices] payments fetch failed:", err?.message || err);
                         }
                         downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user, payments });
-                      }} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
-                      <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
-                      <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
-                    </td>
+                      }} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
+                      <button onClick={() => openEdit(inv)} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                      <button onClick={() => remove(inv.id)} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop table (lg+) */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left bg-muted/40 border-b border-border">
+                    <th className="px-6 py-3 label-eyebrow">Invoice</th>
+                    <th className="px-6 py-3 label-eyebrow">Client / Student</th>
+                    <th className="px-6 py-3 label-eyebrow">Date</th>
+                    <th className="px-6 py-3 label-eyebrow">Status</th>
+                    <th className="px-6 py-3 label-eyebrow text-right">Total</th>
+                    <th className="px-6 py-3"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {list.map(inv => (
+                    <tr key={inv.id} className="hover:bg-muted/40">
+                      <td className="px-6 py-3.5">
+                        <p className="font-medium">{inv.invoice_number}</p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${inv.invoice_type === "service_charge" ? "bg-indigo-100/60 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-400" : "bg-muted text-foreground"}`}>
+                            {inv.invoice_type === "service_charge" ? "Service" : "Campus visit"}
+                          </span>
+                          {inv.campus_visit_no && <p className="text-xs text-muted-foreground">Visit #{inv.campus_visit_no}</p>}
+                          {inv.auto_log_expenses && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">Auto-logged</span>}
+                        </div>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <p>{clientMap[inv.client_id]?.name || "—"}</p>
+                        {inv.student_name && <p className="text-xs text-muted-foreground">{inv.student_name}{inv.course ? ` · ${inv.course}` : ""}{inv.college ? ` · ${inv.college}` : ""}</p>}
+                        {inv.academic_year && <p className="text-xs text-muted-foreground/70">AY {inv.academic_year}</p>}
+                      </td>
+                      <td className="px-6 py-3.5 text-muted-foreground">{formatDate(inv.issue_date)}</td>
+                      <td className="px-6 py-3.5">
+                        <Select value={inv.status} onValueChange={(v) => updateStatus(inv.id, v)}>
+                          <SelectTrigger className={`h-7 w-28 text-xs ${STATUS_STYLES[inv.status]}`} data-testid={`inv-status-${inv.id}`}><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="sent">Sent</SelectItem>
+                            <SelectItem value="paid">Paid</SelectItem>
+                            <SelectItem value="overdue">Overdue</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </td>
+                      <td className="px-6 py-3.5 text-right tabular-nums font-medium">{formatMoney(inv.total, currency)}</td>
+                      <td className="px-6 py-3.5 text-right whitespace-nowrap">
+                        <button onClick={async () => {
+                          let payments = [];
+                          try {
+                            const { data } = await api.get(`/invoices/${inv.id}/payments`);
+                            payments = data?.payments || [];
+                          } catch (err) {
+                            console.error("[invoices] payments fetch failed:", err?.message || err);
+                          }
+                          downloadInvoicePDF({ invoice: inv, client: clientMap[inv.client_id], user, payments });
+                        }} data-testid={`pdf-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5" title="Download PDF"><DownloadSimple size={16} /></button>
+                        <button onClick={() => openEdit(inv)} data-testid={`edit-inv-${inv.id}`} className="text-muted-foreground hover:text-foreground p-1.5"><PencilSimple size={16} /></button>
+                        <button onClick={() => remove(inv.id)} data-testid={`delete-inv-${inv.id}`} className="text-muted-foreground hover:text-rose-700 dark:text-rose-400 p-1.5"><Trash size={16} /></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
     </div>

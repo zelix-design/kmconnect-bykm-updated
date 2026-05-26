@@ -34,7 +34,7 @@ export default function PaymentDialog({
           <DialogDescription className="text-xs text-muted-foreground">Record a fee collection and (optionally) split into adjustments.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><Label>Date credited</Label><Input type="date" required value={state.form.date} onChange={(e) => setForm({ date: e.target.value })} data-testid="pay-date" /></div>
             <div>
               <Label>Schedule (optional)</Label>
@@ -49,7 +49,7 @@ export default function PaymentDialog({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Fee type</Label>
               <Select value={state.form.fee_type} onValueChange={(v) => setForm({ fee_type: v })}>

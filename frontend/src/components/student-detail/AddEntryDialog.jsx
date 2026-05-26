@@ -69,7 +69,7 @@ export default function AddEntryDialog({
                   </Select>
                   <Input className="mt-2" placeholder="Or type a custom label" value={f.schedule.label} onChange={(e) => updateSch({ label: e.target.value })} />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><Label>Amount</Label><Input type="number" step="0.01" required value={f.schedule.amount} onChange={(e) => updateSch({ amount: e.target.value })} data-testid="entry-sch-amount" /></div>
                   <div><Label>Due date</Label><Input type="date" value={f.schedule.due_date} onChange={(e) => updateSch({ due_date: e.target.value })} /></div>
                 </div>
@@ -107,7 +107,7 @@ export default function AddEntryDialog({
 
             {f.log_payment && (
               <div className="space-y-3 pt-1">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div><Label>Date credited</Label><Input type="date" required value={f.payment.date} onChange={(e) => updatePay({ date: e.target.value })} data-testid="entry-pay-date" /></div>
                   <div>
                     <Label>Fee type</Label>

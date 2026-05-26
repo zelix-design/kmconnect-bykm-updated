@@ -25,7 +25,7 @@ export default function NewRequestDialog({
           <DialogDescription>Submit for super-admin approval.</DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="kind">Kind</Label>
               <Select value={form.kind} onValueChange={(v) => setForm({ ...form, kind: v })}>
@@ -47,7 +47,7 @@ export default function NewRequestDialog({
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="amount">Amount</Label>
               <Input id="amount" type="number" min="0" step="0.01" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="req-amount" />

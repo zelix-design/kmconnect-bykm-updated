@@ -178,8 +178,8 @@ export default function AppShell() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="hidden md:flex relative w-64 lg:w-80">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
+            <div className="hidden lg:flex relative w-64 xl:w-80">
               <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
@@ -190,11 +190,11 @@ export default function AppShell() {
             </div>
             <NotificationsBell />
             <ThemeToggle />
-            <div className="flex items-center gap-2.5 pl-3 ml-1 border-l border-border h-8">
+            <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
               <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0" data-testid="topbar-avatar">
                 {initialsOf(user?.name).toUpperCase()}
               </div>
-              <div className="hidden md:block min-w-0">
+              <div className="hidden lg:block min-w-0">
                 <p className="text-xs font-medium leading-tight truncate max-w-[140px]" data-testid="topbar-user-name">{user?.name}</p>
                 <p className="text-[10px] text-muted-foreground leading-tight">{user?.business_name || user?.currency || "USD"}</p>
               </div>
@@ -203,7 +203,7 @@ export default function AppShell() {
                 onClick={handleLogout}
                 data-testid="logout-btn"
                 title="Sign out"
-                className="ml-1 w-9 h-9 rounded-full bg-muted/60 hover:bg-rose-500/15 text-foreground hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center transition-colors"
+                className="ml-0.5 sm:ml-1 w-9 h-9 rounded-full bg-muted/60 hover:bg-rose-500/15 text-foreground hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center transition-colors"
               >
                 <SignOut size={16} />
               </button>
@@ -211,7 +211,7 @@ export default function AppShell() {
           </div>
         </header>
 
-        <div className="px-5 sm:px-8 lg:px-10 py-8 max-w-[1500px] w-full mx-auto">
+        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-[1500px] w-full mx-auto">
           <Outlet />
         </div>
       </main>

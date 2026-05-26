@@ -301,7 +301,15 @@
 - [x] **Backend** `routers/applications.py`: `POST /api/public/applications` (creates student row owned by first super-admin, status=`inquiry`, full application payload preserved under `application` sub-doc, optional registration_amount auto-logged), `GET /api/public/courses`.
 - [x] **Admin surface**: "FROM ONLINE APPLICATION" badge, "Application PDF" button, "Share application link" button on Students page header.
 
-## Implementation status — 2026-02-25 (iteration 32: Place catalogue + Deal-with field)
+## Implementation status — 2026-02-26 (iteration 33: Mobile + tablet responsiveness sweep)
+- [x] **Dialogs mobile-safe**: `dialog.jsx` width clamped to `calc(100vw - 1.5rem)`, padding stepped (`p-4 sm:p-6`), `max-h-[calc(100dvh-2rem)] overflow-y-auto` so long forms scroll inside the modal. Rounded corners now apply at all sizes.
+- [x] **Tables → card lists on mobile + tablet (≤ lg, 1024px)** — Transactions and Invoices pages render the original table on desktop, but switch to a stacked card list below `lg`. Cards show all essential columns (description/amount/date/account/category for tx; invoice/total/client/student/status/actions for invoices) without horizontal scroll.
+- [x] **Topbar squeeze fix**: search bar now hidden until `lg` (was `md`), username/business line hidden until `lg`, gaps tightened from `gap-3` → `gap-1.5 sm:gap-2 md:gap-3`. Username no longer collides with avatar on 768px tablet view.
+- [x] **Page padding tuned for mobile**: AppShell content `px-5 sm:px-8 lg:px-10 py-8` → `px-4 sm:px-6 lg:px-10 py-6 sm:py-8`.
+- [x] **Form grids stack on mobile**: changed `grid-cols-2 gap-3` → `grid-cols-1 sm:grid-cols-2 gap-3` in Students Add dialog, Transactions dialog, Clients dialog (Email/Phone, Office/DoB), PaymentDialog, AddEntryDialog, NewRequestDialog.
+- [x] **ClientDetail & StudentDetail tables**: wrapped in `overflow-x-auto` with `min-w-[640px]`/`min-w-[800px]` so they scroll cleanly on narrow viewports instead of squishing.
+- [x] Public `/apply` form, OfficeDashboard, Accounts grid, Users page, Categories already responsive — verified unchanged.
+- [x] **Verified visually** at 375px (iPhone SE), 390px (iPhone 13), 600px, 768px (iPad portrait), 1024px (small laptop), 1440px (desktop). Desktop layout untouched.
 - [x] **10 partner cities** as a shared catalogue (`/lib/places.js`): Bangalore, Mangalore, Mysore, Erode, Salem, Coimbatore, Chennai, Kochi, Thrissur, Malappuram — plus an "Other" escape hatch.
 - [x] **Colleges page**:
   - Place filter chips above the search, with per-city counts (e.g. "Bangalore 3 · Coimbatore 1 · Other 2").

@@ -338,7 +338,8 @@ export default function StudentDetail() {
         {(!s.schedules || s.schedules.length === 0) ? (
           <div className="p-10 text-center text-sm text-muted-foreground" data-testid="empty-schedules">No schedules yet.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left bg-muted/40 border-b border-border">
                 <th className="px-6 py-3 label-eyebrow">Schedule</th>
@@ -368,6 +369,7 @@ export default function StudentDetail() {
               </tr>
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -385,7 +387,8 @@ export default function StudentDetail() {
         {(!s.payments || s.payments.length === 0) ? (
           <div className="p-10 text-center text-sm text-muted-foreground" data-testid="empty-payments">No payments logged yet.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[800px]">
             <thead>
               <tr className="text-left bg-muted/40 border-b border-border">
                 <th className="px-6 py-3 label-eyebrow w-8"></th>
@@ -464,6 +467,7 @@ export default function StudentDetail() {
               </tr>
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 

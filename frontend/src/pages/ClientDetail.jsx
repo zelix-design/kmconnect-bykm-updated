@@ -156,7 +156,8 @@ export default function ClientDetail() {
         {data.students.length === 0 ? (
           <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-client-students">No students linked yet.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="text-left bg-muted/40 border-b border-border">
                 <th className="px-6 py-3 label-eyebrow">Student</th>
@@ -220,6 +221,7 @@ export default function ClientDetail() {
               </tr>
             </tbody>
           </table>
+          </div>
         )}
       </Card>
 
@@ -235,7 +237,8 @@ export default function ClientDetail() {
               No transactions tagged to this client yet.
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left bg-muted/40 border-b border-border">
                   <th className="px-6 py-3 label-eyebrow">Date</th>
@@ -267,6 +270,7 @@ export default function ClientDetail() {
                 </tr>
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       )}
