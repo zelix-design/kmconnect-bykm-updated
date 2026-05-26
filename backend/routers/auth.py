@@ -51,7 +51,7 @@ async def register(payload: RegisterIn):
     }
 
 
-@router.post("/login", response_model=UserOut)
+@router.post("/login")
 async def login(payload: LoginIn, response: Response):
     email = payload.email.lower().strip()
     try:
@@ -72,7 +72,10 @@ async def login(payload: LoginIn, response: Response):
         set_auth_cookie(response, token)
         user.pop("password_hash", None)
         user.pop("_id", None)
-        return user
+        # Return the JWT in the body too, so cross-origin deployments (Vercel
+        # frontend + Railway backend) where Chrome blocks third-party cookies
+        # can fall back to Authorization: Bearer auth via localStorage.
+        return {**user, "access_token": token}
     except HTTPException:
         raise
     except Exception as exc:  # log opaque crashes so prod ops can debug

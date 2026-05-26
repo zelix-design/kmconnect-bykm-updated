@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import api, { formatApiError } from "./api";
+import api, { formatApiError, setStoredToken } from "./api";
 
 const AuthContext = createContext(null);
 
@@ -38,7 +38,12 @@ export function AuthProvider({ children }) {
     setError("");
     try {
       const { data } = await api.post("/auth/login", { email, password });
-      setUser(data);
+      // Backend returns the JWT in the body alongside the user object so
+      // cross-origin deploys (where Chrome blocks third-party cookies) can
+      // fall back to Authorization: Bearer auth.
+      if (data?.access_token) setStoredToken(data.access_token);
+      const { access_token: _t, ...rest } = data || {};
+      setUser(rest);
       return true;
     } catch (e) {
       setError(formatApiError(e.response?.data?.detail) || e.message);
@@ -66,6 +71,7 @@ export function AuthProvider({ children }) {
       // the local session so the user isn't stuck.
       console.error("[auth] logout failed:", err?.message || err);
     }
+    setStoredToken(null);
     setUser(false);
   };
 
