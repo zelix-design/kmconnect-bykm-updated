@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
 import NotificationsBell from "@/components/NotificationsBell";
+import BottomNav from "@/components/BottomNav";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
@@ -245,13 +246,11 @@ export default function AppShell() {
           </div>
         </header>
 
-        <div
-          className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 max-w-[1500px] w-full mx-auto"
-          style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1.5rem)" }}
-        >
+        <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-28 md:pb-12 max-w-[1500px] w-full mx-auto">
           <Outlet />
         </div>
       </main>
+      <BottomNav />
     </div>
   );
 }

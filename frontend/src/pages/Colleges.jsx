@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -150,6 +151,19 @@ export default function Colleges() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  // Deep-link: ?add=1 (from the mobile bottom-nav "+" Quick Add menu) auto-opens
+  // the Add college dialog.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("add") === "1") {
+      openCreate();
+      const next = new URLSearchParams(searchParams);
+      next.delete("add");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const openCreate = () => {
     setEditing(null);

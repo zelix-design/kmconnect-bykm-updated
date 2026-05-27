@@ -48,7 +48,13 @@ export default function AuthPage({ mode }) {
   };
 
   return (
-    <div className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-5 bg-background text-foreground">
+    <div
+      className="min-h-screen w-full grid grid-cols-1 lg:grid-cols-5 bg-background text-foreground"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
       {/* Hero — amber gradient side */}
       <div className="relative hidden lg:flex lg:col-span-2 flex-col justify-between p-12 overflow-hidden bg-amber-gradient text-white">
         {/* Decorative blobs */}
