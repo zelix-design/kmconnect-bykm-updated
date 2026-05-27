@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -182,6 +181,10 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
           )}
 
           {tab === "course" && (() => {
+            // Cascade: Place → filters Colleges → that College's courses
+            const collegesInPlace = place
+              ? colleges.filter((c) => normalizePlace(c.place || "").toLowerCase() === place.toLowerCase())
+              : colleges;
             const selectedCollege = colleges.find((c) => c.name === form.course.preferred_college);
             const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
             const courseOptions = collegeCourses.length > 0 ? collegeCourses : courses;
@@ -193,63 +196,88 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
                     onValueChange={(v) => {
                       const next = v === "_all" ? "" : v;
                       setPlace(next);
-                      // If current college isn't in the new place, clear it
+                      // If the current college isn't in the new place, clear it (and the course)
                       if (next && selectedCollege) {
                         const cnorm = normalizePlace(selectedCollege.place || "");
                         if (cnorm.toLowerCase() !== next.toLowerCase()) {
                           set("course", "preferred_college", "");
+                          set("course", "interested_course", "");
                         }
                       }
                     }}
                   >
-                    <SelectTrigger data-testid="edit-co-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+                    <SelectTrigger data-testid="edit-co-place">
+                      <SelectValue placeholder="Any city" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="_all">Any city</SelectItem>
                       {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>
+
                 <Field label="Preferred College">
-                  <CollegeSelect
-                    value={form.course.preferred_college}
-                    onChange={(name) => {
+                  <Select
+                    value={form.course.preferred_college || ""}
+                    onValueChange={(name) => {
                       set("course", "preferred_college", name);
-                      // Reset the course if the new college doesn't offer it
+                      // If the picked college doesn't offer the current course, clear it
                       const nextCollege = colleges.find((c) => c.name === name);
                       if (
                         nextCollege &&
                         form.course.interested_course &&
+                        (nextCollege.courses || []).length > 0 &&
                         !(nextCollege.courses || []).includes(form.course.interested_course)
                       ) {
                         set("course", "interested_course", "");
                       }
                     }}
-                    testid="edit-co-college"
-                    placeholder={place ? `Pick a college in ${place}` : "Pick a college"}
-                    colleges={colleges}
-                    placeFilter={place}
-                  />
+                  >
+                    <SelectTrigger data-testid="edit-co-college">
+                      <SelectValue placeholder={place ? `Pick a college in ${place}` : "Pick a college"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {collegesInPlace.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                          No colleges {place ? `in ${place}` : "in the catalogue"} yet.
+                        </div>
+                      ) : (
+                        collegesInPlace.map((c) => (
+                          <SelectItem key={c.id || c.name} value={c.name}>
+                            {c.name}
+                            {c.place ? <span className="text-muted-foreground"> · {c.place}</span> : null}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </Field>
+
                 <Field label="Interested course" required>
-                  {courseOptions.length > 0 ? (
-                    <Select value={form.course.interested_course} onValueChange={(v) => set("course", "interested_course", v)}>
-                      <SelectTrigger data-testid="edit-co-course"><SelectValue placeholder="Pick a course" /></SelectTrigger>
-                      <SelectContent>
-                        {courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      value={form.course.interested_course}
-                      onChange={(e) => set("course", "interested_course", e.target.value)}
-                      placeholder="Type the course"
-                      data-testid="edit-co-course"
-                    />
-                  )}
+                  <Select
+                    value={form.course.interested_course || ""}
+                    onValueChange={(v) => set("course", "interested_course", v)}
+                    disabled={courseOptions.length === 0}
+                  >
+                    <SelectTrigger data-testid="edit-co-course">
+                      <SelectValue placeholder={
+                        selectedCollege ? "Pick a course" : "Pick a college first"
+                      } />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courseOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">No courses listed.</div>
+                      ) : (
+                        courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)
+                      )}
+                    </SelectContent>
+                  </Select>
                 </Field>
+
                 <Field label="Academic year">
                   <Input value={form.course.academic_year} onChange={(e) => set("course", "academic_year", e.target.value)} placeholder="e.g. 2026-2027" data-testid="edit-co-year" />
                 </Field>
+
                 <Field label="Admission type">
                   <Select value={form.course.admission_type} onValueChange={(v) => set("course", "admission_type", v)}>
                     <SelectTrigger data-testid="edit-co-admission"><SelectValue /></SelectTrigger>
