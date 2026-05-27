@@ -9,15 +9,21 @@ Students page.
 Extra application data (parents, address, academic records, payment, reference)
 is preserved as a nested ``application`` sub-document on the student doc.
 """
+import logging
+import os
 from typing import Optional, Literal
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 
 from db import db
 from auth_lib import gen_id, now_iso, get_current_user
+from lib.application_pdf import render_application_pdf
+from lib.email_notifier import send_email, application_email_html
 
 # Re-use the notifier so super-admins get pinged in real time.
 from routers.notifications import notify_super_admins
+
+log = logging.getLogger("finflow.applications")
 
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -194,6 +200,26 @@ async def submit_application(payload: ApplicationIn) -> dict:
         )
     except Exception:  # pragma: no cover — best-effort
         pass
+    # Email notification with the Application PDF attached. Best-effort: never
+    # block or fail the public submit endpoint if the email pipeline is down.
+    recipient = os.environ.get("APPLICATION_NOTIFY_EMAIL")
+    if recipient:
+        try:
+            pdf_bytes = render_application_pdf(doc)
+            safe_name = "".join(
+                ch if ch.isalnum() or ch in " -_" else "_"
+                for ch in (payload.basic_info.student_full_name or "applicant")
+            ).strip() or "applicant"
+            filename = f"{safe_name} - Application - {doc['application_submitted_at'][:10]}.pdf"
+            await send_email(
+                to=recipient,
+                subject=f"New application · {payload.basic_info.student_full_name}",
+                html=application_email_html(doc),
+                attachments=[{"filename": filename, "content": pdf_bytes}],
+                reply_to=str(payload.basic_info.email) if payload.basic_info.email else None,
+            )
+        except Exception as exc:  # pragma: no cover — best-effort
+            log.warning("[applications] email notification failed: %s", exc)
     return {
         "id": doc["id"],
         "reference_code": doc["id"][:8].upper(),
