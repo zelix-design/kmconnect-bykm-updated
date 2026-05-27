@@ -11,6 +11,7 @@ from auth_lib import (
 )
 from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISSIONS
 from seed import seed_user_defaults
+from routers.notifications import notify_super_admins
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 log = logging.getLogger("auth")
@@ -44,6 +45,17 @@ async def register(payload: RegisterIn):
     await db.users.insert_one(doc)
     # Seed defaults so the office admin has accounts/categories ready upon approval
     await seed_user_defaults(user_id)
+    # Notify super admins that someone is waiting for approval
+    try:
+        await notify_super_admins(
+            type="user_registration",
+            title="New staff awaiting approval",
+            message=f"{payload.name} ({email}) · Office: {payload.office}",
+            link="/users?tab=pending",
+            metadata={"user_id": user_id, "office": payload.office},
+        )
+    except Exception:  # pragma: no cover — best-effort
+        pass
     return {
         "ok": True,
         "approval_status": "pending",

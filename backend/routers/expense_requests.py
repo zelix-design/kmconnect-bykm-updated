@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import ExpenseRequestIn, ExpenseRequestApproval, ExpenseRequestRejection
-from routers.notifications import notify_super_admins
+from routers.notifications import notify_super_admins, notify_users
+from lib.push import office_admin_user_ids_for_office
 
 router = APIRouter(prefix="/api/expense-requests", tags=["expense-requests"])
 
@@ -66,6 +67,23 @@ async def create_request(payload: ExpenseRequestIn, user: dict = Depends(require
         actor_user_id=user["id"],
         metadata={"request_id": doc["id"], "amount": payload.amount, "kind": payload.kind, "urgency": payload.urgency},
     )
+    # Also notify other office admins from the same office (so colleagues are
+    # aware of pending requests from their office). Skips the requester.
+    try:
+        office_admins = await office_admin_user_ids_for_office(user.get("office"))
+        if office_admins:
+            await notify_users(
+                office_admins,
+                type="expense_request",
+                title=f"{kind_label} from your office",
+                message=f"{user.get('name', 'A colleague')} requested ₹{payload.amount:,.0f}"
+                        f"{' · URGENT' if payload.urgency == 'urgent' else ''}",
+                link="/expense-requests",
+                actor_user_id=user["id"],
+                metadata={"request_id": doc["id"], "amount": payload.amount},
+            )
+    except Exception:  # pragma: no cover — best-effort
+        pass
     return doc
 
 
@@ -128,6 +146,18 @@ async def approve_request(req_id: str, payload: ExpenseRequestApproval, user: di
         patch["decision_note"] = payload.note
     await db.expense_requests.update_one({"id": req_id}, {"$set": patch})
     fresh = await db.expense_requests.find_one({"id": req_id}, {"_id": 0})
+    # Notify the requester (office admin) that their request was approved
+    kind_label = "Salary request" if req.get("kind") == "salary" else "Expense request"
+    await notify_users(
+        [req["requested_by_user_id"]],
+        type="expense_request_approved",
+        title=f"{kind_label} approved",
+        message=f"₹{req['amount']:,.0f} approved by {user.get('name', 'super admin')}"
+                f"{' · ' + payload.note if payload.note else ''}",
+        link="/expense-requests",
+        actor_user_id=user["id"],
+        metadata={"request_id": req_id, "amount": req["amount"]},
+    )
     return fresh
 
 
@@ -149,4 +179,16 @@ async def reject_request(req_id: str, payload: ExpenseRequestRejection, user: di
         patch["decision_note"] = payload.note
     await db.expense_requests.update_one({"id": req_id}, {"$set": patch})
     fresh = await db.expense_requests.find_one({"id": req_id}, {"_id": 0})
+    # Notify the requester that their request was rejected
+    kind_label = "Salary request" if req.get("kind") == "salary" else "Expense request"
+    await notify_users(
+        [req["requested_by_user_id"]],
+        type="expense_request_rejected",
+        title=f"{kind_label} rejected",
+        message=f"₹{req['amount']:,.0f} rejected by {user.get('name', 'super admin')}"
+                f"{' · ' + payload.note if payload.note else ''}",
+        link="/expense-requests",
+        actor_user_id=user["id"],
+        metadata={"request_id": req_id, "amount": req["amount"]},
+    )
     return fresh

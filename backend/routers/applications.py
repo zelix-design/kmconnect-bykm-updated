@@ -306,3 +306,32 @@ async def admin_submit_application(payload: ApplicationIn, user: dict = Depends(
         "reference_code": doc["id"][:8].upper(),
         "submitted_at": doc["application_submitted_at"],
     }
+
+
+@admin_router.patch("/{student_id}", status_code=200)
+async def update_application(student_id: str, payload: ApplicationIn, user: dict = Depends(get_current_user)) -> dict:
+    """Replace the ``application`` sub-document on an existing student.
+
+    Super-admin only. Mirrors the same payload shape as the public submit so
+    edits flow back into the same fields the PDF generator reads. Top-level
+    student fields (name, course, college, reference) are kept in sync with
+    the application's basic_info / course / reference.
+    """
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    student = await db.students.find_one({"id": student_id})
+    if not student:
+        raise HTTPException(404, "Student not found")
+    patch = {
+        "application": payload.model_dump(),
+        "name": payload.basic_info.student_full_name,
+        "course": payload.course.interested_course,
+        "college": payload.course.preferred_college or "",
+        "reference": payload.reference.name or "",
+        "application_updated_at": now_iso(),
+    }
+    if (student.get("notes") or "").strip() == "" and payload.reference.notes:
+        patch["notes"] = (payload.reference.notes or "").strip()
+    await db.students.update_one({"id": student_id}, {"$set": patch})
+    fresh = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return fresh

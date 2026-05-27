@@ -3,8 +3,10 @@
 //   - Cache the app shell (HTML, CSS, JS, icons) on first load.
 //   - Network-first for everything (so users always get fresh data when online).
 //   - Fall back to cache when offline so the shell still loads.
+//   - Handle Web Push events → show OS-level notifications even when the app
+//     is closed.
 
-const CACHE = "finflow-shell-v1";
+const CACHE = "finflow-shell-v2";
 const SHELL = [
   "/",
   "/manifest.json",
@@ -31,12 +33,10 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  // Never cache API calls — always go to the network.
   if (req.method !== "GET" || req.url.includes("/api/")) return;
   event.respondWith(
     fetch(req)
       .then((res) => {
-        // Cache successful same-origin GETs for future offline fallback.
         if (res.ok && new URL(req.url).origin === self.location.origin) {
           const clone = res.clone();
           caches.open(CACHE).then((c) => c.put(req, clone));
@@ -44,5 +44,45 @@ self.addEventListener("fetch", (event) => {
         return res;
       })
       .catch(() => caches.match(req).then((r) => r || caches.match("/"))),
+  );
+});
+
+// ── Web Push ─────────────────────────────────────────────────────────────
+// Payload shape pushed by the server (see backend/lib/push.py):
+//   { title, body, url, tag, icon, badge }
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) { /* not JSON */ }
+  const title = data.title || "FinFlow";
+  const options = {
+    body: data.body || "",
+    icon: data.icon || "/pwa-icon-192.png",
+    badge: data.badge || "/finflow-icon.png",
+    tag: data.tag || "finflow",
+    data: { url: data.url || "/" },
+    renotify: false,
+    requireInteraction: false,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    (async () => {
+      const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const c of clientsList) {
+        try {
+          if (c.url && "focus" in c) {
+            await c.focus();
+            if ("navigate" in c) await c.navigate(url);
+            return;
+          }
+        } catch (_) { /* ignore */ }
+      }
+      await self.clients.openWindow(url);
+    })(),
   );
 });

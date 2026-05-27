@@ -3,8 +3,16 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
-  Bell, Check, ReceiptX, Receipt, GraduationCap, Trash, BellSlash,
+  isPushSupported,
+  permissionState,
+  subscribeToPush,
+  unsubscribeFromPush,
+  currentSubscription,
+} from "@/lib/push";
+import {
+  Bell, Check, ReceiptX, Receipt, GraduationCap, Trash, BellSlash, BellRinging,
 } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 const TYPE_ICON = {
   expense_request: { icon: ReceiptX, palette: "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400" },
@@ -154,15 +162,18 @@ export default function NotificationsBell() {
                 {unread > 0 ? `${unread} unread` : "All caught up"}
               </p>
             </div>
-            {unread > 0 && (
-              <button
-                onClick={onMarkAll}
-                data-testid="notifications-mark-all"
-                className="text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 inline-flex items-center gap-1"
-              >
-                <Check size={12} weight="bold" /> Mark all read
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <PushToggle />
+              {unread > 0 && (
+                <button
+                  onClick={onMarkAll}
+                  data-testid="notifications-mark-all"
+                  className="text-xs text-orange-600 dark:text-orange-400 hover:text-orange-700 inline-flex items-center gap-1"
+                >
+                  <Check size={12} weight="bold" /> Mark all read
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List */}
@@ -221,5 +232,61 @@ export default function NotificationsBell() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Tiny toggle that flips the device's Web Push subscription on/off. */
+function PushToggle() {
+  const [supported] = useState(() => isPushSupported());
+  const [enabled, setEnabled] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supported) return;
+      const sub = await currentSubscription();
+      if (!cancelled) setEnabled(!!sub && permissionState() === "granted");
+    })();
+    return () => { cancelled = true; };
+  }, [supported]);
+
+  if (!supported) return null;
+
+  const onClick = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (enabled) {
+        await unsubscribeFromPush();
+        setEnabled(false);
+        toast.success("Push notifications turned off on this device");
+      } else {
+        await subscribeToPush();
+        setEnabled(true);
+        toast.success("Push notifications enabled");
+      }
+    } catch (e) {
+      toast.error(e?.message || "Couldn't update push subscription");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid="push-toggle"
+      title={enabled ? "Push notifications: ON (click to disable)" : "Enable push notifications on this device"}
+      className={`inline-flex items-center gap-1 text-xs rounded-full px-2.5 py-1 transition-colors ${
+        enabled
+          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/25"
+          : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+      }`}
+    >
+      <BellRinging size={12} weight={enabled ? "fill" : "regular"} />
+      {enabled ? "On" : "Enable"}
+    </button>
   );
 }

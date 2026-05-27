@@ -30,6 +30,7 @@ export default function HeaderCard({
   onAddEntry,
   onExportPdf,
   onExportApplicationPdf,
+  onEditApplication,
   onConvertToEnrolled,
 }) {
   return (
@@ -132,6 +133,11 @@ export default function HeaderCard({
             {(s.application_source === "public_form" || s.application_source === "admin_paste") && s.application && (
               <Button variant="outline" onClick={onExportApplicationPdf} data-testid="export-application-pdf">
                 <ClipboardText size={14} className="mr-1.5" /> Application PDF
+              </Button>
+            )}
+            {(s.application_source === "public_form" || s.application_source === "admin_paste") && s.application && onEditApplication && (
+              <Button variant="outline" onClick={onEditApplication} data-testid="edit-application-btn">
+                <PencilSimple size={14} className="mr-1.5" /> Edit application
               </Button>
             )}
             <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-header"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>

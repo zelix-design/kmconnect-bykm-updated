@@ -16,6 +16,7 @@ import { downloadApplicationPdf } from "@/lib/applicationPdf";
 import ConvertToEnrolledDialog from "@/components/student-detail/ConvertToEnrolledDialog";
 import { feesPlanFromApi, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import HeaderCard from "@/components/student-detail/HeaderCard";
+import EditApplicationDialog from "@/components/student-detail/EditApplicationDialog";
 import SummaryTiles from "@/components/student-detail/SummaryTiles";
 import PaymentDialog from "@/components/student-detail/PaymentDialog";
 import AddEntryDialog from "@/components/student-detail/AddEntryDialog";
@@ -39,6 +40,7 @@ export default function StudentDetail() {
   const [payDlg, setPayDlg] = useState({ open: false, editing: null, form: emptyPayment() });
   const [entryDlg, setEntryDlg] = useState({ open: false, form: emptyEntry() });
   const [convertOpen, setConvertOpen] = useState(false);
+  const [editAppOpen, setEditAppOpen] = useState(false);
   const [expanded, setExpanded] = useState({});
 
   const load = useCallback(async () => {
@@ -292,6 +294,7 @@ export default function StudentDetail() {
         onAddEntry={openEntryAdd}
         onExportPdf={onExportPdf}
         onExportApplicationPdf={onExportApplicationPdf}
+        onEditApplication={user?.role === "super_admin" ? () => setEditAppOpen(true) : undefined}
         onConvertToEnrolled={() => setConvertOpen(true)}
       />
 
@@ -498,6 +501,13 @@ export default function StudentDetail() {
         student={s}
         currency={currency}
         onConverted={() => { load(); }}
+      />
+
+      <EditApplicationDialog
+        open={editAppOpen}
+        onOpenChange={setEditAppOpen}
+        student={s}
+        onSaved={() => { load(); }}
       />
     </div>
   );

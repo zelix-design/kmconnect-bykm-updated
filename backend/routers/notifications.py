@@ -1,16 +1,60 @@
-"""In-app notifications. Currently only super_admin users receive notifications
-on three events fired by office-admin actions:
-  - new expense_request submitted
-  - new transaction logged
-  - new student enrolled
+"""In-app notifications + Web Push fan-out.
+
+Events that currently fire notifications (in-app bell + push):
+  - new expense_request submitted              → super_admins + office_admins of that office
+  - expense_request approved / rejected        → the requester + super_admins (except actor)
+  - new transaction logged                     → super_admins
+  - new student enrolled                       → super_admins
+  - new student application submitted (/apply) → super_admins
+  - new user registration awaiting approval    → super_admins
 """
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso
+from lib.push import send_push_to_users
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+
+async def _bulk_persist_and_push(
+    *,
+    recipient_ids: list[str],
+    type: str,
+    title: str,
+    message: str,
+    link: str,
+    metadata: dict | None,
+    actor_user_id: str | None,
+) -> None:
+    """Write rows into ``notifications`` for each recipient and fan-out via Web Push."""
+    targets = [rid for rid in set(recipient_ids) if rid and rid != actor_user_id]
+    if not targets:
+        return
+    now = now_iso()
+    docs = [
+        {
+            "id": gen_id(),
+            "recipient_user_id": rid,
+            "type": type,
+            "title": title,
+            "message": message,
+            "link": link,
+            "metadata": metadata or {},
+            "read": False,
+            "created_at": now,
+        }
+        for rid in targets
+    ]
+    await db.notifications.insert_many(docs)
+    # Best-effort Web Push (no-op if VAPID keys aren't configured)
+    try:
+        await send_push_to_users(
+            targets, title=title, body=message, url=link or "/", tag=type,
+        )
+    except Exception:  # pragma: no cover — best-effort
+        pass
 
 
 # --- helper used by other routers --------------------------------------
@@ -28,24 +72,29 @@ async def notify_super_admins(
         {"role": "super_admin", "approval_status": "approved"},
         {"_id": 0, "id": 1},
     ).to_list(50)
-    docs: List[dict] = []
-    now = now_iso()
-    for a in admins:
-        if actor_user_id and a["id"] == actor_user_id:
-            continue
-        docs.append({
-            "id": gen_id(),
-            "recipient_user_id": a["id"],
-            "type": type,
-            "title": title,
-            "message": message,
-            "link": link,
-            "metadata": metadata or {},
-            "read": False,
-            "created_at": now,
-        })
-    if docs:
-        await db.notifications.insert_many(docs)
+    await _bulk_persist_and_push(
+        recipient_ids=[a["id"] for a in admins],
+        type=type, title=title, message=message, link=link,
+        metadata=metadata, actor_user_id=actor_user_id,
+    )
+
+
+async def notify_users(
+    user_ids: list[str],
+    *,
+    type: str,
+    title: str,
+    message: str,
+    link: str = "",
+    metadata: dict | None = None,
+    actor_user_id: str | None = None,
+) -> None:
+    """Fan-out a notification to specific users (used for approve/reject flows)."""
+    await _bulk_persist_and_push(
+        recipient_ids=user_ids,
+        type=type, title=title, message=message, link=link,
+        metadata=metadata, actor_user_id=actor_user_id,
+    )
 
 
 # --- endpoints ----------------------------------------------------------
