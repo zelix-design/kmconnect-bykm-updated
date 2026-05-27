@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CollegeSelect from "@/components/CollegeSelect";
+import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 import api, { formatApiError } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -52,6 +54,26 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
   const [tab, setTab] = useState("basic");
   const [form, setForm] = useState(emptyApp());
   const [saving, setSaving] = useState(false);
+  const [colleges, setColleges] = useState([]);
+  const [courses, setCourses] = useState([]);
+  // The "Place" filter is a UI state for narrowing the College picker — it is
+  // NOT persisted on the application (the application stores the college name).
+  const [place, setPlace] = useState("");
+
+  // Fetch master college + course lists once when the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    Promise.all([
+      api.get("/colleges").then((r) => r.data?.colleges || []).catch(() => []),
+      api.get("/courses").then((r) => r.data?.courses || []).catch(() => []),
+    ]).then(([cl, cr]) => {
+      if (cancelled) return;
+      setColleges(cl);
+      setCourses(cr);
+    });
+    return () => { cancelled = true; };
+  }, [open]);
 
   useEffect(() => {
     if (open && student?.application) {
@@ -71,6 +93,19 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
       setTab("basic");
     }
   }, [open, student]);
+
+  // Seed the place filter from the currently-saved college so the College
+  // dropdown re-opens scoped to the right city.
+  useEffect(() => {
+    if (!open) return;
+    const collegeName = form?.course?.preferred_college;
+    if (!collegeName || !colleges.length) return;
+    const col = colleges.find((c) => c.name === collegeName);
+    if (!col?.place) return;
+    const norm = normalizePlace(col.place);
+    if (COLLEGE_PLACES.includes(norm)) setPlace(norm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, colleges]);
 
   const set = (section, key, value) =>
     setForm((s) => ({ ...s, [section]: { ...s[section], [key]: value } }));
@@ -146,19 +181,84 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
             </div>
           )}
 
-          {tab === "course" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Interested course" required><Input value={form.course.interested_course} onChange={(e) => set("course", "interested_course", e.target.value)} data-testid="edit-co-course" /></Field>
-              <Field label="Preferred college"><Input value={form.course.preferred_college} onChange={(e) => set("course", "preferred_college", e.target.value)} data-testid="edit-co-college" /></Field>
-              <Field label="Academic year"><Input value={form.course.academic_year} onChange={(e) => set("course", "academic_year", e.target.value)} placeholder="2026-27" /></Field>
-              <Field label="Admission type">
-                <Select value={form.course.admission_type} onValueChange={(v) => set("course", "admission_type", v)}>
-                  <SelectTrigger data-testid="edit-co-admission"><SelectValue /></SelectTrigger>
-                  <SelectContent>{ADMISSION.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </Field>
-            </div>
-          )}
+          {tab === "course" && (() => {
+            const selectedCollege = colleges.find((c) => c.name === form.course.preferred_college);
+            const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
+            const courseOptions = collegeCourses.length > 0 ? collegeCourses : courses;
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Place / City">
+                  <Select
+                    value={place || "_all"}
+                    onValueChange={(v) => {
+                      const next = v === "_all" ? "" : v;
+                      setPlace(next);
+                      // If current college isn't in the new place, clear it
+                      if (next && selectedCollege) {
+                        const cnorm = normalizePlace(selectedCollege.place || "");
+                        if (cnorm.toLowerCase() !== next.toLowerCase()) {
+                          set("course", "preferred_college", "");
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="edit-co-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_all">Any city</SelectItem>
+                      {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Preferred College">
+                  <CollegeSelect
+                    value={form.course.preferred_college}
+                    onChange={(name) => {
+                      set("course", "preferred_college", name);
+                      // Reset the course if the new college doesn't offer it
+                      const nextCollege = colleges.find((c) => c.name === name);
+                      if (
+                        nextCollege &&
+                        form.course.interested_course &&
+                        !(nextCollege.courses || []).includes(form.course.interested_course)
+                      ) {
+                        set("course", "interested_course", "");
+                      }
+                    }}
+                    testid="edit-co-college"
+                    placeholder={place ? `Pick a college in ${place}` : "Pick a college"}
+                    colleges={colleges}
+                    placeFilter={place}
+                  />
+                </Field>
+                <Field label="Interested course" required>
+                  {courseOptions.length > 0 ? (
+                    <Select value={form.course.interested_course} onValueChange={(v) => set("course", "interested_course", v)}>
+                      <SelectTrigger data-testid="edit-co-course"><SelectValue placeholder="Pick a course" /></SelectTrigger>
+                      <SelectContent>
+                        {courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={form.course.interested_course}
+                      onChange={(e) => set("course", "interested_course", e.target.value)}
+                      placeholder="Type the course"
+                      data-testid="edit-co-course"
+                    />
+                  )}
+                </Field>
+                <Field label="Academic year">
+                  <Input value={form.course.academic_year} onChange={(e) => set("course", "academic_year", e.target.value)} placeholder="e.g. 2026-2027" data-testid="edit-co-year" />
+                </Field>
+                <Field label="Admission type">
+                  <Select value={form.course.admission_type} onValueChange={(v) => set("course", "admission_type", v)}>
+                    <SelectTrigger data-testid="edit-co-admission"><SelectValue /></SelectTrigger>
+                    <SelectContent>{ADMISSION.map((a) => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </Field>
+              </div>
+            );
+          })()}
 
           {tab === "communication" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
