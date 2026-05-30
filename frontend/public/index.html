@@ -36,6 +36,87 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
+
+        <!-- ─── FinFlow splash screen ─────────────────────────────────
+             Renders BEFORE React mounts so first-load feels instant.
+             Hides automatically once the video ends, when the app
+             dispatches the `finflow-ready` event, or after a 6.5s timeout.
+             Only shown once per browser session (sessionStorage flag). -->
+        <div
+            id="finflow-splash"
+            aria-hidden="true"
+            style="
+                position: fixed;
+                inset: 0;
+                z-index: 2147483647;
+                background: #000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 1;
+                transition: opacity 320ms ease;
+                pointer-events: none;
+            "
+        >
+            <video
+                id="finflow-splash-video"
+                autoplay
+                muted
+                playsinline
+                preload="auto"
+                poster="%PUBLIC_URL%/splash-poster.jpg"
+                style="
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    object-position: center;
+                    background: #000;
+                "
+            >
+                <source src="%PUBLIC_URL%/splash.mp4" type="video/mp4" />
+            </video>
+        </div>
+        <script>
+            (function () {
+                var splash = document.getElementById("finflow-splash");
+                var video = document.getElementById("finflow-splash-video");
+                if (!splash) return;
+                // Skip the splash if we've shown it once already this session
+                // (so route changes / reloads after the first visit don't replay it).
+                try {
+                    if (sessionStorage.getItem("finflow_splash_seen")) {
+                        splash.remove();
+                        return;
+                    }
+                    // Skip on wide viewports — the portrait splash is built for phones
+                    if (window.innerWidth >= 768) {
+                        splash.remove();
+                        return;
+                    }
+                } catch (_) { /* sessionStorage disabled — keep playing */ }
+
+                var dismissed = false;
+                function dismiss() {
+                    if (dismissed) return;
+                    dismissed = true;
+                    try { sessionStorage.setItem("finflow_splash_seen", "1"); } catch (_) {}
+                    splash.style.opacity = "0";
+                    setTimeout(function () { splash.remove(); }, 360);
+                }
+
+                // Hide when the video ends, when React signals readiness, or after timeout
+                if (video) {
+                    video.addEventListener("ended", dismiss);
+                    video.addEventListener("error", dismiss);
+                    // If autoplay was blocked (uncommon when muted), fall back to a quick fade
+                    var p = video.play && video.play();
+                    if (p && typeof p.catch === "function") p.catch(function () { setTimeout(dismiss, 800); });
+                }
+                window.addEventListener("finflow-ready", dismiss);
+                setTimeout(dismiss, 6500);  // hard cap so users are never stuck
+            })();
+        </script>
+
         <div id="root"></div>
         <!--
       This HTML file is a template.
