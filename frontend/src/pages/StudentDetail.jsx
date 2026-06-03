@@ -507,7 +507,14 @@ export default function StudentDetail() {
         open={editAppOpen}
         onOpenChange={setEditAppOpen}
         student={s}
-        onSaved={() => { load(); }}
+        onSaved={(updated) => {
+          // Update React state IMMEDIATELY from the server response so the
+          // next Application PDF download uses the fresh data even if the
+          // background refetch hasn't completed yet.
+          if (updated && updated.id === s?.id) setS({ ...s, ...updated });
+          // Also re-fetch in case schedules/payments need to refresh.
+          load();
+        }}
       />
     </div>
   );

@@ -6,9 +6,8 @@
 //   - Handle Web Push events → show OS-level notifications even when the app
 //     is closed.
 
-const CACHE = "finflow-shell-v2";
+const CACHE = "finflow-shell-v3";
 const SHELL = [
-  "/",
   "/manifest.json",
   "/finflow-icon.png",
   "/apple-touch-icon.png",
@@ -34,6 +33,16 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || req.url.includes("/api/")) return;
+  const dest = req.destination;
+  // Never cache the HTML document — always go to the network so the user
+  // never gets stuck on a stale shell pointing at obsolete JS bundle hashes.
+  // We DO fall back to the cached "/" shell if completely offline.
+  if (dest === "document" || req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).catch(() => caches.match("/") || caches.match(req)),
+    );
+    return;
+  }
   event.respondWith(
     fetch(req)
       .then((res) => {
