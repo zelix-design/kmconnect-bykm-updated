@@ -60,12 +60,14 @@ export default function EditApplicationDialog({ open, onOpenChange, student, onS
   const [place, setPlace] = useState("");
 
   // Fetch master college + course lists once when the dialog opens.
+  // We deliberately use the SAME public endpoints the /apply form uses so the
+  // shape + filtering behaviour stay in lockstep with the public application.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     Promise.all([
-      api.get("/colleges").then((r) => r.data?.colleges || []).catch(() => []),
-      api.get("/courses").then((r) => r.data?.courses || []).catch(() => []),
+      api.get("/public/colleges").then((r) => r.data?.colleges || []).catch(() => []),
+      api.get("/public/courses").then((r) => r.data?.courses || []).catch(() => []),
     ]).then(([cl, cr]) => {
       if (cancelled) return;
       setColleges(cl);
