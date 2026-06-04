@@ -265,9 +265,9 @@ export default function StudentDetail() {
     }
   };
 
-  const onExportApplicationPdf = () => {
+  const onExportApplicationPdf = async () => {
     try {
-      downloadApplicationPdf({ student: s, user });
+      await downloadApplicationPdf({ student: s, user });
       toast.success("Application PDF generated");
     } catch (err) {
       console.error("[student-detail] application pdf failed:", err);

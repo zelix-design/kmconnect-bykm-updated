@@ -617,12 +617,15 @@ async def mark_incentive_paid(student_id: str, user: dict = Depends(require_edit
         return {"ok": True, "student_id": student_id, "incentive_paid": True,
                 "expense_request_id": s.get("incentive_request_id")}
 
-    # Look up the referring staff to read their eligible_incentive
+    # Look up the referring staff to read their eligible_incentive. Use the
+    # record OWNER's clients so super_admin can mark-paid for an office admin's
+    # student and still resolve the right staff member.
     ref = (s.get("reference") or "").strip().lower()
+    owner_id = s.get("user_id") or user["id"]
     staff = None
     if ref:
         all_staff = await db.clients.find(
-            {"user_id": user["id"], "client_type": "staff"}, {"_id": 0}
+            {"user_id": owner_id, "client_type": "staff"}, {"_id": 0}
         ).to_list(500)
         staff = next((c for c in all_staff if (c.get("name") or "").strip().lower() == ref), None)
     amount = float((staff or {}).get("eligible_incentive") or 0)
@@ -669,11 +672,13 @@ async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_ed
     s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
-    # If a salary request was auto-created and is still pending, cancel it
+    # If a salary request was auto-created and is still pending, cancel it. The
+    # request belongs to the student's OWNER (super_admin acting on an office
+    # admin's record finds the office admin's pending request).
     req_id = s.get("incentive_request_id")
     if req_id:
         await db.expense_requests.delete_one(
-            {"id": req_id, "requested_by_user_id": user["id"], "status": "pending"}
+            {"id": req_id, "requested_by_user_id": s.get("user_id"), "status": "pending"}
         )
     await db.students.update_one(
         _student_filter(student_id, user),
@@ -684,8 +689,13 @@ async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_ed
 
 
 # ---------- Schedules ----------
-async def _load_student_or_404(student_id: str, user_id: str) -> dict:
-    s = await db.students.find_one({"id": student_id, "user_id": user_id}, {"_id": 0})
+async def _load_student_or_404(student_id: str, user: dict) -> dict:
+    """Load a student honouring the super_admin cross-user bypass.
+
+    Super admin can load any student. Office admin is scoped to their own
+    user_id. Raises 404 if the student doesn't exist or is out of scope.
+    """
+    s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
     return s
@@ -693,7 +703,7 @@ async def _load_student_or_404(student_id: str, user_id: str) -> dict:
 
 @router.post("/{student_id}/schedules")
 async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = Depends(require_edit("students"))):
-    await _load_student_or_404(student_id, user["id"])
+    await _load_student_or_404(student_id, user)
     item = {"id": gen_id(), "created_at": now_iso(), **payload.model_dump()}
     await db.students.update_one(
         _student_filter(student_id, user),
@@ -705,8 +715,9 @@ async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = De
 
 @router.patch("/{student_id}/schedules/{schedule_id}")
 async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleItemIn, user: dict = Depends(require_edit("students"))):
+    filt = {**_student_filter(student_id, user), "schedules.id": schedule_id}
     res = await db.students.update_one(
-        {"id": student_id, "user_id": user["id"], "schedules.id": schedule_id},
+        filt,
         {"$set": {f"schedules.$.{k}": v for k, v in payload.model_dump().items()}},
     )
     if res.matched_count == 0:
@@ -740,12 +751,15 @@ def _materialize_payment(payload: PaymentItemIn) -> dict:
 
 @router.post("/{student_id}/payments")
 async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depends(require_edit("students"))):
-    student = await _load_student_or_404(student_id, user["id"])
+    student = await _load_student_or_404(student_id, user)
     item = {"id": gen_id(), "created_at": now_iso(), **_materialize_payment(payload)}
     await db.students.update_one(
         _student_filter(student_id, user),
         {"$push": {"payments": item}},
     )
+    # Auto-log income transaction on the RECORD OWNER's books (not the actor's).
+    # This way, when super_admin posts a payment to an office_admin's student,
+    # the cash lands on the office_admin's account/ledger.
     await _auto_log_payment_transaction(student["user_id"], student, item)
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
     return _summarize(s)
@@ -754,8 +768,9 @@ async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depe
 @router.patch("/{student_id}/payments/{payment_id}")
 async def update_payment(student_id: str, payment_id: str, payload: PaymentItemIn, user: dict = Depends(require_edit("students"))):
     data = _materialize_payment(payload)
+    filt = {**_student_filter(student_id, user), "payments.id": payment_id}
     res = await db.students.update_one(
-        {"id": student_id, "user_id": user["id"], "payments.id": payment_id},
+        filt,
         {"$set": {f"payments.$.{k}": v for k, v in data.items()}},
     )
     if res.matched_count == 0:
@@ -770,12 +785,14 @@ async def update_payment(student_id: str, payment_id: str, payload: PaymentItemI
 
 @router.delete("/{student_id}/payments/{payment_id}")
 async def delete_payment(student_id: str, payment_id: str, user: dict = Depends(require_edit("students"))):
+    student = await _load_student_or_404(student_id, user)
     res = await db.students.update_one(
         _student_filter(student_id, user),
         {"$pull": {"payments": {"id": payment_id}}},
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Student not found")
-    await _delete_payment_transaction(user["id"], payment_id)
+    # Cascade-clean the auto-logged transaction on the record OWNER's books.
+    await _delete_payment_transaction(student["user_id"], payment_id)
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
     return _summarize(s)

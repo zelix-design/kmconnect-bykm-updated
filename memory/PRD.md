@@ -456,6 +456,30 @@
 - [x] **Office admin's Quick Entry → Add Student** now navigates to `/students?new=1` which triggers the picker (was: opened form directly). Office Dashboard's "Add an admission" → `/students?new=1&staff=<name>` still skips the picker and goes straight to the form with reference pre-filled.
 - [x] **100% regression** — iteration_18.json: backend 8/8 pytest pass, frontend 15/15 acceptance checks pass.
 
+## Implementation status — 2026-02-26 (iteration 34: Public form + PDF redesign + Super→Office cross-user edit)
+- [x] **Public `/apply` form overhaul** to match the new admission flow:
+  - Stepper renamed: Payment → **"Payment & Reference"** · Reference → **"Declaration"** (still 6 steps).
+  - Step 4 Academic: 12th Standard / Diploma **Register Number is mandatory** (red asterisk, validated client + server side; toast surfaces on Continue).
+  - Step 5 Payment & Reference: Payment block trimmed to `Registration Amount (₹)` + `Payment Date` only (Payment Mode / Transaction ID / Screenshot URL removed). Below a divider, a new **"Reference / How did you hear about us?"** block with optional `Reference Name` + `Contact Number`.
+  - Step 6 Declaration: shows the two-paragraph KM Foundation declaration text with `{college_name}` substituted live from Step 2 (placeholder underscores when blank + amber tip). Mandatory **"I Agree" checkbox** gates the Submit button (disabled until ticked).
+- [x] **Backend Pydantic models** in `routers/applications.py`: legacy `payment_mode/transaction_id/screenshot_url` now Optional (back-compat); added `Declaration{agreement_accepted: bool}` top-level. `POST /api/public/applications` returns **422** if `academic.twelfth.register_number` is empty OR `declaration.agreement_accepted` is false.
+- [x] **PDF generators rewritten** (frontend jsPDF + backend ReportLab) to match the uploaded `Sample_Student Application Form.pdf` layout:
+  - Top-left "AdmissionForm" title (deep blue) · top-right `Ref:` + `Submitted:` + KM Foundation logo (km-mark.png embedded via fetch→dataURL on the client, drawn directly on the server).
+  - Large applicant name banner (UPPERCASE) · large course · medium college · "Admission Type:" / "Academic Year :" rows.
+  - Blue-underlined section headings: CANDIDATE DETAILS · PARENTS & ADDRESS · ACADEMIC QUALIFICATIONS · DECLARATION.
+  - Academic table with 10th + 12th sub-headers and columns Register No · School · Board · Place · Year · Percentage.
+  - Declaration paragraph with `{college_name}` substituted (matches the user-provided wording exactly).
+  - Applicant Signature / Admissions Officer signature blocks.
+  - Footer with KM Foundation contact info (`+91 88846 27275 | info@kmfoundation.co.in | www.kmfoundation.co.in`) + generated timestamp · drawn on every page including page breaks.
+- [x] **Super Admin → Office Admin record edits propagate** (recurring P1 finally closed):
+  - `routers/clients.py`: `update_client` + `delete_client` switched from hardcoded `user_id` filter to `_client_filter(cid, user)` so super-admin bypasses the per-user scope.
+  - `routers/students.py`: `_load_student_or_404` now takes the user dict (uses `_student_filter`). `update_schedule`, `update_payment`, `delete_payment`, `mark_incentive_paid`, `unmark_incentive_paid` all consistently use `_student_filter` and now resolve the staff/expense_request from the **record owner's** clients (not the actor's). Auto-logged income transactions for payments still land on the record owner's books even when super-admin posts the payment.
+  - Office admin still strictly scoped to own records (defense-in-depth tests added).
+- [x] **Frontend `applicationPdf.js` now async** — `await downloadApplicationPdf(...)` in `StudentDetail.jsx` so the KM logo blob fetch resolves before rendering.
+- [x] **48/48 new + existing pytest pass** — `test_public_application_v2.py` (4), `test_cross_user_edit.py` (4), `test_colleges.py` (8), `test_create_user.py` (6), `test_lib_helpers.py` (27), `test_paste_application.py` (3). Pre-existing failures in `test_finflow_api.py` + iteration{4,5,6,8} are stale schema/role assertions unrelated to this work.
+- [x] **End-to-end verified via curl**: super admin POST + PATCH + DELETE on office-admin's clients/students/payments returns 200; office admin reads back the super-admin's edits successfully; office admin cannot edit super-admin's records (404).
+- [x] **PDF visual analysis** via gemini-2.5-flash-lite confirms the rendered output matches the sample's layout: 2-page A4, AdmissionForm title, KM logo, applicant banner, blue section underlines, declaration paragraph, signature blocks, contact footer.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

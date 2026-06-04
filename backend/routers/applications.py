@@ -94,19 +94,43 @@ class Academic(BaseModel):
 
 
 class Payment(BaseModel):
+    """Registration payment block.
+
+    Legacy fields (``payment_mode``, ``transaction_id``, ``screenshot_url``)
+    are kept optional so historical applications still validate cleanly when
+    re-saved through the admin Edit dialog. New submissions only send
+    ``registration_amount`` + ``payment_date``.
+    """
     registration_amount: float = 0.0
     payment_date: Optional[str] = None
-    payment_mode: PaymentMode = "upi"
+    payment_mode: Optional[PaymentMode] = None
     transaction_id: Optional[str] = None
     screenshot_url: Optional[str] = None
 
 
 class Reference(BaseModel):
-    type: ReferenceType = "sub_agent"
+    """Trimmed reference block — only the two fields the new form collects.
+
+    Legacy fields (``type``, ``place``, ``notes``, ``relation``, ``phone``)
+    are kept optional to preserve backward compatibility.
+    """
     name: Optional[str] = None
     contact_number: Optional[str] = None
+    type: Optional[ReferenceType] = None
     place: Optional[str] = None
     notes: Optional[str] = None
+    relation: Optional[str] = None
+    phone: Optional[str] = None
+
+
+class Declaration(BaseModel):
+    """Applicant's acceptance of the admission declaration.
+
+    ``agreement_accepted`` MUST be true for new public submissions — enforced
+    by the route handler (not by Pydantic) so admin paste/patch flows can
+    still save partial records.
+    """
+    agreement_accepted: bool = False
 
 
 class ApplicationIn(BaseModel):
@@ -116,6 +140,7 @@ class ApplicationIn(BaseModel):
     academic: Academic = Field(default_factory=Academic)
     payment: Payment = Field(default_factory=Payment)
     reference: Reference = Field(default_factory=Reference)
+    declaration: Declaration = Field(default_factory=Declaration)
 
 
 # ---------- Helpers ----------
@@ -161,11 +186,7 @@ def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_
             "has_adjustment": False,
             "adjustments": [],
             "schedule_id": None,
-            "remarks": (
-                f"Registration payment via {app.payment.payment_mode}"
-                + (f" · UTR {app.payment.transaction_id}" if app.payment.transaction_id else "")
-                + " · pending verification"
-            ),
+            "remarks": "Registration payment · pending verification",
         })
 
     return {
@@ -197,6 +218,13 @@ def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_
 @router.post("/applications", status_code=201)
 async def submit_application(payload: ApplicationIn) -> dict:
     """Submit a new student application. Returns ``{id, reference_code}``."""
+    # Enforce mandatory fields for public submissions. Admin paste/patch
+    # endpoints don't go through here so they can still save partial data.
+    twelfth_reg = (payload.academic.twelfth.register_number or "").strip()
+    if not twelfth_reg:
+        raise HTTPException(422, "12th Standard Register Number is required")
+    if not payload.declaration.agreement_accepted:
+        raise HTTPException(422, "Please accept the declaration to submit")
     owner_id = await _resolve_owner_user_id()
     doc = _build_student_doc(payload, owner_id)
     await db.students.insert_one(doc)

@@ -42,7 +42,7 @@ async def create_client(payload: ClientIn, user: dict = Depends(require_edit("cl
 @router.patch("/{client_id}")
 async def update_client(client_id: str, payload: ClientIn, user: dict = Depends(require_edit("clients"))):
     res = await db.clients.update_one(
-        {"id": client_id, "user_id": user["id"]},
+        _client_filter(client_id, user),
         {"$set": payload.model_dump()},
     )
     if res.matched_count == 0:
@@ -52,7 +52,7 @@ async def update_client(client_id: str, payload: ClientIn, user: dict = Depends(
 
 @router.delete("/{client_id}")
 async def delete_client(client_id: str, user: dict = Depends(require_edit("clients"))):
-    res = await db.clients.delete_one({"id": client_id, "user_id": user["id"]})
+    res = await db.clients.delete_one(_client_filter(client_id, user))
     if res.deleted_count == 0:
         raise HTTPException(404, "Client not found")
     return {"ok": True}

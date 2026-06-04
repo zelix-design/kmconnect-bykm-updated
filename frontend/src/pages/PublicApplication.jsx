@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast, Toaster } from "sonner";
 import axios from "axios";
@@ -14,8 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import {
   STEPS, GENDERS, PARTNER_COLLEGES, ADMISSION_TYPES, BOARDS,
-  PAYMENT_MODES, REFERENCE_TYPES, INDIAN_STATES,
-  emptyApplication, validateStep,
+  INDIAN_STATES, emptyApplication, validateStep, renderDeclaration,
 } from "@/lib/applicationSchema";
 import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
@@ -65,8 +64,8 @@ export default function PublicApplication() {
   }, []);
 
   // If the form was opened via a referral link (?ref=<client_id>), fetch the
-  // referrer details and pre-fill (+ lock) the Reference step so the applicant
-  // can't accidentally change attribution.
+  // referrer details and pre-fill (+ lock) the Reference section so the
+  // applicant can't accidentally change attribution.
   useEffect(() => {
     if (!referrerId) return;
     let cancelled = false;
@@ -78,10 +77,8 @@ export default function PublicApplication() {
           ...prev,
           reference: {
             ...prev.reference,
-            type: data.type || prev.reference.type,
             name: data.name || prev.reference.name,
             contact_number: data.contact_number || prev.reference.contact_number,
-            place: data.place || prev.reference.place,
           },
         }));
       })
@@ -109,10 +106,10 @@ export default function PublicApplication() {
   const prev = () => { setStep((s) => Math.max(s - 1, 0)); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const submit = async () => {
-    // Final validation across critical steps
-    for (const k of ["basic_info", "course", "communication"]) {
-      const errs = validateStep(k, app);
-      if (errs.length) { errs.forEach((e) => toast.error(e)); setStep(STEPS.findIndex((s) => s.key === k)); return; }
+    // Final validation across every step (each step's own rules are re-run).
+    for (const s of STEPS) {
+      const errs = validateStep(s.key, app);
+      if (errs.length) { errs.forEach((e) => toast.error(e)); setStep(STEPS.findIndex((x) => x.key === s.key)); return; }
     }
     setSubmitting(true);
     try {
@@ -136,6 +133,8 @@ export default function PublicApplication() {
   };
 
   if (submitted) return <SubmittedView submitted={submitted} app={app} onAgain={() => { setSubmitted(null); setApp(emptyApplication()); setStep(0); }} />;
+
+  const submitDisabled = submitting || !app.declaration?.agreement_accepted;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50/40 to-white dark:from-stone-950 dark:via-stone-950 dark:to-stone-900 py-6 sm:py-8 px-3 sm:px-4">
@@ -174,8 +173,8 @@ export default function PublicApplication() {
           {stepKey === "course" && <StepCourse app={app} setField={setField} courses={courses} colleges={colleges} />}
           {stepKey === "communication" && <StepCommunication app={app} setField={setField} />}
           {stepKey === "academic" && <StepAcademic app={app} setNested={setNested} />}
-          {stepKey === "payment" && <StepPayment app={app} setField={setField} />}
-          {stepKey === "reference" && <StepReference app={app} setField={setField} referrer={referrer} />}
+          {stepKey === "payment" && <StepPayment app={app} setField={setField} referrer={referrer} />}
+          {stepKey === "declaration" && <StepDeclaration app={app} setField={setField} />}
 
           <div className="mt-8 flex flex-col-reverse sm:flex-row sm:justify-between gap-3">
             <Button type="button" variant="outline" onClick={prev} disabled={step === 0} data-testid="apply-prev" className="w-full sm:w-auto">
@@ -186,7 +185,7 @@ export default function PublicApplication() {
                 Continue <ArrowRight size={14} className="ml-1.5" />
               </Button>
             ) : (
-              <Button type="button" onClick={submit} disabled={submitting} className="btn-amber border-0 w-full sm:w-auto" data-testid="apply-submit">
+              <Button type="button" onClick={submit} disabled={submitDisabled} className="btn-amber border-0 w-full sm:w-auto" data-testid="apply-submit">
                 {submitting ? "Submitting…" : "Submit application"}
                 <CheckCircle size={14} className="ml-1.5" />
               </Button>
@@ -411,18 +410,20 @@ function StepCommunication({ app, setField }) {
 function StepAcademic({ app, setNested }) {
   return (
     <div className="space-y-6">
-      <SectionTitle eyebrow="Section D" title="Academic Qualifications" subtitle="Last two qualifications. Fill what applies." />
+      <SectionTitle eyebrow="Section D" title="Academic Qualifications" subtitle="12th Standard Register Number is mandatory." />
       <QualificationBlock title="10th Standard" rec={app.academic.tenth} onChange={(k, v) => setNested("academic", "tenth", k, v)} prefix="ac-10" />
-      <QualificationBlock title="12th Standard / Diploma" rec={app.academic.twelfth} onChange={(k, v) => setNested("academic", "twelfth", k, v)} prefix="ac-12" />
+      <QualificationBlock title="12th Standard / Diploma" rec={app.academic.twelfth} onChange={(k, v) => setNested("academic", "twelfth", k, v)} prefix="ac-12" registerRequired />
     </div>
   );
 }
-function QualificationBlock({ title, rec, onChange, prefix }) {
+function QualificationBlock({ title, rec, onChange, prefix, registerRequired }) {
   return (
     <div className="rounded-lg border border-border p-4 sm:p-5 bg-muted/20" data-testid={`${prefix}-block`}>
       <h3 className="font-display text-base mb-3">{title}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Register Number"><Input value={rec.register_number} onChange={(e) => onChange("register_number", e.target.value)} data-testid={`${prefix}-reg`} /></Field>
+        <Field label="Register Number" required={registerRequired}>
+          <Input value={rec.register_number} onChange={(e) => onChange("register_number", e.target.value)} data-testid={`${prefix}-reg`} />
+        </Field>
         <Field label="School Name"><Input value={rec.school_name} onChange={(e) => onChange("school_name", e.target.value)} data-testid={`${prefix}-school`} /></Field>
         <Field label="School Place"><Input value={rec.school_place} onChange={(e) => onChange("school_place", e.target.value)} data-testid={`${prefix}-place`} /></Field>
         <Field label="Board">
@@ -438,12 +439,18 @@ function QualificationBlock({ title, rec, onChange, prefix }) {
   );
 }
 
-// ---- Step 5: Payment ----
-function StepPayment({ app, setField }) {
+// ---- Step 5: Payment & Reference ----
+function StepPayment({ app, setField, referrer }) {
   const f = app.payment;
+  const r = app.reference;
+  const locked = !!referrer; // /apply?ref=<id> → reference is fixed
   return (
-    <div>
-      <SectionTitle eyebrow="Section E" title="Registration Payment" subtitle="Optional — pay later by visiting the office. Status stays Pending until the accounts team verifies." />
+    <div className="space-y-6">
+      <SectionTitle
+        eyebrow="Section E"
+        title="Registration Payment"
+        subtitle="Optional — pay later by visiting the office. Status stays Pending until the accounts team verifies."
+      />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field label="Registration Amount (₹)">
           <Input type="number" step="0.01" value={f.registration_amount} onChange={(e) => setField("payment", "registration_amount", e.target.value)} placeholder="0.00" data-testid="pa-amount" />
@@ -451,59 +458,75 @@ function StepPayment({ app, setField }) {
         <Field label="Payment Date">
           <Input type="date" value={f.payment_date} onChange={(e) => setField("payment", "payment_date", e.target.value)} data-testid="pa-date" />
         </Field>
-        <Field label="Payment Mode">
-          <Select value={f.payment_mode} onValueChange={(v) => setField("payment", "payment_mode", v)}>
-            <SelectTrigger data-testid="pa-mode"><SelectValue /></SelectTrigger>
-            <SelectContent>{PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-        <Field label="Transaction ID / UTR">
-          <Input value={f.transaction_id} onChange={(e) => setField("payment", "transaction_id", e.target.value)} placeholder="Optional" data-testid="pa-utr" />
-        </Field>
-        <Field label="Payment Screenshot URL" wide>
-          <Input value={f.screenshot_url} onChange={(e) => setField("payment", "screenshot_url", e.target.value)} placeholder="Optional · paste an upload link" data-testid="pa-url" />
-        </Field>
+      </div>
+
+      <div className="pt-2 border-t border-border">
+        <SectionTitle
+          title="Reference / How did you hear about us?"
+          subtitle={locked
+            ? `Your application is attributed to ${referrer.name}.`
+            : "Optional — helps us route your application faster."}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Reference Name">
+            <Input
+              value={r.name}
+              onChange={(e) => setField("reference", "name", e.target.value)}
+              placeholder="Person / office name"
+              readOnly={locked}
+              data-testid="rf-name"
+              className={locked ? "bg-muted/40 cursor-not-allowed" : ""}
+            />
+          </Field>
+          <Field label="Contact Number">
+            <Input
+              value={r.contact_number}
+              onChange={(e) => setField("reference", "contact_number", e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="10-digit (optional)"
+              readOnly={locked && !!r.contact_number}
+              data-testid="rf-contact"
+              className={locked && r.contact_number ? "bg-muted/40 cursor-not-allowed" : ""}
+            />
+          </Field>
+        </div>
       </div>
     </div>
   );
 }
 
-// ---- Step 6: Reference ----
-function StepReference({ app, setField, referrer }) {
-  const f = app.reference;
-  const locked = !!referrer; // arriving via /apply?ref=<id> → reference is fixed
+// ---- Step 6: Declaration ----
+function StepDeclaration({ app, setField }) {
+  const collegeName = (app.course?.preferred_college || "").trim();
+  const text = renderDeclaration(collegeName);
+  const paragraphs = text.split("\n\n");
   return (
     <div>
-      <SectionTitle
-        eyebrow="Section F"
-        title={locked ? "Reference (auto-filled)" : "Reference / How did you hear about us?"}
-        subtitle={locked
-          ? `Your application will be attributed to ${referrer.name}. You can still add a note below.`
-          : "Optional — helps us route your application faster."}
-      />
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Reference Type">
-          <Select value={f.type} onValueChange={(v) => setField("reference", "type", v)} disabled={locked}>
-            <SelectTrigger data-testid="rf-type"><SelectValue /></SelectTrigger>
-            <SelectContent>{REFERENCE_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
-          </Select>
-        </Field>
-        <Field label="Reference Name">
-          <Input value={f.name} onChange={(e) => setField("reference", "name", e.target.value)} placeholder="Person / office name" readOnly={locked} data-testid="rf-name" className={locked ? "bg-muted/40 cursor-not-allowed" : ""} />
-        </Field>
-        <Field label="Contact Number">
-          <Input value={f.contact_number} onChange={(e) => setField("reference", "contact_number", e.target.value.replace(/\D/g, "").slice(0, 10))} readOnly={locked && !!f.contact_number} data-testid="rf-contact" className={locked && f.contact_number ? "bg-muted/40 cursor-not-allowed" : ""} />
-        </Field>
-        <Field label="Place">
-          <Input value={f.place} onChange={(e) => setField("reference", "place", e.target.value)} readOnly={locked && !!f.place} data-testid="rf-place" className={locked && f.place ? "bg-muted/40 cursor-not-allowed" : ""} />
-        </Field>
-        <Field label="Additional Notes" wide>
-          <Textarea rows={3} value={f.notes} onChange={(e) => setField("reference", "notes", e.target.value)} placeholder="Anything our admissions team should know" data-testid="rf-notes" />
-        </Field>
+      <SectionTitle eyebrow="Section F" title="Declaration" subtitle="Please read carefully and tick the box to submit." />
+      <div className="rounded-lg border border-border bg-muted/20 p-4 sm:p-5 text-sm leading-relaxed text-foreground" data-testid="declaration-text">
+        {paragraphs.map((p, i) => (
+          <p key={i} className={i > 0 ? "mt-3" : ""}>{p}</p>
+        ))}
+        {!collegeName && (
+          <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
+            Tip · Go back to Section B and pick your preferred college so the declaration includes its name automatically.
+          </p>
+        )}
       </div>
-      <div className="mt-6 p-4 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/30 text-xs text-amber-800 dark:text-amber-300">
-        By submitting, you confirm the details above are accurate. The admissions team will contact you within 1–2 working days.
-      </div>
+      <label className="mt-5 flex items-start gap-3 cursor-pointer select-none" data-testid="declaration-checkbox-row">
+        <Checkbox
+          checked={!!app.declaration?.agreement_accepted}
+          onCheckedChange={(v) => setField("declaration", "agreement_accepted", !!v)}
+          data-testid="declaration-checkbox"
+          className="mt-0.5"
+        />
+        <span className="text-sm leading-relaxed text-foreground">
+          <span className="font-semibold">I Agree</span>
+          <span className="text-muted-foreground"> — I have read the declaration and confirm that all details I provided are true to the best of my knowledge.</span>
+        </span>
+      </label>
+      {!app.declaration?.agreement_accepted && (
+        <p className="mt-3 text-xs text-muted-foreground">Submit will be enabled once you tick the I Agree box.</p>
+      )}
     </div>
   );
 }
@@ -540,7 +563,7 @@ function SubmittedView({ submitted, app, onAgain }) {
 function SectionTitle({ eyebrow, title, subtitle }) {
   return (
     <div className="mb-5">
-      <p className="label-eyebrow">{eyebrow}</p>
+      {eyebrow && <p className="label-eyebrow">{eyebrow}</p>}
       <h2 className="font-display text-lg sm:text-2xl mt-1 leading-tight">{title}</h2>
       {subtitle && <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>}
     </div>
