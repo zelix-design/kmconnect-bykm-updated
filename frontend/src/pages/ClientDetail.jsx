@@ -104,7 +104,15 @@ export default function ClientDetail() {
             <Button
               variant="outline"
               onClick={() => {
-                const url = `${window.location.origin}/apply?ref=${c.id}`;
+                // Prefer a human-readable slug (e.g. /apply?ref=john-doe).
+                // Falls back to the UUID if the client somehow has no name.
+                const slug = (c.name || "")
+                  .trim()
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "-")
+                  .replace(/^-+|-+$/g, "");
+                const ref = slug || c.id;
+                const url = `${window.location.origin}/apply?ref=${ref}`;
                 navigator.clipboard.writeText(url).then(
                   () => toast.success("Referral link copied", { description: url }),
                   () => window.prompt("Copy this referral link:", url),

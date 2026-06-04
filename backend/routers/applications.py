@@ -11,6 +11,7 @@ is preserved as a nested ``application`` sub-document on the student doc.
 """
 import logging
 import os
+import re
 from typing import Optional, Literal
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
@@ -24,6 +25,15 @@ from lib.email_notifier import send_email, application_email_html
 from routers.notifications import notify_super_admins
 
 log = logging.getLogger("finflow.applications")
+
+
+def slugify(name: str) -> str:
+    """Lowercase, dash-separated slug. Strips everything except a-z 0-9 -."""
+    if not name:
+        return ""
+    s = name.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    return s.strip("-")
 
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -268,17 +278,40 @@ _CLIENT_TYPE_TO_REF = {
 }
 
 
-@router.get("/referrer/{client_id}")
-async def get_referrer(client_id: str) -> dict:
-    """Public lookup for the referral landing page. Returns the bare-minimum
-    info needed to pre-fill the Reference section of the application form.
-    404 if the client doesn't exist."""
-    c = await db.clients.find_one({"id": client_id}, {"_id": 0})
+@router.get("/referrer/{ref}")
+async def get_referrer(ref: str) -> dict:
+    """Public lookup for the referral landing page.
+
+    Accepts either:
+    - a UUID (legacy long links) — looked up as ``id``
+    - a short slug like ``john-doe`` — matched against ``slugify(name)``
+
+    Returns the bare-minimum info needed to pre-fill the Reference section
+    of the application form. 404 if no match.
+    """
+    # UUID-shaped strings → direct id lookup (legacy + future direct shares)
+    is_uuid = len(ref) == 36 and ref.count("-") == 4
+    c = None
+    if is_uuid:
+        c = await db.clients.find_one({"id": ref}, {"_id": 0})
+    if c is None:
+        # Fall back to slug — match the first staff/agent client whose name slugifies
+        # to the given ref. Slug collisions resolve by oldest-created (deterministic).
+        target_slug = slugify(ref)
+        if target_slug:
+            candidates = await db.clients.find(
+                {}, {"_id": 0, "id": 1, "name": 1, "client_type": 1, "phone": 1, "office": 1, "company": 1, "created_at": 1},
+            ).to_list(2000)
+            matches = [d for d in candidates if slugify(d.get("name") or "") == target_slug]
+            if matches:
+                matches.sort(key=lambda d: d.get("created_at") or "")
+                c = await db.clients.find_one({"id": matches[0]["id"]}, {"_id": 0})
     if not c:
         raise HTTPException(404, "Referrer not found")
     return {
         "id": c["id"],
         "name": c.get("name") or "",
+        "slug": slugify(c.get("name") or ""),
         "type": _CLIENT_TYPE_TO_REF.get(c.get("client_type"), "other"),
         "contact_number": c.get("phone") or "",
         "place": c.get("office", "").replace("KM_", "KM ") if c.get("office") else (c.get("company") or ""),
