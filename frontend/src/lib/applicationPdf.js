@@ -1,7 +1,17 @@
-// Per-student admission application PDF — formal A4 layout matching the
-// official KM Foundation Admission Form sample (large applicant banner,
-// blue "AdmissionForm" title, KM logo top-right, blue section underlines,
-// declaration paragraph, signature blocks, contact footer).
+// Per-student admission application PDF — KM Foundation branded design.
+//
+// Mirrors /app/backend/lib/application_pdf.py exactly:
+//   - Red→black gradient bar at the very top
+//   - Logo TOP-LEFT (km-mark.png), Ref/Submitted TOP-RIGHT
+//   - Applicant name banner (Montserrat-Bold 22pt)
+//   - Course / College in semibold 10pt
+//   - Section headers 11pt bold with thin black underline
+//   - Two-column key/value blocks at 9pt
+//   - Pink accent (#FFE7F3) on 10th / 12th sub-header rows
+//   - Declaration paragraph at 8pt
+//   - Signature blocks + KM Foundation contact footer at 7pt
+//
+// Single A4 page output. Montserrat TTFs are loaded once per session.
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";
@@ -15,14 +25,63 @@ const LABELS = {
   },
 };
 
-const MARGIN = 40;
-// Brand palette tuned to the sample (deep blue accent + soft gray rules).
-const BRAND_BLUE = [25, 65, 130];
-const BRAND_BLUE_SOFT = [180, 200, 230];
-const INK = [28, 25, 23];
-const MUTED = [120, 113, 108];
-const RULE = [220, 218, 215];
+const MARGIN = 36;
+// Brand palette per design spec
+const BRAND_RED = [199, 0, 0];      // #C70000
+const BRAND_BLACK = [16, 16, 16];   // #101010
+const PINK = [255, 231, 243];       // #FFE7F3
+const INK = [0, 0, 0];
+const MUTED = [90, 90, 90];
+const RULE = [212, 212, 212];
 
+// ---- Font registry ----
+// jsPDF needs the TTF as a base64 string. We fetch it once per page-session
+// and stash on `window` so subsequent PDFs reuse without refetching.
+const FONT_FILES = [
+  { name: "Montserrat", style: "normal", file: "Montserrat-Regular.ttf" },
+  { name: "Montserrat", style: "bold", file: "Montserrat-Bold.ttf" },
+  { name: "MontserratSemi", style: "normal", file: "Montserrat-SemiBold.ttf" },
+  { name: "MontserratLight", style: "normal", file: "Montserrat-Light.ttf" },
+];
+
+async function loadFontDataUrl(file) {
+  try {
+    const res = await fetch(`/fonts/${file}`, { cache: "force-cache" });
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    // Convert ArrayBuffer to base64 in chunks to avoid stack overflow
+    const bytes = new Uint8Array(buf);
+    const chunkSize = 0x8000;
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
+  } catch (err) {
+    console.warn(`[applicationPdf] font load failed (${file}):`, err?.message || err);
+    return null;
+  }
+}
+
+let FONTS_BASE64 = null;
+async function ensureFonts(doc) {
+  if (!FONTS_BASE64) {
+    const entries = await Promise.all(FONT_FILES.map(async (f) => ({
+      ...f, b64: await loadFontDataUrl(f.file),
+    })));
+    FONTS_BASE64 = entries.filter((e) => e.b64);
+  }
+  // If no fonts loaded, fall back silently to Helvetica
+  if (!FONTS_BASE64.length) return { primary: "helvetica", bold: "helvetica", semi: "helvetica", light: "helvetica" };
+  // Register each font with this jsPDF doc instance
+  for (const f of FONTS_BASE64) {
+    doc.addFileToVFS(f.file, f.b64);
+    doc.addFont(f.file, f.name, f.style);
+  }
+  return { primary: "Montserrat", bold: "Montserrat", semi: "MontserratSemi", light: "MontserratLight" };
+}
+
+// ---- Helpers ----
 function v(value) {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
@@ -32,9 +91,6 @@ function labelOf(map, value) {
   return map[value] || value;
 }
 
-// Load /km-mark.png from the same origin and convert it to a base64 PNG
-// data URI that jsPDF can embed. Returns null on any failure so the PDF
-// still generates without the logo.
 async function loadLogoDataUrl() {
   try {
     const res = await fetch("/km-mark.png", { cache: "force-cache" });
@@ -52,101 +108,112 @@ async function loadLogoDataUrl() {
   }
 }
 
-function drawHeader(doc, opts) {
+function drawGradientBar(doc, height = 8) {
   const pageWidth = doc.internal.pageSize.getWidth();
+  const steps = 200;
+  const stripeW = pageWidth / steps;
+  for (let i = 0; i < steps; i += 1) {
+    const t = i / (steps - 1);
+    const r = Math.round(BRAND_RED[0] + (BRAND_BLACK[0] - BRAND_RED[0]) * t);
+    const g = Math.round(BRAND_RED[1] + (BRAND_BLACK[1] - BRAND_RED[1]) * t);
+    const b = Math.round(BRAND_RED[2] + (BRAND_BLACK[2] - BRAND_RED[2]) * t);
+    doc.setFillColor(r, g, b);
+    doc.rect(i * stripeW, 0, stripeW + 0.6, height, "F");
+  }
+}
 
-  // Logo top-right (optional). Slot reserved 64×64.
+function drawHeader(doc, fonts, opts) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  // 1) Gradient bar
+  drawGradientBar(doc, 8);
+
+  // 2) Logo top-left
   if (opts.logoDataUrl) {
     try {
-      doc.addImage(opts.logoDataUrl, "PNG", pageWidth - MARGIN - 60, 32, 60, 60);
+      doc.addImage(opts.logoDataUrl, "PNG", MARGIN, 16, 50, 50);
     } catch (err) {
-      // Silently skip if the PNG can't be decoded by jsPDF.
+      console.warn("[applicationPdf] addImage failed", err);
     }
   }
 
-  // "AdmissionForm" main title — top-left, bold blue.
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(...BRAND_BLUE);
-  doc.text("AdmissionForm", MARGIN, 56);
-
-  // Ref + submitted timestamp — sits just below the logo, right aligned.
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  // 3) AdmissionForm wordmark + sub-line
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(18);
   doc.setTextColor(...INK);
-  doc.text(`Ref: ${opts.refCode}`, pageWidth - MARGIN, 102, { align: "right" });
-  doc.text(`Submitted: ${opts.submittedAt}`, pageWidth - MARGIN, 116, { align: "right" });
+  doc.text("AdmissionForm", MARGIN + 60, 38);
+  doc.setFont(fonts.semi, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text("KM Foundation Educational Services LLP", MARGIN + 60, 50);
 
-  // Horizontal rule
+  // 4) Right side: Ref + Submitted
+  doc.setFont(fonts.semi, "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...INK);
+  doc.text(`Ref: ${opts.refCode}`, pageWidth - MARGIN, 38, { align: "right" });
+  doc.setFont(fonts.primary, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text(`Submitted: ${opts.submittedAt}`, pageWidth - MARGIN, 50, { align: "right" });
+
+  // 5) Subtle rule
   doc.setDrawColor(...RULE);
-  doc.setLineWidth(0.6);
-  doc.line(MARGIN, 130, pageWidth - MARGIN, 130);
-  return 148;
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN, 78, pageWidth - MARGIN, 78);
+
+  return 96;
 }
 
-function drawApplicantBanner(doc, opts, y) {
+function drawApplicantBanner(doc, fonts, opts, y) {
   const pageWidth = doc.internal.pageSize.getWidth();
-
-  // Big applicant name
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(26);
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(22);
   doc.setTextColor(...INK);
   doc.text((opts.studentName || "—").toUpperCase(), MARGIN, y);
 
-  // Course (large)
-  doc.setFontSize(16);
-  doc.setTextColor(...INK);
-  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 24);
-
-  // College (medium)
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(13);
-  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 42);
-
-  // Admission Type + Academic Year row (label : value, right-aligned values)
-  const rowY = y + 66;
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fonts.semi, "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...INK);
-  doc.text("Admission Type:", MARGIN, rowY);
-  doc.text("Academic Year :", MARGIN, rowY + 16);
+  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 16);
 
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...INK);
-  doc.text((opts.admissionType || "—"), pageWidth - MARGIN, rowY, { align: "right" });
-  doc.text((opts.academicYear || "—"), pageWidth - MARGIN, rowY + 16, { align: "right" });
+  doc.setFont(fonts.semi, "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(...MUTED);
+  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 30);
 
-  // Soft separator
+  doc.setFont(fonts.semi, "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...INK);
+  doc.text(`Admission Type:  ${opts.admissionType || "—"}`,
+    pageWidth - MARGIN, y + 4, { align: "right" });
+  doc.text(`Academic Year:  ${opts.academicYear || "—"}`,
+    pageWidth - MARGIN, y + 18, { align: "right" });
+
   doc.setDrawColor(...RULE);
-  doc.line(MARGIN, rowY + 28, pageWidth - MARGIN, rowY + 28);
-  return rowY + 44;
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN, y + 42, pageWidth - MARGIN, y + 42);
+  return y + 56;
 }
 
-function drawSectionHeader(doc, title, y, opts = {}) {
+function drawSectionHeader(doc, fonts, title, y, sub) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(11);
   doc.setTextColor(...INK);
   doc.text(title.toUpperCase(), MARGIN, y);
-  // Blue underline
-  doc.setDrawColor(...BRAND_BLUE_SOFT);
-  doc.setLineWidth(1.2);
-  doc.line(MARGIN, y + 4, pageWidth - MARGIN, y + 4);
-
-  if (opts.sub) {
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(8.5);
+  doc.setDrawColor(...INK);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
+  if (sub) {
+    doc.setFont(fonts.primary, "normal");
+    doc.setFontSize(7);
     doc.setTextColor(...MUTED);
-    doc.text(opts.sub, MARGIN, y + 18);
-    return y + 30;
+    doc.text(sub, MARGIN, y + 13);
+    return y + 22;
   }
-  return y + 22;
+  return y + 14;
 }
 
-// Two-column key/value block. `rows` is a flat list of [label, value] tuples.
-// Optionally `wideRows` are full-width rows inserted in order (used for
-// addresses/long values).
-function drawKvBlock(doc, rows, startY, wideRows = []) {
+function drawKvBlock(doc, fonts, rows, startY) {
   const body = [];
   let buffer = null;
   for (const r of rows) {
@@ -163,141 +230,162 @@ function drawKvBlock(doc, rows, startY, wideRows = []) {
     startY,
     body,
     theme: "plain",
-    styles: { fontSize: 9.5, textColor: INK, cellPadding: { top: 4, right: 8, bottom: 4, left: 0 }, valign: "top" },
-    columnStyles: {
-      0: { fontStyle: "bold", textColor: MUTED, cellWidth: 95 },
-      1: { cellWidth: 158 },
-      2: { fontStyle: "bold", textColor: MUTED, cellWidth: 95 },
-      3: { cellWidth: 158 },
+    styles: {
+      font: fonts.semi,
+      fontStyle: "normal",
+      fontSize: 9,
+      textColor: INK,
+      cellPadding: { top: 2, right: 6, bottom: 2, left: 0 },
+      valign: "top",
     },
-    margin: { left: MARGIN, right: MARGIN },
-  });
-  let y = doc.lastAutoTable.finalY;
-
-  // Render wide rows underneath
-  if (wideRows.length) {
-    autoTable(doc, {
-      startY: y,
-      body: wideRows.map(([k, val]) => [k, v(val)]),
-      theme: "plain",
-      styles: { fontSize: 9.5, textColor: INK, cellPadding: { top: 4, right: 8, bottom: 4, left: 0 }, valign: "top" },
-      columnStyles: {
-        0: { fontStyle: "bold", textColor: MUTED, cellWidth: 95 },
-        1: { cellWidth: "auto" },
-      },
-      margin: { left: MARGIN, right: MARGIN },
-    });
-    y = doc.lastAutoTable.finalY;
-  }
-  return y;
-}
-
-function drawAcademicTable(doc, tenth, twelfth, startY) {
-  // Header row + one row per level. Layout: Reg.No | School | Board | Place | Year | %
-  const head = [["Register No.", "School", "Board", "Place", "Year", "Percentage"]];
-  const body = [
-    [
-      { content: "10th Standard", colSpan: 6, styles: { fillColor: [245, 247, 252], textColor: BRAND_BLUE, fontStyle: "bold", fontSize: 10 } },
-    ],
-    [
-      v(tenth.register_number), v(tenth.school_name), v(tenth.board),
-      v(tenth.school_place), v(tenth.year_of_passing), v(tenth.percentage),
-    ],
-    [
-      { content: "12th Standard / Diploma", colSpan: 6, styles: { fillColor: [245, 247, 252], textColor: BRAND_BLUE, fontStyle: "bold", fontSize: 10 } },
-    ],
-    [
-      v(twelfth.register_number), v(twelfth.school_name), v(twelfth.board),
-      v(twelfth.school_place), v(twelfth.year_of_passing), v(twelfth.percentage),
-    ],
-  ];
-  autoTable(doc, {
-    startY,
-    head,
-    body,
-    theme: "grid",
-    styles: { fontSize: 9, textColor: INK, cellPadding: 5, valign: "middle" },
-    headStyles: { fillColor: [255, 255, 255], textColor: MUTED, fontStyle: "bold", fontSize: 8.5, lineColor: RULE, lineWidth: 0.4 },
-    bodyStyles: { lineColor: RULE, lineWidth: 0.4 },
     columnStyles: {
-      0: { cellWidth: 70 }, 1: { cellWidth: 110 },
-      2: { cellWidth: 60 }, 3: { cellWidth: 80 },
-      4: { cellWidth: 55 }, 5: { cellWidth: 'auto' },
+      0: { textColor: MUTED, cellWidth: 80 },
+      1: { textColor: INK, cellWidth: 175 },
+      2: { textColor: MUTED, cellWidth: 80 },
+      3: { textColor: INK, cellWidth: 175 },
     },
     margin: { left: MARGIN, right: MARGIN },
   });
   return doc.lastAutoTable.finalY;
 }
 
-function drawDeclaration(doc, collegeName, startY) {
+function drawWideRow(doc, fonts, label, value, startY) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  autoTable(doc, {
+    startY,
+    body: [[label, v(value)]],
+    theme: "plain",
+    styles: {
+      font: fonts.semi,
+      fontStyle: "normal",
+      fontSize: 9,
+      textColor: INK,
+      cellPadding: { top: 2, right: 6, bottom: 2, left: 0 },
+      valign: "top",
+    },
+    columnStyles: {
+      0: { textColor: MUTED, cellWidth: 80 },
+      1: { textColor: INK, cellWidth: pageWidth - MARGIN * 2 - 80 },
+    },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  return doc.lastAutoTable.finalY;
+}
+
+function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const contentW = pageWidth - MARGIN * 2;
+  const colWidths = [60, 95, 50, 95, 60, contentW - 60 - 95 - 50 - 95 - 60];
+
+  const body = [
+    [
+      { content: "10th Standard", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } },
+    ],
+    [
+      { content: "Register No.", styles: { textColor: MUTED } }, v(tenth.register_number),
+      { content: "Board", styles: { textColor: MUTED } }, v(tenth.board),
+      { content: "Year", styles: { textColor: MUTED } }, v(tenth.year_of_passing),
+    ],
+    [
+      { content: "School", styles: { textColor: MUTED } }, v(tenth.school_name),
+      { content: "Place", styles: { textColor: MUTED } }, v(tenth.school_place),
+      { content: "Percentage", styles: { textColor: MUTED } }, v(tenth.percentage),
+    ],
+    [
+      { content: "12th Standard / Diploma", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } },
+    ],
+    [
+      { content: "Register No.", styles: { textColor: MUTED } }, v(twelfth.register_number),
+      { content: "Board", styles: { textColor: MUTED } }, v(twelfth.board),
+      { content: "Year", styles: { textColor: MUTED } }, v(twelfth.year_of_passing),
+    ],
+    [
+      { content: "School", styles: { textColor: MUTED } }, v(twelfth.school_name),
+      { content: "Place", styles: { textColor: MUTED } }, v(twelfth.school_place),
+      { content: "Percentage", styles: { textColor: MUTED } }, v(twelfth.percentage),
+    ],
+  ];
+
+  autoTable(doc, {
+    startY,
+    body,
+    theme: "plain",
+    styles: {
+      font: fonts.semi,
+      fontStyle: "normal",
+      fontSize: 9,
+      textColor: INK,
+      cellPadding: { top: 3, right: 4, bottom: 3, left: 4 },
+      valign: "middle",
+    },
+    columnStyles: {
+      0: { cellWidth: colWidths[0] }, 1: { cellWidth: colWidths[1] },
+      2: { cellWidth: colWidths[2] }, 3: { cellWidth: colWidths[3] },
+      4: { cellWidth: colWidths[4] }, 5: { cellWidth: colWidths[5] },
+    },
+    margin: { left: MARGIN, right: MARGIN },
+  });
+  return doc.lastAutoTable.finalY;
+}
+
+function drawDeclaration(doc, fonts, collegeName, startY) {
   const pageWidth = doc.internal.pageSize.getWidth();
   let y = startY;
-  // Heading
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fonts.bold, "bold");
   doc.setFontSize(11);
   doc.setTextColor(...INK);
   doc.text("DECLARATION", MARGIN, y);
-  doc.setDrawColor(...BRAND_BLUE_SOFT);
-  doc.setLineWidth(1.2);
-  doc.line(MARGIN, y + 4, pageWidth - MARGIN, y + 4);
-  y += 18;
+  doc.setDrawColor(...INK);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
+  y += 14;
 
-  const text = renderDeclaration(collegeName);
-  const paragraphs = text.split("\n\n");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
+  const text = renderDeclaration(collegeName).replace(/\n\n/g, " ");
+  doc.setFont(fonts.light, "normal");
+  doc.setFontSize(8);
   doc.setTextColor(...INK);
-  for (let i = 0; i < paragraphs.length; i += 1) {
-    const lines = doc.splitTextToSize(paragraphs[i], pageWidth - MARGIN * 2);
-    doc.text(lines, MARGIN, y);
-    y += lines.length * 12 + 6;
+  const lines = doc.splitTextToSize(text, pageWidth - MARGIN * 2);
+  for (const ln of lines) {
+    doc.text(ln, MARGIN, y);
+    y += 10;
   }
   return y;
 }
 
-function drawSignatureStrip(doc, y) {
+function drawSignatures(doc, fonts, y) {
   const pageWidth = doc.internal.pageSize.getWidth();
   doc.setDrawColor(...INK);
-  doc.setLineWidth(0.4);
-  doc.line(MARGIN, y, MARGIN + 170, y);
-  doc.line(pageWidth - MARGIN - 170, y, pageWidth - MARGIN, y);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  doc.setLineWidth(0.5);
+  doc.line(MARGIN, y, MARGIN + 150, y);
+  doc.line(pageWidth - MARGIN - 150, y, pageWidth - MARGIN, y);
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(8);
   doc.setTextColor(...INK);
-  doc.text("Applicant Signature", MARGIN, y + 14);
-  doc.text("Admissions Officer", pageWidth - MARGIN - 170, y + 14);
+  doc.text("Applicant Signature", MARGIN, y + 11);
+  doc.text("Admissions Officer", pageWidth - MARGIN - 150, y + 11);
 }
 
-function drawFooter(doc) {
+function drawFooter(doc, fonts) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  // Top divider
   doc.setDrawColor(...RULE);
-  doc.setLineWidth(0.6);
-  doc.line(MARGIN, pageHeight - 50, pageWidth - MARGIN, pageHeight - 50);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN, pageHeight - 40, pageWidth - MARGIN, pageHeight - 40);
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...INK);
+  doc.text(
+    "More Information: +91 88846 27275  |  info@kmfoundation.co.in  |  www.kmfoundation.co.in",
+    pageWidth / 2, pageHeight - 26, { align: "center" },
+  );
+  doc.setFont(fonts.primary, "normal");
+  doc.setFontSize(6.5);
   doc.setTextColor(...MUTED);
+  const ts = new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
   doc.text(
-    "More Information: +91 88846 27275 | info@kmfoundation.co.in | www.kmfoundation.co.in",
-    pageWidth / 2, pageHeight - 32, { align: "center" },
+    `Generated ${ts}.  FinFlow by KM Foundation`,
+    pageWidth / 2, pageHeight - 14, { align: "center" },
   );
-  doc.setFontSize(7.5);
-  doc.setTextColor(168, 162, 158);
-  doc.text(
-    `Generated ${new Date().toLocaleString()}. FinFlow by KM Foundation`,
-    pageWidth / 2, pageHeight - 18, { align: "center" },
-  );
-}
-
-function ensureSpace(doc, y, needed = 100) {
-  const pageHeight = doc.internal.pageSize.getHeight();
-  if (y + needed > pageHeight - 100) {
-    doc.addPage();
-    return 60;
-  }
-  return y;
 }
 
 export async function downloadApplicationPdf({ student }) {
@@ -305,7 +393,11 @@ export async function downloadApplicationPdf({ student }) {
   if (!app) throw new Error("This student has no application data attached.");
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const logoDataUrl = await loadLogoDataUrl();
+  // Load fonts + logo in parallel
+  const [fonts, logoDataUrl] = await Promise.all([
+    ensureFonts(doc),
+    loadLogoDataUrl(),
+  ]);
 
   const bi = app.basic_info || {};
   const co = app.course || {};
@@ -313,15 +405,14 @@ export async function downloadApplicationPdf({ student }) {
   const ac = app.academic || {};
 
   const submittedAt = student.application_submitted_at
-    ? formatDate(student.application_submitted_at)
-    : "—";
+    ? formatDate(student.application_submitted_at) : "—";
   const refCode = (student.id || "").slice(0, 8).toUpperCase() || "—";
 
-  // ---- Header (logo + title + ref) ----
-  let y = drawHeader(doc, { logoDataUrl, refCode, submittedAt });
+  // ---- Header ----
+  let y = drawHeader(doc, fonts, { logoDataUrl, refCode, submittedAt });
 
   // ---- Applicant banner ----
-  y = drawApplicantBanner(doc, {
+  y = drawApplicantBanner(doc, fonts, {
     studentName: bi.student_full_name || student.name,
     course: co.interested_course,
     college: co.preferred_college,
@@ -330,53 +421,52 @@ export async function downloadApplicationPdf({ student }) {
   }, y);
 
   // ---- CANDIDATE DETAILS ----
-  y = ensureSpace(doc, y, 200);
-  y = drawSectionHeader(doc, "Candidate Details", y, { sub: "*Your personal information" });
-  y = drawKvBlock(doc, [
+  y = drawSectionHeader(doc, fonts, "Candidate Details", y, "*Your personal information");
+  y = drawKvBlock(doc, fonts, [
     ["Mobile", bi.mobile_number],
+    ["Date of Birth", bi.date_of_birth ? formatDate(bi.date_of_birth) : null],
     ["Email", bi.email],
+    ["Gender", labelOf(LABELS.gender, bi.gender)],
     ["Nationality", bi.nationality || "Indian"],
+    ["Aadhaar", bi.aadhaar_number],
     ["Caste", bi.caste],
     ["Religion", bi.religion],
-    ["Date of Birth", bi.date_of_birth ? formatDate(bi.date_of_birth) : null],
-    ["Gender", labelOf(LABELS.gender, bi.gender)],
-    ["Aadhaar", bi.aadhaar_number],
   ], y);
+  y += 8;
 
   // ---- PARENTS & ADDRESS ----
-  y = ensureSpace(doc, y + 10, 180);
-  y = drawSectionHeader(doc, "Parents & Address", y);
   const addrLine = [cm.address_line_1, cm.address_line_2].filter(Boolean).join(", ");
-  y = drawKvBlock(doc, [
+  y = drawSectionHeader(doc, fonts, "Parents & Address", y);
+  y = drawKvBlock(doc, fonts, [
     ["Father's Name", cm.father_name],
-    ["Father's Mobile", cm.father_mobile],
     ["Mother's Name", cm.mother_name],
+    ["Father's Mobile", cm.father_mobile],
     ["Mother's Mobile", cm.mother_mobile],
+  ], y);
+  y = drawWideRow(doc, fonts, "Address", addrLine || "—", y + 2);
+  y = drawKvBlock(doc, fonts, [
     ["City", cm.city],
-    ["State", cm.state],
     ["Pincode", cm.pincode],
-  ], y, [["Address", addrLine || "—"]]);
+    ["State", cm.state],
+    ["", ""],
+  ], y + 2);
+  y += 8;
 
   // ---- ACADEMIC QUALIFICATIONS ----
-  y = ensureSpace(doc, y + 10, 160);
-  y = drawSectionHeader(doc, "Academic Qualifications", y);
-  y = drawAcademicTable(doc, ac.tenth || {}, ac.twelfth || {}, y);
+  y = drawSectionHeader(doc, fonts, "Academic Qualifications", y);
+  y = drawAcademicTable(doc, fonts, ac.tenth || {}, ac.twelfth || {}, y);
+  y += 8;
 
   // ---- DECLARATION ----
-  y = ensureSpace(doc, y + 14, 120);
-  y = drawDeclaration(doc, co.preferred_college, y);
+  y = drawDeclaration(doc, fonts, co.preferred_college, y);
 
-  // ---- Signature strip (always near the bottom of last page) ----
+  // ---- Signature strip ----
   const pageHeight = doc.internal.pageSize.getHeight();
-  const sigY = Math.max(y + 50, pageHeight - 100);
-  drawSignatureStrip(doc, sigY);
+  const sigY = Math.max(y + 22, pageHeight - 78);
+  drawSignatures(doc, fonts, sigY);
 
-  // ---- Footer (every page) ----
-  const pages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pages; i += 1) {
-    doc.setPage(i);
-    drawFooter(doc);
-  }
+  // ---- Footer ----
+  drawFooter(doc, fonts);
 
   const safeName = (bi.student_full_name || student.name || "applicant").replace(/[^a-z0-9_\- ]/gi, "_");
   doc.save(`${safeName} - Application - ${new Date().toISOString().slice(0, 10)}.pdf`);

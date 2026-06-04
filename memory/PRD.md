@@ -480,6 +480,26 @@
 - [x] **End-to-end verified via curl**: super admin POST + PATCH + DELETE on office-admin's clients/students/payments returns 200; office admin reads back the super-admin's edits successfully; office admin cannot edit super-admin's records (404).
 - [x] **PDF visual analysis** via gemini-2.5-flash-lite confirms the rendered output matches the sample's layout: 2-page A4, AdmissionForm title, KM logo, applicant banner, blue section underlines, declaration paragraph, signature blocks, contact footer.
 
+## Implementation status — 2026-02-26 (iteration 35: PDF redesign v2 — branded Montserrat layout)
+- [x] **Application PDF visual overhaul** to match the user's second sample (page 2 design spec):
+  - Red → Black linear gradient bar (#C70000 → #101010) at the very top edge (200-stripe approximation).
+  - KM Foundation logo (km-mark.png) anchored TOP-LEFT next to the "AdmissionForm" wordmark.
+  - "Ref:" + "Submitted:" timestamp block TOP-RIGHT.
+  - Applicant name banner (22pt Bold) · course/college (10pt SemiBold) · Admission Type/Academic Year row right-aligned.
+  - Section headers (11pt Bold) underlined with a thin black rule (CANDIDATE DETAILS · PARENTS & ADDRESS · ACADEMIC QUALIFICATIONS · DECLARATION).
+  - Two-column key/value layout at 9pt SemiBold with muted labels (#5a5a5a) + black values.
+  - Academic table with **pink (#FFE7F3) sub-header rows** for "10th Standard" and "12th Standard / Diploma".
+  - Declaration paragraph at 8pt Light with `{college_name}` substituted from the picked college.
+  - Signature blocks anchored above the footer (Applicant Signature / Admissions Officer).
+  - Contact footer in bold 7pt: "+91 88846 27275 | info@kmfoundation.co.in | www.kmfoundation.co.in" + generated timestamp.
+- [x] **Single-page A4 output** verified (single page on both frontend jsPDF and backend ReportLab).
+- [x] **Montserrat font family embedded** (Regular / SemiBold / Bold / Light) in BOTH generators:
+  - Backend: TTFs at `/app/backend/lib/fonts/`, registered via `pdfmetrics.registerFont(TTFont(...))` at module import (silent Helvetica fallback if missing).
+  - Frontend: TTFs at `/app/frontend/public/fonts/`, fetched once per session, base64-encoded, and registered via `doc.addFileToVFS + doc.addFont` (silent Helvetica fallback).
+- [x] **Visually validated** end-to-end via Playwright: super admin logged in → opened Arya R student detail → clicked "Application PDF" → browser downloaded ~1.3MB PDF → analyzed image confirms gradient bar at top edge, logo top-left, pink section accents, single page, all sections in correct order, signatures + footer present.
+- [x] **Backend smoke render** at /tmp/test_app_v3.pdf (~78KB without browser overhead, single page).
+- [x] **52/52 pytest pass** (no regressions from font registration or layout changes).
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
