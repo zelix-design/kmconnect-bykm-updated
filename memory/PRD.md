@@ -500,6 +500,20 @@
 - [x] **Backend smoke render** at /tmp/test_app_v3.pdf (~78KB without browser overhead, single page).
 - [x] **52/52 pytest pass** (no regressions from font registration or layout changes).
 
+## Implementation status — 2026-02-26 (iteration 36: PDF redesign v3 — SVG-template aligned)
+- [x] **Application PDF re-laid out** to follow the user's uploaded SVG template + Left.svg + Right.svg specs:
+  - **TOP-RIGHT**: KM Foundation logo (km-mark.png, 48×48pt) anchored to the right margin just below the gradient strip.
+  - **TOP-LEFT**: `AdmissionForm` wordmark with `Admission` rendered in BLACK and `Form` rendered in BRAND_RED — visually quoted from Left.svg.
+  - Tall red→black gradient strip (36pt height) at the very top edge — content sits below in a 80pt header block.
+  - `Ref:` + `Submitted:` lines right-aligned below the logo.
+  - Thin red rule under the whole header zone for separation.
+  - Body sections (Candidate Details, Parents & Address, Academic Qualifications, Declaration) with 12pt gaps between them — balanced, breathable spacing.
+  - **Footer band**: black→red gradient strip (30pt, mirrors the header) at the bottom edge with the KM Foundation contact line + generated timestamp printed above it.
+  - Pink (#FFE7F3) accent retained for 10th / 12th Standard sub-headers in the academic table.
+- [x] **Single A4 page output** preserved (~80KB backend ReportLab; ~140KB frontend jsPDF including embedded Montserrat).
+- [x] **Visually validated** end-to-end via Playwright: image analyzer confirms all 8 design checks pass on the frontend PDF (gradient bar top, AdmissionForm wordmark with red Form, logo top-right, Ref/Submitted right-aligned, bottom gradient mirror, contact above strip, single page, balanced spacing) and on the backend PDF.
+- [x] **52/52 pytest pass** (no regressions from layout swap).
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

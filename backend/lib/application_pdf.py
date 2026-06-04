@@ -1,17 +1,16 @@
-"""Server-side admission Application PDF — KM Foundation branded design.
+"""Server-side admission Application PDF — KM Foundation branded.
 
-Implements the design spec on page 2 of the user-provided sample:
-  - Header: linear gradient bar (#C70000 → #101010) at the top
-  - Logo: TOP-LEFT (km-mark.png), Ref + Submitted block TOP-RIGHT
-  - Applicant Name banner: Montserrat-Bold 25pt
-  - Course / College: Montserrat-SemiBold 10pt
-  - Section headers: Montserrat-Bold 11pt
-  - Field labels + values: Montserrat-SemiBold 10pt
-  - Declaration: Montserrat-Light 8pt
-  - Footer: Century Gothic 7pt (fallback Montserrat-Bold) — contact info
-  - Pink accent (#FFE7F3) for visual interest
+Layout matches the user's SVG template:
+  - 0-40pt: Red→Black linear gradient header band
+  - 40-110pt: AdmissionForm wordmark TOP-LEFT (Admission black + Form red)
+              + KM logo TOP-RIGHT + Ref / Submitted right-aligned
+  - Thin red rule separator
+  - Body with consistent vertical spacing between sections
+  - Pink (#FFE7F3) accent on 10th / 12th sub-headers in academic table
+  - Footer: red→black gradient band + KM Foundation contact line
+  - Montserrat font family throughout (TTF embedded)
 
-Layout is tuned to fit ONE A4 page.
+Single A4 page output.
 """
 from __future__ import annotations
 
@@ -36,7 +35,12 @@ PAGE_WIDTH, PAGE_HEIGHT = A4
 MARGIN = 36
 CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
 
-# Brand palette from the user's design spec.
+# Header zones (in pt, measured from top of page)
+HEADER_BAR_HEIGHT = 36     # Red→black gradient strip at the very top
+HEADER_BLOCK_HEIGHT = 80   # Logo + AdmissionForm + Ref live in this band
+FOOTER_BAR_HEIGHT = 30     # Decorative gradient strip + contact line at bottom
+
+# Brand palette per design spec
 BRAND_RED = colors.HexColor("#C70000")
 BRAND_BLACK = colors.HexColor("#101010")
 PINK_ACCENT = colors.HexColor("#FFE7F3")
@@ -44,16 +48,16 @@ INK = colors.HexColor("#000000")
 MUTED = colors.HexColor("#5a5a5a")
 RULE = colors.HexColor("#d4d4d4")
 
+
 # ---------- Font registration (Montserrat from /app/backend/lib/fonts) ----------
 _FONTS_DIR = os.path.join(os.path.dirname(__file__), "fonts")
-_FONT_FAMILY_PRIMARY = "Helvetica"            # Safe default — overridden below
+_FONT_FAMILY_PRIMARY = "Helvetica"
 _FONT_FAMILY_BOLD = "Helvetica-Bold"
 _FONT_FAMILY_SEMI = "Helvetica-Bold"
 _FONT_FAMILY_LIGHT = "Helvetica"
 
 
 def _register_fonts() -> None:
-    """Register Montserrat once at import. Falls back to Helvetica silently."""
     global _FONT_FAMILY_PRIMARY, _FONT_FAMILY_BOLD, _FONT_FAMILY_SEMI, _FONT_FAMILY_LIGHT
     mappings = [
         ("Montserrat", "Montserrat-Regular.ttf"),
@@ -70,9 +74,8 @@ def _register_fonts() -> None:
             if name not in pdfmetrics.getRegisteredFontNames():
                 pdfmetrics.registerFont(TTFont(name, path))
             registered.append(name)
-        except Exception as exc:  # pragma: no cover — best-effort
+        except Exception as exc:  # pragma: no cover
             log.warning("[pdf] failed to register %s: %s", name, exc)
-
     if "Montserrat" in registered:
         _FONT_FAMILY_PRIMARY = "Montserrat"
     if "Montserrat-Bold" in registered:
@@ -145,85 +148,97 @@ def _logo_path() -> str | None:
     return None
 
 
-def _draw_gradient_bar(c: Canvas, y_top: float, height: float = 10) -> None:
-    """Approximate a linear gradient from #C70000 (left) to #101010 (right)
-    by drawing many thin vertical stripes. ReportLab's `linearGradient` API
-    is fiddly with canvas state, so this brute-force approach is the cleanest.
+def _draw_gradient_strip(c: Canvas, top_y: float, height: float, reverse: bool = False) -> None:
+    """Draw a horizontal red→black gradient strip occupying the full page
+    width. ``top_y`` is the top edge of the strip (in PDF coords).
+    Setting ``reverse=True`` flips the gradient (black→red), used for the
+    footer to visually mirror the header.
     """
-    steps = 200
+    steps = 240
     stripe_w = PAGE_WIDTH / steps
     for i in range(steps):
         t = i / (steps - 1)
+        if reverse:
+            t = 1 - t
         r = int(0xC7 + (0x10 - 0xC7) * t)
         g = int(0x00 + (0x10 - 0x00) * t)
         b = int(0x00 + (0x10 - 0x00) * t)
         c.setFillColorRGB(r / 255, g / 255, b / 255)
-        c.rect(i * stripe_w, y_top - height, stripe_w + 0.6, height, stroke=0, fill=1)
+        c.rect(i * stripe_w, top_y - height, stripe_w + 0.6, height, stroke=0, fill=1)
 
 
 def _draw_header(c: Canvas, ref_code: str, submitted_at: str) -> float:
-    """Draws gradient bar + logo (TOP-LEFT) + Ref/Submitted (TOP-RIGHT).
-    Returns the y-cursor at which the body content can begin.
+    """Top zone: gradient strip + AdmissionForm + KM logo + Ref/Submitted.
+    Returns the y-cursor where body content can begin.
     """
-    # 1) Gradient bar at the very top
-    _draw_gradient_bar(c, PAGE_HEIGHT, height=8)
+    # 1) Red→Black gradient strip
+    _draw_gradient_strip(c, PAGE_HEIGHT, HEADER_BAR_HEIGHT)
 
-    # 2) Logo top-left (50×50, hugs the left margin just under the bar)
+    # 2) AdmissionForm wordmark TOP-LEFT — "Admission" black, "Form" red
+    text_baseline = PAGE_HEIGHT - HEADER_BAR_HEIGHT - 22
+    c.setFont(_FONT_FAMILY_BOLD, 20)
+    # Measure "Admission" so we know where to start "Form"
+    admission_text = "Admission"
+    form_text = "Form"
+    admission_w = c.stringWidth(admission_text, _FONT_FAMILY_BOLD, 20)
+    c.setFillColor(INK)
+    c.drawString(MARGIN, text_baseline, admission_text)
+    c.setFillColor(BRAND_RED)
+    c.drawString(MARGIN + admission_w, text_baseline, form_text)
+    # Subtle subline
+    c.setFont(_FONT_FAMILY_PRIMARY, 7.5)
+    c.setFillColor(MUTED)
+    c.drawString(MARGIN, text_baseline - 12, "KM Foundation · Educational Services LLP")
+
+    # 3) KM logo TOP-RIGHT
     logo = _logo_path()
-    logo_y = PAGE_HEIGHT - 70
     if logo:
         try:
-            c.drawImage(logo, MARGIN, logo_y, width=50, height=50,
-                        preserveAspectRatio=True, mask="auto")
+            logo_size = 48
+            c.drawImage(
+                logo,
+                PAGE_WIDTH - MARGIN - logo_size,
+                PAGE_HEIGHT - HEADER_BAR_HEIGHT - logo_size - 6,
+                width=logo_size, height=logo_size,
+                preserveAspectRatio=True, mask="auto",
+            )
         except Exception as exc:
             log.warning("[pdf] logo drawImage failed: %s", exc)
 
-    # 3) "AdmissionForm" wordmark — top-left, sits right of the logo
-    c.setFillColor(INK)
-    c.setFont(_FONT_FAMILY_BOLD, 18)
-    c.drawString(MARGIN + 60, PAGE_HEIGHT - 38, "AdmissionForm")
-    c.setFont(_FONT_FAMILY_SEMI, 8)
-    c.setFillColor(MUTED)
-    c.drawString(MARGIN + 60, PAGE_HEIGHT - 50, "KM Foundation Educational Services LLP")
-
-    # 4) Ref + Submitted timestamp — right side
-    c.setFillColor(INK)
+    # 4) Ref / Submitted text — below the logo, right-aligned
+    ref_y = PAGE_HEIGHT - HEADER_BAR_HEIGHT - HEADER_BLOCK_HEIGHT + 22
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
-    c.drawRightString(PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 38, f"Ref: {ref_code}")
+    c.setFillColor(INK)
+    c.drawRightString(PAGE_WIDTH - MARGIN, ref_y, f"Ref: {ref_code}")
     c.setFont(_FONT_FAMILY_PRIMARY, 8)
     c.setFillColor(MUTED)
-    c.drawRightString(PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 50, f"Submitted: {_fmt_date(submitted_at)}")
+    c.drawRightString(PAGE_WIDTH - MARGIN, ref_y - 11, f"Submitted: {_fmt_date(submitted_at)}")
 
-    # 5) Subtle rule under the header
-    c.setStrokeColor(RULE)
-    c.setLineWidth(0.5)
-    c.line(MARGIN, PAGE_HEIGHT - 78, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 78)
+    # 5) Thin red rule under the whole header zone
+    sep_y = PAGE_HEIGHT - HEADER_BAR_HEIGHT - HEADER_BLOCK_HEIGHT - 4
+    c.setStrokeColor(BRAND_RED)
+    c.setLineWidth(0.8)
+    c.line(MARGIN, sep_y, PAGE_WIDTH - MARGIN, sep_y)
 
-    return PAGE_HEIGHT - 92
+    return sep_y - 18
 
 
 def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
-    """Renders the large applicant name + course + college block plus the
-    Admission Type / Academic Year right-aligned rows."""
     name = (opts.get("student_name") or "—").upper()
     course = (opts.get("course") or "—").upper()
     college = (opts.get("college") or "—").upper()
 
-    # Big applicant name — 25pt Bold per spec
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 22)
     c.drawString(MARGIN, y, name)
 
-    # Course (10pt Semibold)
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.drawString(MARGIN, y - 16, course)
 
-    # College (10pt Semibold)
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.setFillColor(MUTED)
     c.drawString(MARGIN, y - 30, college)
 
-    # Right-aligned Admission Type + Academic Year (label : value)
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
     c.drawRightString(PAGE_WIDTH - MARGIN, y - 4,
@@ -231,9 +246,8 @@ def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
     c.drawRightString(PAGE_WIDTH - MARGIN, y - 18,
                       f"Academic Year:  {opts.get('academic_year') or '—'}")
 
-    # Subtle rule
     c.setStrokeColor(RULE)
-    c.setLineWidth(0.5)
+    c.setLineWidth(0.4)
     c.line(MARGIN, y - 42, PAGE_WIDTH - MARGIN, y - 42)
     return y - 56
 
@@ -242,9 +256,8 @@ def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 11)
     c.drawString(MARGIN, y, title.upper())
-    # Thin black underline per the spec (sample shows a black underline strip)
     c.setStrokeColor(INK)
-    c.setLineWidth(0.8)
+    c.setLineWidth(0.7)
     c.line(MARGIN, y - 3, PAGE_WIDTH - MARGIN, y - 3)
     if sub:
         c.setFillColor(MUTED)
@@ -255,7 +268,6 @@ def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None
 
 
 def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
-    """Compact 4-column table (label · value · label · value) at 10pt."""
     rows: list[list[Any]] = []
     buf: tuple[str, Any] | None = None
     for label, value in pairs:
@@ -278,8 +290,8 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
     ]))
     return table
 
@@ -287,22 +299,20 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
 def _wide_row(label: str, value: Any) -> Table:
     table = Table([[label, _v(value)]], colWidths=[80, CONTENT_WIDTH - 80])
     table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (0, -1), _FONT_FAMILY_SEMI),
-        ("FONTNAME", (1, 0), (1, -1), _FONT_FAMILY_SEMI),
+        ("FONTNAME", (0, 0), (-1, -1), _FONT_FAMILY_SEMI),
         ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
         ("TEXTCOLOR", (1, 0), (1, -1), INK),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
     ]))
     return table
 
 
 def _academic_table(tenth: dict, twelfth: dict) -> Table:
-    """Compact academic block — pink header rows for 10th / 12th."""
     body = [
         [{"colSpan": 6, "content": "10th Standard"}, "", "", "", "", ""],
         ["Register No.", _v(tenth.get("register_number")),
@@ -326,7 +336,6 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
     col_widths = [60, 95, 50, 95, 60, CONTENT_WIDTH - 60 - 95 - 50 - 95 - 60]
     table = Table(norm, colWidths=col_widths)
     style = [
-        # Pink section rows
         ("SPAN", (0, 0), (-1, 0)),
         ("SPAN", (0, 3), (-1, 3)),
         ("BACKGROUND", (0, 0), (-1, 0), PINK_ACCENT),
@@ -343,26 +352,22 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
         ("TOPPADDING", (0, 3), (-1, 3), 4),
         ("BOTTOMPADDING", (0, 3), (-1, 3), 4),
-        # Body cells (rows 1,2,4,5)
         ("FONTNAME", (0, 1), (-1, 2), _FONT_FAMILY_SEMI),
         ("FONTNAME", (0, 4), (-1, 5), _FONT_FAMILY_SEMI),
         ("FONTSIZE", (0, 1), (-1, 2), 9),
         ("FONTSIZE", (0, 4), (-1, 5), 9),
-        # Label cells (cols 0, 2, 4 of rows 1,2,4,5)
         ("TEXTCOLOR", (0, 1), (0, 2), MUTED),
         ("TEXTCOLOR", (2, 1), (2, 2), MUTED),
         ("TEXTCOLOR", (4, 1), (4, 2), MUTED),
         ("TEXTCOLOR", (0, 4), (0, 5), MUTED),
         ("TEXTCOLOR", (2, 4), (2, 5), MUTED),
         ("TEXTCOLOR", (4, 4), (4, 5), MUTED),
-        # Value cells
         ("TEXTCOLOR", (1, 1), (1, 2), INK),
         ("TEXTCOLOR", (3, 1), (3, 2), INK),
         ("TEXTCOLOR", (5, 1), (5, 2), INK),
         ("TEXTCOLOR", (1, 4), (1, 5), INK),
         ("TEXTCOLOR", (3, 4), (3, 5), INK),
         ("TEXTCOLOR", (5, 4), (5, 5), INK),
-        # Grid lines
         ("LINEBELOW", (0, 1), (-1, 1), 0.3, RULE),
         ("LINEBELOW", (0, 4), (-1, 4), 0.3, RULE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -376,19 +381,17 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
 
 
 def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
-    """Section header + 8pt light text declaration paragraph."""
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 11)
     c.drawString(MARGIN, y, "DECLARATION")
     c.setStrokeColor(INK)
-    c.setLineWidth(0.8)
+    c.setLineWidth(0.7)
     c.line(MARGIN, y - 3, PAGE_WIDTH - MARGIN, y - 3)
 
     y -= 14
     text = _render_declaration(college_name)
     c.setFont(_FONT_FAMILY_LIGHT, 8)
     c.setFillColor(INK)
-    # Wrap to ~125 chars per line at 8pt — fits the content width comfortably
     lines = wrap(text, width=125)
     for ln in lines:
         c.drawString(MARGIN, y, ln)
@@ -397,7 +400,6 @@ def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
 
 
 def _draw_signature(c: Canvas, y: float) -> None:
-    """Applicant Signature / Admissions Officer signature lines."""
     c.setStrokeColor(INK)
     c.setLineWidth(0.5)
     c.line(MARGIN, y, MARGIN + 150, y)
@@ -409,30 +411,33 @@ def _draw_signature(c: Canvas, y: float) -> None:
 
 
 def _draw_footer(c: Canvas) -> None:
-    """Contact info bar + generated timestamp."""
-    c.setStrokeColor(RULE)
-    c.setLineWidth(0.4)
-    c.line(MARGIN, 40, PAGE_WIDTH - MARGIN, 40)
+    """Decorative bottom strip + contact info.
 
+    The strip mirrors the header band visually — black at the left,
+    transitioning to red at the right, with the contact line printed
+    centred above it.
+    """
+    # Contact line — sits above the strip
+    contact_y = FOOTER_BAR_HEIGHT + 12
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 7)
     c.drawCentredString(
-        PAGE_WIDTH / 2, 26,
+        PAGE_WIDTH / 2, contact_y,
         "More Information: +91 88846 27275  |  info@kmfoundation.co.in  |  www.kmfoundation.co.in",
     )
     c.setFillColor(MUTED)
     c.setFont(_FONT_FAMILY_PRIMARY, 6.5)
     c.drawCentredString(
-        PAGE_WIDTH / 2, 14,
+        PAGE_WIDTH / 2, contact_y - 10,
         f"Generated {datetime.now().strftime('%d/%m/%Y, %H:%M:%S')}.  FinFlow by KM Foundation",
     )
 
+    # Decorative strip — black→red, mirrors the header
+    _draw_gradient_strip(c, FOOTER_BAR_HEIGHT, FOOTER_BAR_HEIGHT, reverse=True)
+
 
 def render_application_pdf(student: dict) -> bytes:
-    """Generate the admission application PDF from a `students` document.
-
-    Single-page A4 output. Returns raw PDF bytes.
-    """
+    """Generate the admission application PDF (single-page A4)."""
     app = student.get("application")
     if not app:
         raise ValueError("Student has no application data attached")
@@ -443,7 +448,7 @@ def render_application_pdf(student: dict) -> bytes:
     buf = BytesIO()
     c = Canvas(buf, pagesize=A4)
 
-    # ---- Header (gradient + logo + ref) ----
+    # ---- Header ----
     y = _draw_header(c, ref_code, submitted_at)
 
     # ---- Applicant banner ----
@@ -471,7 +476,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 8
+    y -= h + 12  # consistent gap between sections
 
     # ---- PARENTS & ADDRESS ----
     cm = app.get("communication") or {}
@@ -496,11 +501,11 @@ def render_application_pdf(student: dict) -> bytes:
         ("City", cm.get("city")),
         ("Pincode", cm.get("pincode")),
         ("State", cm.get("state")),
-        ("", ""),  # spacer
+        ("", ""),
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 8
+    y -= h + 12
 
     # ---- ACADEMIC QUALIFICATIONS ----
     ac = app.get("academic") or {}
@@ -508,13 +513,13 @@ def render_application_pdf(student: dict) -> bytes:
     block = _academic_table(ac.get("tenth") or {}, ac.get("twelfth") or {})
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 8
+    y -= h + 12
 
     # ---- DECLARATION ----
     y = _draw_declaration(c, co.get("preferred_college"), y)
 
     # ---- Signature strip — anchored above the footer ----
-    sig_y = max(y - 24, 78)
+    sig_y = max(y - 24, FOOTER_BAR_HEIGHT + 60)
     _draw_signature(c, sig_y)
 
     # ---- Footer ----

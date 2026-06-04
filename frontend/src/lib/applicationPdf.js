@@ -1,17 +1,15 @@
-// Per-student admission application PDF — KM Foundation branded design.
+// Per-student admission application PDF — KM Foundation branded.
 //
 // Mirrors /app/backend/lib/application_pdf.py exactly:
-//   - Red→black gradient bar at the very top
-//   - Logo TOP-LEFT (km-mark.png), Ref/Submitted TOP-RIGHT
-//   - Applicant name banner (Montserrat-Bold 22pt)
-//   - Course / College in semibold 10pt
-//   - Section headers 11pt bold with thin black underline
-//   - Two-column key/value blocks at 9pt
-//   - Pink accent (#FFE7F3) on 10th / 12th sub-header rows
-//   - Declaration paragraph at 8pt
-//   - Signature blocks + KM Foundation contact footer at 7pt
-//
-// Single A4 page output. Montserrat TTFs are loaded once per session.
+//   - Tall red→black gradient strip at the very top edge
+//   - AdmissionForm wordmark TOP-LEFT (Admission = black, Form = red)
+//   - KM logo TOP-RIGHT
+//   - Ref / Submitted right-aligned, below the logo
+//   - Thin red rule separator
+//   - Body sections with consistent breathable spacing
+//   - Pink (#FFE7F3) sub-headers in academic table
+//   - Declaration paragraph 8pt
+//   - Signature blocks + contact line + bottom gradient strip (mirror of header)
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDate } from "@/lib/format";
@@ -26,17 +24,18 @@ const LABELS = {
 };
 
 const MARGIN = 36;
-// Brand palette per design spec
-const BRAND_RED = [199, 0, 0];      // #C70000
-const BRAND_BLACK = [16, 16, 16];   // #101010
-const PINK = [255, 231, 243];       // #FFE7F3
+const HEADER_BAR_HEIGHT = 36;
+const HEADER_BLOCK_HEIGHT = 80;
+const FOOTER_BAR_HEIGHT = 30;
+
+const BRAND_RED = [199, 0, 0];
+const BRAND_BLACK = [16, 16, 16];
+const PINK = [255, 231, 243];
 const INK = [0, 0, 0];
 const MUTED = [90, 90, 90];
 const RULE = [212, 212, 212];
 
-// ---- Font registry ----
-// jsPDF needs the TTF as a base64 string. We fetch it once per page-session
-// and stash on `window` so subsequent PDFs reuse without refetching.
+// ---- Font registry (Montserrat) ----
 const FONT_FILES = [
   { name: "Montserrat", style: "normal", file: "Montserrat-Regular.ttf" },
   { name: "Montserrat", style: "bold", file: "Montserrat-Bold.ttf" },
@@ -49,7 +48,6 @@ async function loadFontDataUrl(file) {
     const res = await fetch(`/fonts/${file}`, { cache: "force-cache" });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
-    // Convert ArrayBuffer to base64 in chunks to avoid stack overflow
     const bytes = new Uint8Array(buf);
     const chunkSize = 0x8000;
     let binary = "";
@@ -71,9 +69,9 @@ async function ensureFonts(doc) {
     })));
     FONTS_BASE64 = entries.filter((e) => e.b64);
   }
-  // If no fonts loaded, fall back silently to Helvetica
-  if (!FONTS_BASE64.length) return { primary: "helvetica", bold: "helvetica", semi: "helvetica", light: "helvetica" };
-  // Register each font with this jsPDF doc instance
+  if (!FONTS_BASE64.length) {
+    return { primary: "helvetica", bold: "helvetica", semi: "helvetica", light: "helvetica" };
+  }
   for (const f of FONTS_BASE64) {
     doc.addFileToVFS(f.file, f.b64);
     doc.addFont(f.file, f.name, f.style);
@@ -108,60 +106,74 @@ async function loadLogoDataUrl() {
   }
 }
 
-function drawGradientBar(doc, height = 8) {
+function drawGradientStrip(doc, topY, height, reverse = false) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const steps = 200;
+  const steps = 240;
   const stripeW = pageWidth / steps;
   for (let i = 0; i < steps; i += 1) {
-    const t = i / (steps - 1);
+    let t = i / (steps - 1);
+    if (reverse) t = 1 - t;
     const r = Math.round(BRAND_RED[0] + (BRAND_BLACK[0] - BRAND_RED[0]) * t);
     const g = Math.round(BRAND_RED[1] + (BRAND_BLACK[1] - BRAND_RED[1]) * t);
     const b = Math.round(BRAND_RED[2] + (BRAND_BLACK[2] - BRAND_RED[2]) * t);
     doc.setFillColor(r, g, b);
-    doc.rect(i * stripeW, 0, stripeW + 0.6, height, "F");
+    doc.rect(i * stripeW, topY, stripeW + 0.6, height, "F");
   }
 }
 
 function drawHeader(doc, fonts, opts) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  // 1) Gradient bar
-  drawGradientBar(doc, 8);
+  // 1) Gradient strip at the top
+  drawGradientStrip(doc, 0, HEADER_BAR_HEIGHT);
 
-  // 2) Logo top-left
+  // 2) AdmissionForm wordmark TOP-LEFT — "Admission" black, "Form" red
+  const baselineY = HEADER_BAR_HEIGHT + 22;
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...INK);
+  doc.text("Admission", MARGIN, baselineY);
+  const admissionW = doc.getTextWidth("Admission");
+  doc.setTextColor(...BRAND_RED);
+  doc.text("Form", MARGIN + admissionW, baselineY);
+  // Subline
+  doc.setFont(fonts.primary, "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...MUTED);
+  doc.text("KM Foundation · Educational Services LLP", MARGIN, baselineY + 12);
+
+  // 3) KM logo TOP-RIGHT
   if (opts.logoDataUrl) {
     try {
-      doc.addImage(opts.logoDataUrl, "PNG", MARGIN, 16, 50, 50);
+      const logoSize = 48;
+      doc.addImage(
+        opts.logoDataUrl, "PNG",
+        pageWidth - MARGIN - logoSize,
+        HEADER_BAR_HEIGHT + 6,
+        logoSize, logoSize,
+      );
     } catch (err) {
       console.warn("[applicationPdf] addImage failed", err);
     }
   }
 
-  // 3) AdmissionForm wordmark + sub-line
-  doc.setFont(fonts.bold, "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(...INK);
-  doc.text("AdmissionForm", MARGIN + 60, 38);
-  doc.setFont(fonts.semi, "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text("KM Foundation Educational Services LLP", MARGIN + 60, 50);
-
-  // 4) Right side: Ref + Submitted
+  // 4) Ref / Submitted below the logo
+  const refY = HEADER_BAR_HEIGHT + HEADER_BLOCK_HEIGHT - 22;
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  doc.text(`Ref: ${opts.refCode}`, pageWidth - MARGIN, 38, { align: "right" });
+  doc.text(`Ref: ${opts.refCode}`, pageWidth - MARGIN, refY, { align: "right" });
   doc.setFont(fonts.primary, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text(`Submitted: ${opts.submittedAt}`, pageWidth - MARGIN, 50, { align: "right" });
+  doc.text(`Submitted: ${opts.submittedAt}`, pageWidth - MARGIN, refY + 11, { align: "right" });
 
-  // 5) Subtle rule
-  doc.setDrawColor(...RULE);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, 78, pageWidth - MARGIN, 78);
+  // 5) Red rule separator
+  const sepY = HEADER_BAR_HEIGHT + HEADER_BLOCK_HEIGHT + 4;
+  doc.setDrawColor(...BRAND_RED);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN, sepY, pageWidth - MARGIN, sepY);
 
-  return 96;
+  return sepY + 18;
 }
 
 function drawApplicantBanner(doc, fonts, opts, y) {
@@ -189,7 +201,7 @@ function drawApplicantBanner(doc, fonts, opts, y) {
     pageWidth - MARGIN, y + 18, { align: "right" });
 
   doc.setDrawColor(...RULE);
-  doc.setLineWidth(0.5);
+  doc.setLineWidth(0.4);
   doc.line(MARGIN, y + 42, pageWidth - MARGIN, y + 42);
   return y + 56;
 }
@@ -201,7 +213,7 @@ function drawSectionHeader(doc, fonts, title, y, sub) {
   doc.setTextColor(...INK);
   doc.text(title.toUpperCase(), MARGIN, y);
   doc.setDrawColor(...INK);
-  doc.setLineWidth(0.8);
+  doc.setLineWidth(0.7);
   doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
   if (sub) {
     doc.setFont(fonts.primary, "normal");
@@ -235,7 +247,7 @@ function drawKvBlock(doc, fonts, rows, startY) {
       fontStyle: "normal",
       fontSize: 9,
       textColor: INK,
-      cellPadding: { top: 2, right: 6, bottom: 2, left: 0 },
+      cellPadding: { top: 2.5, right: 6, bottom: 2.5, left: 0 },
       valign: "top",
     },
     columnStyles: {
@@ -260,7 +272,7 @@ function drawWideRow(doc, fonts, label, value, startY) {
       fontStyle: "normal",
       fontSize: 9,
       textColor: INK,
-      cellPadding: { top: 2, right: 6, bottom: 2, left: 0 },
+      cellPadding: { top: 2.5, right: 6, bottom: 2.5, left: 0 },
       valign: "top",
     },
     columnStyles: {
@@ -278,9 +290,7 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
   const colWidths = [60, 95, 50, 95, 60, contentW - 60 - 95 - 50 - 95 - 60];
 
   const body = [
-    [
-      { content: "10th Standard", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } },
-    ],
+    [{ content: "10th Standard", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } }],
     [
       { content: "Register No.", styles: { textColor: MUTED } }, v(tenth.register_number),
       { content: "Board", styles: { textColor: MUTED } }, v(tenth.board),
@@ -291,9 +301,7 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
       { content: "Place", styles: { textColor: MUTED } }, v(tenth.school_place),
       { content: "Percentage", styles: { textColor: MUTED } }, v(tenth.percentage),
     ],
-    [
-      { content: "12th Standard / Diploma", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } },
-    ],
+    [{ content: "12th Standard / Diploma", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } }],
     [
       { content: "Register No.", styles: { textColor: MUTED } }, v(twelfth.register_number),
       { content: "Board", styles: { textColor: MUTED } }, v(twelfth.board),
@@ -336,7 +344,7 @@ function drawDeclaration(doc, fonts, collegeName, startY) {
   doc.setTextColor(...INK);
   doc.text("DECLARATION", MARGIN, y);
   doc.setDrawColor(...INK);
-  doc.setLineWidth(0.8);
+  doc.setLineWidth(0.7);
   doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
   y += 14;
 
@@ -368,24 +376,27 @@ function drawSignatures(doc, fonts, y) {
 function drawFooter(doc, fonts) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  doc.setDrawColor(...RULE);
-  doc.setLineWidth(0.4);
-  doc.line(MARGIN, pageHeight - 40, pageWidth - MARGIN, pageHeight - 40);
+  // Contact line above the strip
+  const contactY = pageHeight - FOOTER_BAR_HEIGHT - 12;
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...INK);
   doc.text(
     "More Information: +91 88846 27275  |  info@kmfoundation.co.in  |  www.kmfoundation.co.in",
-    pageWidth / 2, pageHeight - 26, { align: "center" },
+    pageWidth / 2, contactY, { align: "center" },
   );
   doc.setFont(fonts.primary, "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(...MUTED);
-  const ts = new Date().toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  doc.text(
-    `Generated ${ts}.  FinFlow by KM Foundation`,
-    pageWidth / 2, pageHeight - 14, { align: "center" },
-  );
+  const ts = new Date().toLocaleString("en-GB", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+  doc.text(`Generated ${ts}.  FinFlow by KM Foundation`,
+    pageWidth / 2, contactY + 10, { align: "center" });
+
+  // Decorative strip — black→red (mirrors header gradient)
+  drawGradientStrip(doc, pageHeight - FOOTER_BAR_HEIGHT, FOOTER_BAR_HEIGHT, true);
 }
 
 export async function downloadApplicationPdf({ student }) {
@@ -393,7 +404,6 @@ export async function downloadApplicationPdf({ student }) {
   if (!app) throw new Error("This student has no application data attached.");
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  // Load fonts + logo in parallel
   const [fonts, logoDataUrl] = await Promise.all([
     ensureFonts(doc),
     loadLogoDataUrl(),
@@ -432,7 +442,7 @@ export async function downloadApplicationPdf({ student }) {
     ["Caste", bi.caste],
     ["Religion", bi.religion],
   ], y);
-  y += 8;
+  y += 12;
 
   // ---- PARENTS & ADDRESS ----
   const addrLine = [cm.address_line_1, cm.address_line_2].filter(Boolean).join(", ");
@@ -450,19 +460,19 @@ export async function downloadApplicationPdf({ student }) {
     ["State", cm.state],
     ["", ""],
   ], y + 2);
-  y += 8;
+  y += 12;
 
   // ---- ACADEMIC QUALIFICATIONS ----
   y = drawSectionHeader(doc, fonts, "Academic Qualifications", y);
   y = drawAcademicTable(doc, fonts, ac.tenth || {}, ac.twelfth || {}, y);
-  y += 8;
+  y += 12;
 
   // ---- DECLARATION ----
   y = drawDeclaration(doc, fonts, co.preferred_college, y);
 
   // ---- Signature strip ----
   const pageHeight = doc.internal.pageSize.getHeight();
-  const sigY = Math.max(y + 22, pageHeight - 78);
+  const sigY = Math.max(y + 22, pageHeight - FOOTER_BAR_HEIGHT - 60);
   drawSignatures(doc, fonts, sigY);
 
   // ---- Footer ----
