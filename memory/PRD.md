@@ -535,6 +535,20 @@
 - [x] **Verified end-to-end**: backend ReportLab render → image analyzer confirms all banner elements; live frontend jsPDF render via Playwright → cropped top-right zone analyzer confirms dynamic Ref + Submitted values render in WHITE text precisely next to the labels (249 pure-white pixels detected by direct pixel sampling).
 - [x] 52/52 pytest pass, lint clean.
 
+## Implementation status — 2026-02-26 (iteration 40: PDF spacing rebalance — content now fills the page)
+- [x] **Rebalanced vertical spacing** across the Application PDF so the content properly fills a single A4 page (previous version left ~30% wasted whitespace at the bottom):
+  - KV table row padding bumped 2.5pt → 8pt top/bottom
+  - Academic table row padding bumped 3pt → 9pt top/bottom
+  - Section gap bumped 12pt → 22pt
+  - Banner → applicant gap bumped 14pt → 22pt
+  - Applicant banner internal spacing widened (course at +18pt, college at +34pt instead of +16/+30)
+  - Section header sub-text padding bumped 13pt → 14pt with +26pt return cursor (was +22pt)
+  - Declaration line height bumped 10pt → 13pt, font 8pt → 9pt
+- [x] **Restructured signature block** with Place + Date stub fields (small lines above the signature line) + descriptive subtitles ("I have read and agreed…" / "For office use only · KM Foundation") to add legal-document weight and naturally fill the bottom.
+- [x] **Pinned signature block** to a fixed offset from the page bottom (FOOTER + 82pt) so the page always renders balanced regardless of declaration length. Backend uses `min(y-40, FOOTER+82)` (ReportLab coords, smaller=lower); frontend uses `max(y+40, pageHeight-FOOTER-82)` (jsPDF coords, larger=lower). **Fixed critical bug** in the frontend where `Math.min` was used instead of `Math.max`, which had been positioning the signature off-page below the footer.
+- [x] **Visually validated** — both backend and frontend PDFs now score ~8/10 (avg) on automated layout analysis (vs 6/10 before): content fill 7/10, section spacing 8/10, signature placement 9/10, visual harmony 9/10.
+- [x] 52/52 pytest pass · lint clean on both `application_pdf.py` + `applicationPdf.js`.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

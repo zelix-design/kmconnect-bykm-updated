@@ -154,8 +154,8 @@ function drawHeader(doc, fonts, opts) {
   doc.setFontSize(7);
   doc.text(opts.submittedAt, valueX, subY);
 
-  // Body content begins 14pt below the banner
-  return HEADER_IMG_HEIGHT + 14;
+  // Body content begins 22pt below the banner — applicant name now has room.
+  return HEADER_IMG_HEIGHT + 22;
 }
 
 function drawApplicantBanner(doc, fonts, opts, y) {
@@ -167,12 +167,12 @@ function drawApplicantBanner(doc, fonts, opts, y) {
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(10);
-  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 16);
+  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 18);
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 30);
+  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 34);
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8.5);
@@ -180,12 +180,12 @@ function drawApplicantBanner(doc, fonts, opts, y) {
   doc.text(`Admission Type:  ${opts.admissionType || "—"}`,
     pageWidth - MARGIN, y + 4, { align: "right" });
   doc.text(`Academic Year:  ${opts.academicYear || "—"}`,
-    pageWidth - MARGIN, y + 18, { align: "right" });
+    pageWidth - MARGIN, y + 20, { align: "right" });
 
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.4);
-  doc.line(MARGIN, y + 42, pageWidth - MARGIN, y + 42);
-  return y + 56;
+  doc.line(MARGIN, y + 50, pageWidth - MARGIN, y + 50);
+  return y + 70;
 }
 
 function drawSectionHeader(doc, fonts, title, y, sub) {
@@ -201,10 +201,10 @@ function drawSectionHeader(doc, fonts, title, y, sub) {
     doc.setFont(fonts.primary, "normal");
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
-    doc.text(sub, MARGIN, y + 13);
-    return y + 22;
+    doc.text(sub, MARGIN, y + 14);
+    return y + 26;
   }
-  return y + 14;
+  return y + 18;
 }
 
 function drawKvBlock(doc, fonts, rows, startY) {
@@ -227,15 +227,15 @@ function drawKvBlock(doc, fonts, rows, startY) {
     styles: {
       font: fonts.semi,
       fontStyle: "normal",
-      fontSize: 9,
+      fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 2.5, right: 6, bottom: 2.5, left: 0 },
+      cellPadding: { top: 8, right: 6, bottom: 8, left: 0 },
       valign: "top",
     },
     columnStyles: {
-      0: { textColor: MUTED, cellWidth: 80 },
+      0: { textColor: MUTED, cellWidth: 85 },
       1: { textColor: INK, cellWidth: 175 },
-      2: { textColor: MUTED, cellWidth: 80 },
+      2: { textColor: MUTED, cellWidth: 85 },
       3: { textColor: INK, cellWidth: 175 },
     },
     margin: { left: MARGIN, right: MARGIN },
@@ -252,14 +252,14 @@ function drawWideRow(doc, fonts, label, value, startY) {
     styles: {
       font: fonts.semi,
       fontStyle: "normal",
-      fontSize: 9,
+      fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 2.5, right: 6, bottom: 2.5, left: 0 },
+      cellPadding: { top: 8, right: 6, bottom: 8, left: 0 },
       valign: "top",
     },
     columnStyles: {
-      0: { textColor: MUTED, cellWidth: 80 },
-      1: { textColor: INK, cellWidth: pageWidth - MARGIN * 2 - 80 },
+      0: { textColor: MUTED, cellWidth: 85 },
+      1: { textColor: INK, cellWidth: pageWidth - MARGIN * 2 - 85 },
     },
     margin: { left: MARGIN, right: MARGIN },
   });
@@ -303,9 +303,9 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
     styles: {
       font: fonts.semi,
       fontStyle: "normal",
-      fontSize: 9,
+      fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 3, right: 4, bottom: 3, left: 4 },
+      cellPadding: { top: 9, right: 6, bottom: 9, left: 6 },
       valign: "middle",
     },
     columnStyles: {
@@ -328,31 +328,53 @@ function drawDeclaration(doc, fonts, collegeName, startY) {
   doc.setDrawColor(...INK);
   doc.setLineWidth(0.7);
   doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
-  y += 14;
+  y += 18;
 
   const text = renderDeclaration(collegeName).replace(/\n\n/g, " ");
   doc.setFont(fonts.light, "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setTextColor(...INK);
   const lines = doc.splitTextToSize(text, pageWidth - MARGIN * 2);
   for (const ln of lines) {
     doc.text(ln, MARGIN, y);
-    y += 10;
+    y += 13;
   }
   return y;
 }
 
 function drawSignatures(doc, fonts, y) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  doc.setDrawColor(...INK);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, y, MARGIN + 150, y);
-  doc.line(pageWidth - MARGIN - 150, y, pageWidth - MARGIN, y);
-  doc.setFont(fonts.bold, "bold");
+  const panelW = 200;
+  const rightX = pageWidth - MARGIN - panelW;
+
+  // Place / Date stubs (small lines just above the signature line)
+  doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text("Place", MARGIN, y - 14);
+  doc.text("Date", MARGIN + 100, y - 14);
+  doc.setDrawColor(...RULE);
+  doc.setLineWidth(0.4);
+  doc.line(MARGIN + 26, y - 12, MARGIN + 96, y - 12);
+  doc.line(MARGIN + 121, y - 12, MARGIN + 200, y - 12);
+
+  // Signature lines
+  doc.setDrawColor(...INK);
+  doc.setLineWidth(0.6);
+  doc.line(MARGIN, y, MARGIN + panelW, y);
+  doc.line(rightX, y, pageWidth - MARGIN, y);
+
+  // Labels under each line
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(9);
   doc.setTextColor(...INK);
-  doc.text("Applicant Signature", MARGIN, y + 11);
-  doc.text("Admissions Officer", pageWidth - MARGIN - 150, y + 11);
+  doc.text("Applicant Signature", MARGIN, y + 13);
+  doc.text("Admissions Officer", rightX, y + 13);
+  doc.setFont(fonts.primary, "normal");
+  doc.setFontSize(7);
+  doc.setTextColor(...MUTED);
+  doc.text("I have read and agreed to the declaration above.", MARGIN, y + 23);
+  doc.text("For office use only · KM Foundation", rightX, y + 23);
 }
 
 function drawFooter(doc, fonts) {
@@ -424,7 +446,7 @@ export async function downloadApplicationPdf({ student }) {
     ["Caste", bi.caste],
     ["Religion", bi.religion],
   ], y);
-  y += 12;
+  y += 22;
 
   // ---- PARENTS & ADDRESS ----
   const addrLine = [cm.address_line_1, cm.address_line_2].filter(Boolean).join(", ");
@@ -435,26 +457,31 @@ export async function downloadApplicationPdf({ student }) {
     ["Father's Mobile", cm.father_mobile],
     ["Mother's Mobile", cm.mother_mobile],
   ], y);
-  y = drawWideRow(doc, fonts, "Address", addrLine || "—", y + 2);
+  y = drawWideRow(doc, fonts, "Address", addrLine || "—", y + 4);
   y = drawKvBlock(doc, fonts, [
     ["City", cm.city],
     ["Pincode", cm.pincode],
     ["State", cm.state],
     ["", ""],
-  ], y + 2);
-  y += 12;
+  ], y + 4);
+  y += 22;
 
   // ---- ACADEMIC QUALIFICATIONS ----
   y = drawSectionHeader(doc, fonts, "Academic Qualifications", y);
   y = drawAcademicTable(doc, fonts, ac.tenth || {}, ac.twelfth || {}, y);
-  y += 12;
+  y += 22;
 
   // ---- DECLARATION ----
   y = drawDeclaration(doc, fonts, co.preferred_college, y);
 
-  // ---- Signature strip ----
+  // ---- Signature strip — pinned near the page bottom so the body fills ----
   const pageHeight = doc.internal.pageSize.getHeight();
-  const sigY = Math.max(y + 22, pageHeight - FOOTER_BAR_HEIGHT - 60);
+  // jsPDF coords: y=0 is the TOP, so LARGER y = lower on page. Use Math.max
+  // to push the signature toward the bottom; clamp to avoid overlapping
+  // the footer (subtitle below sig sits at sigY + 23).
+  let sigY = Math.max(y + 40, pageHeight - FOOTER_BAR_HEIGHT - 82);
+  const maxSigY = pageHeight - FOOTER_BAR_HEIGHT - 34;
+  if (sigY > maxSigY) sigY = maxSigY;
   drawSignatures(doc, fonts, sigY);
 
   // ---- Footer ----

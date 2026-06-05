@@ -222,8 +222,9 @@ def _draw_header(c: Canvas, ref_code: str, submitted_at: str) -> float:
     c.setFont(_FONT_FAMILY_PRIMARY, 7)
     c.drawString(value_x, sub_y, _fmt_date(submitted_at))
 
-    # Body content begins 14pt below the banner
-    return img_bottom - 14
+    # Body content begins 22pt below the banner (gives the applicant name room
+    # to breathe instead of bumping into the banner's bottom edge).
+    return img_bottom - 22
 
 
 def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
@@ -236,23 +237,23 @@ def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
     c.drawString(MARGIN, y, name)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
-    c.drawString(MARGIN, y - 16, course)
+    c.drawString(MARGIN, y - 18, course)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y - 30, college)
+    c.drawString(MARGIN, y - 34, college)
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
     c.drawRightString(PAGE_WIDTH - MARGIN, y - 4,
                       f"Admission Type:  {opts.get('admission_type') or '—'}")
-    c.drawRightString(PAGE_WIDTH - MARGIN, y - 18,
+    c.drawRightString(PAGE_WIDTH - MARGIN, y - 20,
                       f"Academic Year:  {opts.get('academic_year') or '—'}")
 
     c.setStrokeColor(RULE)
     c.setLineWidth(0.4)
-    c.line(MARGIN, y - 42, PAGE_WIDTH - MARGIN, y - 42)
-    return y - 56
+    c.line(MARGIN, y - 50, PAGE_WIDTH - MARGIN, y - 50)
+    return y - 70
 
 
 def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None) -> float:
@@ -265,9 +266,9 @@ def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None
     if sub:
         c.setFillColor(MUTED)
         c.setFont(_FONT_FAMILY_PRIMARY, 7)
-        c.drawString(MARGIN, y - 13, sub)
-        return y - 22
-    return y - 14
+        c.drawString(MARGIN, y - 14, sub)
+        return y - 26
+    return y - 18
 
 
 def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
@@ -282,10 +283,10 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
     if buf is not None:
         rows.append([buf[0], _v(buf[1]), "", ""])
 
-    table = Table(rows, colWidths=[80, 175, 80, 175])
+    table = Table(rows, colWidths=[85, 175, 85, 175])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT_FAMILY_SEMI),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
         ("TEXTCOLOR", (2, 0), (2, -1), MUTED),
         ("TEXTCOLOR", (1, 0), (1, -1), INK),
@@ -293,24 +294,25 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        # Generous vertical breathing room — pushes the form to fill the page.
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     return table
 
 
 def _wide_row(label: str, value: Any) -> Table:
-    table = Table([[label, _v(value)]], colWidths=[80, CONTENT_WIDTH - 80])
+    table = Table([[label, _v(value)]], colWidths=[85, CONTENT_WIDTH - 85])
     table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT_FAMILY_SEMI),
         ("TEXTCOLOR", (0, 0), (0, -1), MUTED),
         ("TEXTCOLOR", (1, 0), (1, -1), INK),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
     return table
 
@@ -357,8 +359,8 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("BOTTOMPADDING", (0, 3), (-1, 3), 4),
         ("FONTNAME", (0, 1), (-1, 2), _FONT_FAMILY_SEMI),
         ("FONTNAME", (0, 4), (-1, 5), _FONT_FAMILY_SEMI),
-        ("FONTSIZE", (0, 1), (-1, 2), 9),
-        ("FONTSIZE", (0, 4), (-1, 5), 9),
+        ("FONTSIZE", (0, 1), (-1, 2), 9.5),
+        ("FONTSIZE", (0, 4), (-1, 5), 9.5),
         ("TEXTCOLOR", (0, 1), (0, 2), MUTED),
         ("TEXTCOLOR", (2, 1), (2, 2), MUTED),
         ("TEXTCOLOR", (4, 1), (4, 2), MUTED),
@@ -374,10 +376,10 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("LINEBELOW", (0, 1), (-1, 1), 0.3, RULE),
         ("LINEBELOW", (0, 4), (-1, 4), 0.3, RULE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 1), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 1), (-1, -1), 4),
-        ("TOPPADDING", (0, 1), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
+        ("LEFTPADDING", (0, 1), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 1), (-1, -1), 6),
+        ("TOPPADDING", (0, 1), (-1, -1), 9),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 9),
     ]
     table.setStyle(TableStyle(style))
     return table
@@ -391,26 +393,51 @@ def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
     c.setLineWidth(0.7)
     c.line(MARGIN, y - 3, PAGE_WIDTH - MARGIN, y - 3)
 
-    y -= 14
+    y -= 18
     text = _render_declaration(college_name)
-    c.setFont(_FONT_FAMILY_LIGHT, 8)
+    c.setFont(_FONT_FAMILY_LIGHT, 9)
     c.setFillColor(INK)
-    lines = wrap(text, width=125)
+    lines = wrap(text, width=112)
     for ln in lines:
         c.drawString(MARGIN, y, ln)
-        y -= 10
+        y -= 13
     return y
 
 
 def _draw_signature(c: Canvas, y: float) -> None:
+    """Two signature panels — Applicant on the left with a Place/Date stub,
+    Admissions Officer on the right. The Place/Date lines give the form
+    legal-document weight and naturally pull more content toward the page
+    bottom so the layout reads as balanced rather than top-heavy.
+    """
+    panel_w = 200
+    right_x = PAGE_WIDTH - MARGIN - panel_w
+
+    # Place / Date small lines just above the signature line
+    c.setFont(_FONT_FAMILY_SEMI, 8)
+    c.setFillColor(MUTED)
+    c.drawString(MARGIN, y + 14, "Place")
+    c.drawString(MARGIN + 100, y + 14, "Date")
+    c.setStrokeColor(RULE)
+    c.setLineWidth(0.4)
+    c.line(MARGIN + 26, y + 12, MARGIN + 96, y + 12)
+    c.line(MARGIN + 121, y + 12, MARGIN + 200, y + 12)
+
+    # Signature lines
     c.setStrokeColor(INK)
-    c.setLineWidth(0.5)
-    c.line(MARGIN, y, MARGIN + 150, y)
-    c.line(PAGE_WIDTH - MARGIN - 150, y, PAGE_WIDTH - MARGIN, y)
+    c.setLineWidth(0.6)
+    c.line(MARGIN, y, MARGIN + panel_w, y)
+    c.line(right_x, y, PAGE_WIDTH - MARGIN, y)
+
+    # Signature labels (below the line)
     c.setFillColor(INK)
-    c.setFont(_FONT_FAMILY_BOLD, 8)
-    c.drawString(MARGIN, y - 11, "Applicant Signature")
-    c.drawString(PAGE_WIDTH - MARGIN - 150, y - 11, "Admissions Officer")
+    c.setFont(_FONT_FAMILY_BOLD, 9)
+    c.drawString(MARGIN, y - 13, "Applicant Signature")
+    c.drawString(right_x, y - 13, "Admissions Officer")
+    c.setFont(_FONT_FAMILY_PRIMARY, 7)
+    c.setFillColor(MUTED)
+    c.drawString(MARGIN, y - 23, "I have read and agreed to the declaration above.")
+    c.drawString(right_x, y - 23, "For office use only · KM Foundation")
 
 
 def _draw_footer(c: Canvas) -> None:
@@ -479,7 +506,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 12  # consistent gap between sections
+    y -= h + 22  # consistent breathable gap between sections
 
     # ---- PARENTS & ADDRESS ----
     cm = app.get("communication") or {}
@@ -493,12 +520,12 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 2
+    y -= h + 4
 
     block = _wide_row("Address", addr or "—")
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 2
+    y -= h + 4
 
     block = _kv_table([
         ("City", cm.get("city")),
@@ -508,7 +535,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 12
+    y -= h + 22
 
     # ---- ACADEMIC QUALIFICATIONS ----
     ac = app.get("academic") or {}
@@ -516,13 +543,17 @@ def render_application_pdf(student: dict) -> bytes:
     block = _academic_table(ac.get("tenth") or {}, ac.get("twelfth") or {})
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 12
+    y -= h + 22
 
     # ---- DECLARATION ----
     y = _draw_declaration(c, co.get("preferred_college"), y)
 
-    # ---- Signature strip — anchored above the footer ----
-    sig_y = max(y - 24, FOOTER_BAR_HEIGHT + 60)
+    # ---- Signature strip — anchored above the footer with comfortable gap ----
+    # Force signature to sit at a fixed Y near the bottom so the content area
+    # naturally fills the page. If the declaration runs long, push it lower.
+    sig_y = min(y - 40, FOOTER_BAR_HEIGHT + 82)
+    if sig_y < FOOTER_BAR_HEIGHT + 60:
+        sig_y = FOOTER_BAR_HEIGHT + 60  # safety floor
     _draw_signature(c, sig_y)
 
     # ---- Footer ----
