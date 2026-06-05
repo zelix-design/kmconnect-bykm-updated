@@ -514,6 +514,13 @@
 - [x] **Visually validated** end-to-end via Playwright: image analyzer confirms all 8 design checks pass on the frontend PDF (gradient bar top, AdmissionForm wordmark with red Form, logo top-right, Ref/Submitted right-aligned, bottom gradient mirror, contact above strip, single page, balanced spacing) and on the backend PDF.
 - [x] **52/52 pytest pass** (no regressions from layout swap).
 
+## Implementation status — 2026-02-26 (iteration 37: PDF artwork swap — Right.png + Left.png embedded)
+- [x] **Replaced abstract K-mark with full KM Foundation horizontal logo** (`Right.png` user upload) at the TOP-RIGHT of the PDF. The logo now shows the abstract K symbol + "KM FOUNDATION" wordmark + "Educational Services LLP" tagline + TM. Saved to `/app/frontend/public/km-foundation-logo.png` (and `/app/backend/lib/assets/km-foundation-logo.png` for the email-PDF generator).
+- [x] **Replaced text-rendered AdmissionForm wordmark with the user's embedded artwork** (`Left.png` user upload) at the TOP-LEFT — preserves the exact red gradient/blur effect on "Form" that the user designed. Falls back to text-rendered version (Admission black + Form red) if the asset is missing. Saved to `/app/frontend/public/admission-form-mark.png` (and `/app/backend/lib/assets/admission-form-mark.png`).
+- [x] **Shared asset resolver** (`_asset_path` helper in `application_pdf.py`) checks the backend's bundled assets first, then falls back to the frontend `public/` directory — single source of truth across email PDFs and downloadable PDFs.
+- [x] **Backend + frontend rendering parity** verified end-to-end: image analyzer confirms all 5 header design checks pass on the live frontend Application PDF download (embedded AdmissionForm wordmark, full KM logo with tagline + TM, top gradient strip, single page, bottom decorative strip).
+- [x] **52/52 pytest pass**, lint clean on both `application_pdf.py` + `applicationPdf.js`.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

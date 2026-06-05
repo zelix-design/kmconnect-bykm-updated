@@ -89,9 +89,9 @@ function labelOf(map, value) {
   return map[value] || value;
 }
 
-async function loadLogoDataUrl() {
+async function loadImageDataUrl(filename) {
   try {
-    const res = await fetch("/km-mark.png", { cache: "force-cache" });
+    const res = await fetch(`/${filename}`, { cache: "force-cache" });
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve, reject) => {
@@ -101,7 +101,7 @@ async function loadLogoDataUrl() {
       reader.readAsDataURL(blob);
     });
   } catch (err) {
-    console.warn("[applicationPdf] logo load failed:", err?.message || err);
+    console.warn(`[applicationPdf] image load failed (${filename}):`, err?.message || err);
     return null;
   }
 }
@@ -126,33 +126,39 @@ function drawHeader(doc, fonts, opts) {
   // 1) Gradient strip at the top
   drawGradientStrip(doc, 0, HEADER_BAR_HEIGHT);
 
-  // 2) AdmissionForm wordmark TOP-LEFT — "Admission" black, "Form" red
-  const baselineY = HEADER_BAR_HEIGHT + 22;
-  doc.setFont(fonts.bold, "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(...INK);
-  doc.text("Admission", MARGIN, baselineY);
-  const admissionW = doc.getTextWidth("Admission");
-  doc.setTextColor(...BRAND_RED);
-  doc.text("Form", MARGIN + admissionW, baselineY);
-  // Subline
+  // 2) AdmissionForm wordmark TOP-LEFT — embedded artwork (Form in red gradient)
+  const wordmarkW = 132;
+  const wordmarkH = 30;
+  const wordmarkY = HEADER_BAR_HEIGHT + 8;
+  if (opts.wordmarkDataUrl) {
+    try {
+      doc.addImage(opts.wordmarkDataUrl, "PNG", MARGIN, wordmarkY, wordmarkW, wordmarkH);
+    } catch (err) {
+      console.warn("[applicationPdf] wordmark addImage failed", err);
+      drawAdmissionWordmarkText(doc, fonts, MARGIN, wordmarkY + wordmarkH - 8);
+    }
+  } else {
+    drawAdmissionWordmarkText(doc, fonts, MARGIN, wordmarkY + wordmarkH - 8);
+  }
+  // Subline under the wordmark
   doc.setFont(fonts.primary, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
-  doc.text("KM Foundation · Educational Services LLP", MARGIN, baselineY + 12);
+  doc.text("KM Foundation · Educational Services LLP", MARGIN, wordmarkY + wordmarkH + 8);
 
-  // 3) KM logo TOP-RIGHT
+  // 3) Full KM Foundation horizontal logo TOP-RIGHT
   if (opts.logoDataUrl) {
     try {
-      const logoSize = 48;
+      const logoW = 120;
+      const logoH = 50;
       doc.addImage(
         opts.logoDataUrl, "PNG",
-        pageWidth - MARGIN - logoSize,
+        pageWidth - MARGIN - logoW,
         HEADER_BAR_HEIGHT + 6,
-        logoSize, logoSize,
+        logoW, logoH,
       );
     } catch (err) {
-      console.warn("[applicationPdf] addImage failed", err);
+      console.warn("[applicationPdf] logo addImage failed", err);
     }
   }
 
@@ -174,6 +180,17 @@ function drawHeader(doc, fonts, opts) {
   doc.line(MARGIN, sepY, pageWidth - MARGIN, sepY);
 
   return sepY + 18;
+}
+
+// Fallback wordmark in case the PNG asset is missing.
+function drawAdmissionWordmarkText(doc, fonts, x, baselineY) {
+  doc.setFont(fonts.bold, "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(...INK);
+  doc.text("Admission", x, baselineY);
+  const admissionW = doc.getTextWidth("Admission");
+  doc.setTextColor(...BRAND_RED);
+  doc.text("Form", x + admissionW, baselineY);
 }
 
 function drawApplicantBanner(doc, fonts, opts, y) {
@@ -404,9 +421,10 @@ export async function downloadApplicationPdf({ student }) {
   if (!app) throw new Error("This student has no application data attached.");
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const [fonts, logoDataUrl] = await Promise.all([
+  const [fonts, logoDataUrl, wordmarkDataUrl] = await Promise.all([
     ensureFonts(doc),
-    loadLogoDataUrl(),
+    loadImageDataUrl("km-foundation-logo.png"),
+    loadImageDataUrl("admission-form-mark.png"),
   ]);
 
   const bi = app.basic_info || {};
@@ -419,7 +437,7 @@ export async function downloadApplicationPdf({ student }) {
   const refCode = (student.id || "").slice(0, 8).toUpperCase() || "—";
 
   // ---- Header ----
-  let y = drawHeader(doc, fonts, { logoDataUrl, refCode, submittedAt });
+  let y = drawHeader(doc, fonts, { logoDataUrl, wordmarkDataUrl, refCode, submittedAt });
 
   // ---- Applicant banner ----
   y = drawApplicantBanner(doc, fonts, {
