@@ -269,7 +269,16 @@ function drawWideRow(doc, fonts, label, value, startY) {
 function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const contentW = pageWidth - MARGIN * 2;
-  const colWidths = [60, 95, 50, 95, 60, contentW - 60 - 95 - 50 - 95 - 60];
+  // Column widths tuned so "Percentage" label fits on one line (was wrapping
+  // as "Percenta\nge" on the previous 60pt column).
+  const colWidths = [
+    70,                   // 0: label – Register No. / School
+    110,                  // 1: value
+    50,                   // 2: label – Board / Place
+    100,                  // 3: value
+    72,                   // 4: label – Year / Percentage  ← fits "Percentage"
+    contentW - 70 - 110 - 50 - 100 - 72,  // 5: value (rest)
+  ];
 
   const body = [
     [{ content: "10th Standard", colSpan: 6, styles: { fillColor: PINK, fontStyle: "bold", textColor: INK, fontSize: 9.5, cellPadding: { top: 4, bottom: 4, left: 6, right: 6 } } }],
@@ -321,63 +330,93 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
   return doc.lastAutoTable.finalY;
 }
 
-function drawDeclaration(doc, fonts, collegeName, startY) {
+// Draws the DECLARATION heading + a black-bordered box that wraps:
+//   - declaration paragraph (with top padding inside the box)
+//   - "Date" stub (stacked ABOVE "Place")
+//   - "Place" stub
+//   - Applicant Signature / Admissions Officer signature lines + labels + subtitles
+//     (with bottom padding inside the box)
+function drawDeclarationBox(doc, fonts, collegeName, headingY) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  let y = startY;
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // 1) Heading drawn ABOVE the box
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(11);
   doc.setTextColor(...INK);
-  doc.text("DECLARATION", MARGIN, y);
+  doc.text("DECLARATION", MARGIN, headingY);
   doc.setDrawColor(...INK);
   doc.setLineWidth(0.7);
-  doc.line(MARGIN, y + 3, pageWidth - MARGIN, y + 3);
-  y += 14;
+  doc.line(MARGIN, headingY + 3, pageWidth - MARGIN, headingY + 3);
 
+  // 2) Box geometry (jsPDF y-axis grows downward, so box_top < box_bottom)
+  const boxTop = headingY + 8;
+  const boxBottom = pageHeight - FOOTER_BAR_HEIGHT - 25;
+  const boxLeft = MARGIN;
+  const boxRight = pageWidth - MARGIN;
+  const innerPadX = 12;
+  const innerTopPad = 14;
+  const innerBottomPad = 20;
+
+  // Outer black border
+  doc.setDrawColor(...INK);
+  doc.setLineWidth(0.8);
+  doc.rect(boxLeft, boxTop, boxRight - boxLeft, boxBottom - boxTop, "S");
+
+  // 3) Declaration paragraph — starts BELOW the box top line
   const text = renderDeclaration(collegeName).replace(/\n\n/g, " ");
   doc.setFont(fonts.light, "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  const lines = doc.splitTextToSize(text, pageWidth - MARGIN * 2);
+  const wrapW = boxRight - boxLeft - innerPadX * 2;
+  const lines = doc.splitTextToSize(text, wrapW);
+  let paraY = boxTop + innerTopPad;
   for (const ln of lines) {
-    doc.text(ln, MARGIN, y);
-    y += 11;
+    doc.text(ln, boxLeft + innerPadX, paraY);
+    paraY += 11;
   }
-  return y;
-}
 
-function drawSignatures(doc, fonts, y) {
-  const pageWidth = doc.internal.pageSize.getWidth();
+  // 4) Signature area — anchored from the BOTTOM of the box
+  //   Layout (top→bottom inside the box, bottom-anchored):
+  //     subtitle baseline = boxBottom - innerBottomPad
+  //     label baseline    = subtitle - 10
+  //     signature line    = label - 13 (=> sigY)
+  //     Place row above (label + line)
+  //     Date row above Place
+  const sigY = boxBottom - innerBottomPad - 10 - 13;
   const panelW = 200;
-  const rightX = pageWidth - MARGIN - panelW;
+  const leftX = boxLeft + innerPadX;
+  const rightX = boxRight - innerPadX - panelW;
 
-  // Place / Date stubs (small lines just above the signature line)
+  // 5) Date + Place stubs (Date ABOVE Place)
+  const placeY = sigY - 18;
+  const dateY = sigY - 18 - 22;
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("Place", MARGIN, y - 14);
-  doc.text("Date", MARGIN + 100, y - 14);
+  doc.text("Date", leftX, dateY);
+  doc.text("Place", leftX, placeY);
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.4);
-  doc.line(MARGIN + 26, y - 12, MARGIN + 96, y - 12);
-  doc.line(MARGIN + 121, y - 12, MARGIN + 200, y - 12);
+  doc.line(leftX + 30, dateY + 2, leftX + 200, dateY + 2);
+  doc.line(leftX + 30, placeY + 2, leftX + 200, placeY + 2);
 
-  // Signature lines
+  // 6) Signature lines + labels + subtitles
   doc.setDrawColor(...INK);
   doc.setLineWidth(0.6);
-  doc.line(MARGIN, y, MARGIN + panelW, y);
-  doc.line(rightX, y, pageWidth - MARGIN, y);
+  doc.line(leftX, sigY, leftX + panelW, sigY);
+  doc.line(rightX, sigY, rightX + panelW, sigY);
 
-  // Labels under each line
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(9);
   doc.setTextColor(...INK);
-  doc.text("Applicant Signature", MARGIN, y + 13);
-  doc.text("Admissions Officer", rightX, y + 13);
+  doc.text("Applicant Signature", leftX, sigY + 13);
+  doc.text("Admissions Officer", rightX, sigY + 13);
   doc.setFont(fonts.primary, "normal");
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
-  doc.text("I have read and agreed to the declaration above.", MARGIN, y + 23);
-  doc.text("For office use only · KM Foundation", rightX, y + 23);
+  doc.text("I have read and agreed to the declaration above.", leftX, sigY + 23);
+  doc.text("For office use only · KM Foundation", rightX, sigY + 23);
 }
 
 function drawFooter(doc, fonts) {
@@ -474,14 +513,8 @@ export async function downloadApplicationPdf({ student }) {
   y = drawAcademicTable(doc, fonts, ac.tenth || {}, ac.twelfth || {}, y);
   y += 16;
 
-  // ---- DECLARATION ----
-  y = drawDeclaration(doc, fonts, co.preferred_college, y);
-
-  // ---- Signature strip — pinned at a fixed distance from page bottom ----
-  const pageHeight = doc.internal.pageSize.getHeight();
-  // Signature sits 90pt above the footer strip — keeps everything single-page.
-  const sigY = pageHeight - FOOTER_BAR_HEIGHT - 90;
-  drawSignatures(doc, fonts, sigY);
+  // ---- DECLARATION + SIGNATURE — wrapped in a single bordered box ----
+  drawDeclarationBox(doc, fonts, co.preferred_college, y);
 
   // ---- Footer ----
   drawFooter(doc, fonts);

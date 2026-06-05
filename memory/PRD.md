@@ -577,6 +577,18 @@
 - [x] **Verified end-to-end**: backend PDF = 1 page (559KB), frontend PDF = 1 page (12.6MB with embedded Montserrat). All 8 sections present (header banner, applicant, candidate details, parents & address, academic 10th + 12th complete, declaration, signature with Place/Date, footer). Image analyzer scored 8/10 on visual spacing.
 - [x] 52/52 pytest pass · lint clean.
 
+## Implementation status — 2026-02-26 (iteration 43: PDF box layout — Percentage column fix + bordered declaration + Date-above-Place)
+- [x] **Fixed "Percentage" column wrapping** in the Academic Qualifications table — was rendering as "Percenta\nge" because the label column was only 60pt wide. Re-tuned column widths to `[70, 110, 50, 100, 72, rest]` (label col 4 bumped to 72pt) so "Percentage" fits on a single line at 9.5pt SemiBold.
+- [x] **Combined Declaration + Signature into a single bordered box** (black 0.8pt outer rectangle) that wraps:
+  - declaration paragraph (with 14pt top padding inside the box — text now starts BELOW the top line)
+  - Date stub (label + thin line)
+  - Place stub (label + thin line, stacked BELOW Date)
+  - Applicant Signature / Admissions Officer signature lines + labels + subtitles (with 20pt bottom padding — subtitle text now sits comfortably ABOVE the bottom border)
+- [x] **Stacked Date above Place** (vertical arrangement) replacing the previous side-by-side layout, per user's annotated screenshot. Date label + dotted line on top, Place label + dotted line below.
+- [x] **Maintained single-page A4 output** — verified backend = 1 page (559KB), frontend = 1 page. Image analyzer confirms all four boxed elements properly padded.
+- [x] **`_draw_declaration` + `_draw_signature` removed in backend**, replaced by unified `_draw_declaration_box` function. Same on frontend: `drawDeclaration` + `drawSignatures` → `drawDeclarationBox`.
+- [x] 52/52 pytest pass · lint clean on both `application_pdf.py` + `applicationPdf.js`.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

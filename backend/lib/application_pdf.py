@@ -337,7 +337,16 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
     for row in body:
         norm.append([cell.get("content") if isinstance(cell, dict) else cell for cell in row])
 
-    col_widths = [60, 95, 50, 95, 60, CONTENT_WIDTH - 60 - 95 - 50 - 95 - 60]
+    # Column widths tuned so the "Percentage" label fits without wrapping
+    # (was breaking as "Percenta\nge" on the previous 60pt label column).
+    col_widths = [
+        70,                 # 0: label – Register No. / School
+        110,                # 1: value
+        50,                 # 2: label – Board / Place
+        100,                # 3: value
+        72,                 # 4: label – Year / Percentage  ← fits "Percentage"
+        CONTENT_WIDTH - 70 - 110 - 50 - 100 - 72,  # 5: value (rest)
+    ]
     table = Table(norm, colWidths=col_widths)
     style = [
         ("SPAN", (0, 0), (-1, 0)),
@@ -384,7 +393,15 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
     return table
 
 
-def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
+def _draw_declaration_box(c: Canvas, college_name: str | None, y: float) -> None:
+    """Draw the DECLARATION heading + black-bordered box containing:
+        - declaration paragraph (with top padding inside the box)
+        - "Date" stub (stacked ABOVE "Place")
+        - "Place" stub
+        - Applicant Signature / Admissions Officer signature lines + labels + subtitles
+          (with bottom padding inside the box)
+    """
+    # 1) Heading — drawn ABOVE the box (outside)
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 11)
     c.drawString(MARGIN, y, "DECLARATION")
@@ -392,51 +409,70 @@ def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
     c.setLineWidth(0.7)
     c.line(MARGIN, y - 3, PAGE_WIDTH - MARGIN, y - 3)
 
-    y -= 14
+    # 2) Box geometry — top sits just below the heading underline; bottom
+    # hovers comfortably above the footer strip.
+    box_top = y - 8
+    box_bottom = FOOTER_BAR_HEIGHT + 25
+    box_left = MARGIN
+    box_right = PAGE_WIDTH - MARGIN
+    inner_pad_x = 12
+    inner_top_pad = 14
+    inner_bottom_pad = 20
+
+    # Draw the outer border
+    c.setStrokeColor(INK)
+    c.setLineWidth(0.8)
+    c.rect(box_left, box_bottom, box_right - box_left, box_top - box_bottom,
+           stroke=1, fill=0)
+
+    # 3) Declaration paragraph — starts BELOW the box top line (with padding)
     text = _render_declaration(college_name)
+    inner_width_chars = 115  # Wraps within the box's inner width at 8.5pt
+    para_y = box_top - inner_top_pad
     c.setFont(_FONT_FAMILY_LIGHT, 8.5)
     c.setFillColor(INK)
-    lines = wrap(text, width=120)
+    lines = wrap(text, width=inner_width_chars)
     for ln in lines:
-        c.drawString(MARGIN, y, ln)
-        y -= 11
-    return y
+        c.drawString(box_left + inner_pad_x, para_y, ln)
+        para_y -= 11
 
-
-def _draw_signature(c: Canvas, y: float) -> None:
-    """Two signature panels — Applicant on the left with a Place/Date stub,
-    Admissions Officer on the right. The Place/Date lines give the form
-    legal-document weight and naturally pull more content toward the page
-    bottom so the layout reads as balanced rather than top-heavy.
-    """
+    # 4) Signature area — anchored from the BOTTOM of the box (with padding)
+    #   Layout bottom-up inside the box:
+    #     box_bottom + inner_bottom_pad → subtitle baseline (sig_y - 23)
+    #   → sig_y = box_bottom + inner_bottom_pad + 23
+    sig_y = box_bottom + inner_bottom_pad + 23 + 10  # extra 10pt for label
     panel_w = 200
-    right_x = PAGE_WIDTH - MARGIN - panel_w
+    right_x = box_right - inner_pad_x - panel_w
+    left_x = box_left + inner_pad_x
 
-    # Place / Date small lines just above the signature line
+    # 5) Date + Place stubs (Date ABOVE Place)
+    # Each stub: label + thin filled-in line. Place stacked below Date.
+    stub_height = 18
+    date_y = sig_y + stub_height + 14   # date label baseline
+    place_y = sig_y + 14                # place label baseline
     c.setFont(_FONT_FAMILY_SEMI, 8)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y + 14, "Place")
-    c.drawString(MARGIN + 100, y + 14, "Date")
+    c.drawString(left_x, date_y, "Date")
+    c.drawString(left_x, place_y, "Place")
     c.setStrokeColor(RULE)
     c.setLineWidth(0.4)
-    c.line(MARGIN + 26, y + 12, MARGIN + 96, y + 12)
-    c.line(MARGIN + 121, y + 12, MARGIN + 200, y + 12)
+    c.line(left_x + 30, date_y - 2, left_x + 200, date_y - 2)
+    c.line(left_x + 30, place_y - 2, left_x + 200, place_y - 2)
 
-    # Signature lines
+    # 6) Signature lines + labels + subtitles
     c.setStrokeColor(INK)
     c.setLineWidth(0.6)
-    c.line(MARGIN, y, MARGIN + panel_w, y)
-    c.line(right_x, y, PAGE_WIDTH - MARGIN, y)
+    c.line(left_x, sig_y, left_x + panel_w, sig_y)
+    c.line(right_x, sig_y, right_x + panel_w, sig_y)
 
-    # Signature labels (below the line)
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 9)
-    c.drawString(MARGIN, y - 13, "Applicant Signature")
-    c.drawString(right_x, y - 13, "Admissions Officer")
+    c.drawString(left_x, sig_y - 13, "Applicant Signature")
+    c.drawString(right_x, sig_y - 13, "Admissions Officer")
     c.setFont(_FONT_FAMILY_PRIMARY, 7)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y - 23, "I have read and agreed to the declaration above.")
-    c.drawString(right_x, y - 23, "For office use only · KM Foundation")
+    c.drawString(left_x, sig_y - 23, "I have read and agreed to the declaration above.")
+    c.drawString(right_x, sig_y - 23, "For office use only · KM Foundation")
 
 
 def _draw_footer(c: Canvas) -> None:
@@ -544,15 +580,8 @@ def render_application_pdf(student: dict) -> bytes:
     block.drawOn(c, MARGIN, y - h)
     y -= h + 16
 
-    # ---- DECLARATION ----
-    y = _draw_declaration(c, co.get("preferred_college"), y)
-
-    # ---- Signature strip — pinned at a fixed distance from page bottom ----
-    # The signature sits 90pt above the footer strip (≈30pt clear air between
-    # the "I have read…" subtitle and the footer contact line). Body content
-    # above stretches naturally to fill the remaining space.
-    sig_y = FOOTER_BAR_HEIGHT + 90
-    _draw_signature(c, sig_y)
+    # ---- DECLARATION + SIGNATURE — wrapped in a single bordered box ----
+    _draw_declaration_box(c, co.get("preferred_college"), y)
 
     # ---- Footer ----
     _draw_footer(c)
