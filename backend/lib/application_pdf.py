@@ -157,16 +157,19 @@ def _asset_path(name: str) -> str | None:
 
 
 def _logo_path() -> str | None:
-    """Full KM Foundation horizontal logo (top-right of the PDF)."""
-    return _asset_path("km-foundation-logo.png") or _asset_path("km-mark.png")
+    """Pre-composed PDF header banner (top of the PDF)."""
+    return _asset_path("pdf-header.jpg")
 
 
-def _admission_wordmark_path() -> str | None:
-    """Branded `AdmissionForm` wordmark — Admission in dark grey, Form in red
-    gradient (top-left of the PDF). Returns None to fall back to the
-    text-rendered version if the asset isn't packaged.
-    """
-    return _asset_path("admission-form-mark.png")
+# ---------- Header banner constants ----------
+# Image is 3497×670px at aspect 5.219, drawn at full A4 width (595pt).
+HEADER_IMG_HEIGHT = 595 / 5.219  # ≈ 114pt
+# Y position of the "Ref:" label baseline (fraction of image height from top).
+REF_LABEL_Y_FRAC = 0.1433
+# Y position of the "Submitted:" label baseline (fraction of image height).
+SUBMITTED_LABEL_Y_FRAC = 0.2537
+# X coordinate where the colons end (fraction of image width).
+LABEL_COLON_X_FRAC = 0.9216
 
 
 def _draw_gradient_strip(c: Canvas, top_y: float, height: float, reverse: bool = False) -> None:
@@ -189,75 +192,39 @@ def _draw_gradient_strip(c: Canvas, top_y: float, height: float, reverse: bool =
 
 
 def _draw_header(c: Canvas, ref_code: str, submitted_at: str) -> float:
-    """Top zone: gradient strip + AdmissionForm artwork + KM logo + Ref/Submitted.
-    Returns the y-cursor where body content can begin.
+    """Draw the pre-composed banner image at the top of the page and overlay
+    the dynamic Ref code + Submitted date next to the labels printed inside
+    the banner. Returns the y-cursor where body content can begin.
     """
-    # 1) Red→Black gradient strip
-    _draw_gradient_strip(c, PAGE_HEIGHT, HEADER_BAR_HEIGHT)
+    header_img = _logo_path()
+    img_top = PAGE_HEIGHT  # banner hugs the top edge
+    img_bottom = PAGE_HEIGHT - HEADER_IMG_HEIGHT
 
-    # 2) AdmissionForm wordmark TOP-LEFT — embedded artwork (Form in red gradient)
-    wordmark_artwork = _admission_wordmark_path()
-    wordmark_w, wordmark_h = 132, 30  # tuned to look balanced against the logo
-    wordmark_top = PAGE_HEIGHT - HEADER_BAR_HEIGHT - wordmark_h - 8
-    if wordmark_artwork:
+    if header_img:
         try:
             c.drawImage(
-                wordmark_artwork, MARGIN, wordmark_top,
-                width=wordmark_w, height=wordmark_h,
-                preserveAspectRatio=True, mask="auto",
+                header_img, 0, img_bottom,
+                width=PAGE_WIDTH, height=HEADER_IMG_HEIGHT,
+                preserveAspectRatio=False, mask=None,
             )
         except Exception as exc:
-            log.warning("[pdf] AdmissionForm wordmark drawImage failed: %s", exc)
-            _draw_admission_wordmark_text(c, MARGIN, wordmark_top + 8)
-    else:
-        _draw_admission_wordmark_text(c, MARGIN, wordmark_top + 8)
+            log.warning("[pdf] header drawImage failed: %s", exc)
 
-    # Subline under the wordmark
-    c.setFont(_FONT_FAMILY_PRIMARY, 7.5)
-    c.setFillColor(MUTED)
-    c.drawString(MARGIN, wordmark_top - 4, "KM Foundation · Educational Services LLP")
+    # Overlay dynamic Ref + Submitted text next to the white labels in the
+    # banner. Both labels are right-aligned at x = LABEL_COLON_X_FRAC * width
+    # and we draw the value just to the right of the colon in white.
+    value_x = PAGE_WIDTH * LABEL_COLON_X_FRAC + 6
+    ref_y = img_top - HEADER_IMG_HEIGHT * REF_LABEL_Y_FRAC - 3
+    sub_y = img_top - HEADER_IMG_HEIGHT * SUBMITTED_LABEL_Y_FRAC - 3
 
-    # 3) Full KM Foundation horizontal logo TOP-RIGHT
-    logo = _logo_path()
-    logo_w, logo_h = 120, 50
-    logo_top = PAGE_HEIGHT - HEADER_BAR_HEIGHT - logo_h - 6
-    if logo:
-        try:
-            c.drawImage(
-                logo, PAGE_WIDTH - MARGIN - logo_w, logo_top,
-                width=logo_w, height=logo_h,
-                preserveAspectRatio=True, mask="auto",
-            )
-        except Exception as exc:
-            log.warning("[pdf] logo drawImage failed: %s", exc)
+    c.setFillColor(colors.white)
+    c.setFont(_FONT_FAMILY_SEMI, 7.5)
+    c.drawString(value_x, ref_y, ref_code)
+    c.setFont(_FONT_FAMILY_PRIMARY, 7)
+    c.drawString(value_x, sub_y, _fmt_date(submitted_at))
 
-    # 4) Ref / Submitted text — below the logo, right-aligned
-    ref_y = PAGE_HEIGHT - HEADER_BAR_HEIGHT - HEADER_BLOCK_HEIGHT + 22
-    c.setFont(_FONT_FAMILY_SEMI, 8.5)
-    c.setFillColor(INK)
-    c.drawRightString(PAGE_WIDTH - MARGIN, ref_y, f"Ref: {ref_code}")
-    c.setFont(_FONT_FAMILY_PRIMARY, 8)
-    c.setFillColor(MUTED)
-    c.drawRightString(PAGE_WIDTH - MARGIN, ref_y - 11, f"Submitted: {_fmt_date(submitted_at)}")
-
-    # 5) Thin red rule under the whole header zone
-    sep_y = PAGE_HEIGHT - HEADER_BAR_HEIGHT - HEADER_BLOCK_HEIGHT - 4
-    c.setStrokeColor(BRAND_RED)
-    c.setLineWidth(0.8)
-    c.line(MARGIN, sep_y, PAGE_WIDTH - MARGIN, sep_y)
-
-    return sep_y - 18
-
-
-def _draw_admission_wordmark_text(c: Canvas, x: float, baseline_y: float) -> None:
-    """Fallback: render the AdmissionForm wordmark with text if the artwork
-    asset is missing. `Admission` in black, `Form` in brand red."""
-    c.setFont(_FONT_FAMILY_BOLD, 20)
-    c.setFillColor(INK)
-    c.drawString(x, baseline_y, "Admission")
-    admission_w = c.stringWidth("Admission", _FONT_FAMILY_BOLD, 20)
-    c.setFillColor(BRAND_RED)
-    c.drawString(x + admission_w, baseline_y, "Form")
+    # Body content begins 14pt below the banner
+    return img_bottom - 14
 
 
 def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:

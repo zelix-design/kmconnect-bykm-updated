@@ -121,76 +121,42 @@ function drawGradientStrip(doc, topY, height, reverse = false) {
   }
 }
 
+// Pre-composed PDF header banner image dimensions.
+// Source is 3497×670px (aspect 5.219). Drawn full-width across A4 (595pt).
+const HEADER_IMG_HEIGHT = 595 / 5.219; // ≈ 114pt
+// Y position of the "Ref:" label baseline (fraction of image height from top).
+const REF_LABEL_Y_FRAC = 0.1433;
+// Y position of the "Submitted:" label baseline (fraction of image height).
+const SUBMITTED_LABEL_Y_FRAC = 0.2537;
+// X coordinate where the colons end (fraction of image width).
+const LABEL_COLON_X_FRAC = 0.9216;
+
 function drawHeader(doc, fonts, opts) {
   const pageWidth = doc.internal.pageSize.getWidth();
-  // 1) Gradient strip at the top
-  drawGradientStrip(doc, 0, HEADER_BAR_HEIGHT);
-
-  // 2) AdmissionForm wordmark TOP-LEFT — embedded artwork (Form in red gradient)
-  const wordmarkW = 132;
-  const wordmarkH = 30;
-  const wordmarkY = HEADER_BAR_HEIGHT + 8;
-  if (opts.wordmarkDataUrl) {
+  // 1) Draw the pre-composed banner spanning full width at the top edge
+  if (opts.headerDataUrl) {
     try {
-      doc.addImage(opts.wordmarkDataUrl, "PNG", MARGIN, wordmarkY, wordmarkW, wordmarkH);
+      doc.addImage(opts.headerDataUrl, "JPEG", 0, 0, pageWidth, HEADER_IMG_HEIGHT);
     } catch (err) {
-      console.warn("[applicationPdf] wordmark addImage failed", err);
-      drawAdmissionWordmarkText(doc, fonts, MARGIN, wordmarkY + wordmarkH - 8);
-    }
-  } else {
-    drawAdmissionWordmarkText(doc, fonts, MARGIN, wordmarkY + wordmarkH - 8);
-  }
-  // Subline under the wordmark
-  doc.setFont(fonts.primary, "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...MUTED);
-  doc.text("KM Foundation · Educational Services LLP", MARGIN, wordmarkY + wordmarkH + 8);
-
-  // 3) Full KM Foundation horizontal logo TOP-RIGHT
-  if (opts.logoDataUrl) {
-    try {
-      const logoW = 120;
-      const logoH = 50;
-      doc.addImage(
-        opts.logoDataUrl, "PNG",
-        pageWidth - MARGIN - logoW,
-        HEADER_BAR_HEIGHT + 6,
-        logoW, logoH,
-      );
-    } catch (err) {
-      console.warn("[applicationPdf] logo addImage failed", err);
+      console.warn("[applicationPdf] header image addImage failed", err);
     }
   }
 
-  // 4) Ref / Submitted below the logo
-  const refY = HEADER_BAR_HEIGHT + HEADER_BLOCK_HEIGHT - 22;
+  // 2) Overlay the dynamic Ref + Submitted values in white next to the
+  //    labels printed inside the banner.
+  const valueX = pageWidth * LABEL_COLON_X_FRAC + 6;
+  const refY = HEADER_IMG_HEIGHT * REF_LABEL_Y_FRAC + 3;
+  const subY = HEADER_IMG_HEIGHT * SUBMITTED_LABEL_Y_FRAC + 3;
+  doc.setTextColor(255, 255, 255);
   doc.setFont(fonts.semi, "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...INK);
-  doc.text(`Ref: ${opts.refCode}`, pageWidth - MARGIN, refY, { align: "right" });
+  doc.setFontSize(7.5);
+  doc.text(opts.refCode, valueX, refY);
   doc.setFont(fonts.primary, "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text(`Submitted: ${opts.submittedAt}`, pageWidth - MARGIN, refY + 11, { align: "right" });
+  doc.setFontSize(7);
+  doc.text(opts.submittedAt, valueX, subY);
 
-  // 5) Red rule separator
-  const sepY = HEADER_BAR_HEIGHT + HEADER_BLOCK_HEIGHT + 4;
-  doc.setDrawColor(...BRAND_RED);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN, sepY, pageWidth - MARGIN, sepY);
-
-  return sepY + 18;
-}
-
-// Fallback wordmark in case the PNG asset is missing.
-function drawAdmissionWordmarkText(doc, fonts, x, baselineY) {
-  doc.setFont(fonts.bold, "bold");
-  doc.setFontSize(20);
-  doc.setTextColor(...INK);
-  doc.text("Admission", x, baselineY);
-  const admissionW = doc.getTextWidth("Admission");
-  doc.setTextColor(...BRAND_RED);
-  doc.text("Form", x + admissionW, baselineY);
+  // Body content begins 14pt below the banner
+  return HEADER_IMG_HEIGHT + 14;
 }
 
 function drawApplicantBanner(doc, fonts, opts, y) {
@@ -421,10 +387,9 @@ export async function downloadApplicationPdf({ student }) {
   if (!app) throw new Error("This student has no application data attached.");
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
-  const [fonts, logoDataUrl, wordmarkDataUrl] = await Promise.all([
+  const [fonts, headerDataUrl] = await Promise.all([
     ensureFonts(doc),
-    loadImageDataUrl("km-foundation-logo.png"),
-    loadImageDataUrl("admission-form-mark.png"),
+    loadImageDataUrl("pdf-header.jpg"),
   ]);
 
   const bi = app.basic_info || {};
@@ -437,7 +402,7 @@ export async function downloadApplicationPdf({ student }) {
   const refCode = (student.id || "").slice(0, 8).toUpperCase() || "—";
 
   // ---- Header ----
-  let y = drawHeader(doc, fonts, { logoDataUrl, wordmarkDataUrl, refCode, submittedAt });
+  let y = drawHeader(doc, fonts, { headerDataUrl, refCode, submittedAt });
 
   // ---- Applicant banner ----
   y = drawApplicantBanner(doc, fonts, {

@@ -521,6 +521,13 @@
 - [x] **Backend + frontend rendering parity** verified end-to-end: image analyzer confirms all 5 header design checks pass on the live frontend Application PDF download (embedded AdmissionForm wordmark, full KM logo with tagline + TM, top gradient strip, single page, bottom decorative strip).
 - [x] **52/52 pytest pass**, lint clean on both `application_pdf.py` + `applicationPdf.js`.
 
+## Implementation status — 2026-02-26 (iteration 38: PDF header replaced with pre-composed banner)
+- [x] **Replaced the entire programmatic PDF header** (gradient strip + AdmissionForm wordmark + KM logo + separators) with the user's pre-composed banner artwork (`Application_-_2026-05-27.pdf_21_x_10.5_cm.jpeg` → `pdf-header.jpg`). Banner spans full A4 width (595pt × 114pt at aspect 5.219).
+- [x] **Dynamic Ref + Submitted overlay** — measured the exact pixel coordinates of the white "Ref:" and "Submitted:" labels inside the banner (y_frac = 0.1433 / 0.2537, colon ends at x_frac = 0.9216) and overlay the per-application values in white right after the labels. Both backend ReportLab and frontend jsPDF share the identical positioning constants.
+- [x] **Removed obsolete header code paths**: programmatic gradient strip, text-rendered AdmissionForm wordmark fallback, separate logo addImage, red rule separator, KM Foundation subline. The whole banner is now ONE atomic asset.
+- [x] **Visually validated** end-to-end via Playwright + Gemini image analysis on the live frontend PDF — banner renders pixel-perfect, dynamic values overlay correctly next to labels, single page, rest of content (Candidate Details, Parents & Address, Academic Qualifications, Declaration, signatures, footer) intact below the banner.
+- [x] **52/52 pytest pass**, lint clean.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
