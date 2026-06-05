@@ -528,6 +528,13 @@
 - [x] **Visually validated** end-to-end via Playwright + Gemini image analysis on the live frontend PDF — banner renders pixel-perfect, dynamic values overlay correctly next to labels, single page, rest of content (Candidate Details, Parents & Address, Academic Qualifications, Declaration, signatures, footer) intact below the banner.
 - [x] **52/52 pytest pass**, lint clean.
 
+## Implementation status — 2026-02-26 (iteration 39: PDF header banner swap — new dark-themed artwork)
+- [x] **Replaced the PDF header banner** with the user's latest upload (`Application - Header.png` → `pdf-header.png`): dark/black-themed banner with red→black gradient strip on top, white "Ref:" / "Submitted:" labels right-aligned, "Form" wordmark in red and full KM FOUNDATION horizontal logo (K mark + "KM FOUNDATION" + "EDUCATIONAL SERVICES LLP" tagline + TM) along the bottom half, and a thin red→black/grey divider at the very bottom.
+- [x] **Re-measured label positions** via pixel-level analysis of the new 4000×770 artwork: Ref label at y_frac=0.1403, Submitted at y_frac=0.2494, colons end at x_frac=0.8645 (gives more horizontal space for long values than the previous artwork).
+- [x] Updated both `application_pdf.py` + `applicationPdf.js` with the new constants and changed asset loaders to use `pdf-header.png` (PNG with alpha) instead of the old `pdf-header.jpg`.
+- [x] **Verified end-to-end**: backend ReportLab render → image analyzer confirms all banner elements; live frontend jsPDF render via Playwright → cropped top-right zone analyzer confirms dynamic Ref + Submitted values render in WHITE text precisely next to the labels (249 pure-white pixels detected by direct pixel sampling).
+- [x] 52/52 pytest pass, lint clean.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

@@ -122,21 +122,20 @@ function drawGradientStrip(doc, topY, height, reverse = false) {
 }
 
 // Pre-composed PDF header banner image dimensions.
-// Source is 3497×670px (aspect 5.219). Drawn full-width across A4 (595pt).
-const HEADER_IMG_HEIGHT = 595 / 5.219; // ≈ 114pt
-// Y position of the "Ref:" label baseline (fraction of image height from top).
-const REF_LABEL_Y_FRAC = 0.1433;
-// Y position of the "Submitted:" label baseline (fraction of image height).
-const SUBMITTED_LABEL_Y_FRAC = 0.2537;
-// X coordinate where the colons end (fraction of image width).
-const LABEL_COLON_X_FRAC = 0.9216;
+// Source artwork is 4000×770px (aspect 5.195) — drawn full A4 width (595pt).
+const HEADER_IMG_HEIGHT = 595 / 5.195; // ≈ 114.5pt
+// Pixel-measured positions of the white "Ref:" / "Submitted:" labels
+// (fractions of the banner image size).
+const REF_LABEL_Y_FRAC = 0.1403;
+const SUBMITTED_LABEL_Y_FRAC = 0.2494;
+const LABEL_COLON_X_FRAC = 0.8645;
 
 function drawHeader(doc, fonts, opts) {
   const pageWidth = doc.internal.pageSize.getWidth();
   // 1) Draw the pre-composed banner spanning full width at the top edge
   if (opts.headerDataUrl) {
     try {
-      doc.addImage(opts.headerDataUrl, "JPEG", 0, 0, pageWidth, HEADER_IMG_HEIGHT);
+      doc.addImage(opts.headerDataUrl, "PNG", 0, 0, pageWidth, HEADER_IMG_HEIGHT);
     } catch (err) {
       console.warn("[applicationPdf] header image addImage failed", err);
     }
@@ -389,7 +388,7 @@ export async function downloadApplicationPdf({ student }) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const [fonts, headerDataUrl] = await Promise.all([
     ensureFonts(doc),
-    loadImageDataUrl("pdf-header.jpg"),
+    loadImageDataUrl("pdf-header.png"),
   ]);
 
   const bi = app.basic_info || {};

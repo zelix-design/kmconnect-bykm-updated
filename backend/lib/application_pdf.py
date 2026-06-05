@@ -158,18 +158,17 @@ def _asset_path(name: str) -> str | None:
 
 def _logo_path() -> str | None:
     """Pre-composed PDF header banner (top of the PDF)."""
-    return _asset_path("pdf-header.jpg")
+    return _asset_path("pdf-header.png") or _asset_path("pdf-header.jpg")
 
 
 # ---------- Header banner constants ----------
-# Image is 3497×670px at aspect 5.219, drawn at full A4 width (595pt).
-HEADER_IMG_HEIGHT = 595 / 5.219  # ≈ 114pt
-# Y position of the "Ref:" label baseline (fraction of image height from top).
-REF_LABEL_Y_FRAC = 0.1433
-# Y position of the "Submitted:" label baseline (fraction of image height).
-SUBMITTED_LABEL_Y_FRAC = 0.2537
-# X coordinate where the colons end (fraction of image width).
-LABEL_COLON_X_FRAC = 0.9216
+# Source artwork is 4000×770px (aspect 5.195) — drawn full A4 width (595pt).
+HEADER_IMG_HEIGHT = 595 / 5.195  # ≈ 114.5pt
+# Pixel-measured positions of the white "Ref:" / "Submitted:" labels inside
+# the banner. Values are fractions of the banner image size.
+REF_LABEL_Y_FRAC = 0.1403
+SUBMITTED_LABEL_Y_FRAC = 0.2494
+LABEL_COLON_X_FRAC = 0.8645
 
 
 def _draw_gradient_strip(c: Canvas, top_y: float, height: float, reverse: bool = False) -> None:
