@@ -549,6 +549,18 @@
 - [x] **Visually validated** — both backend and frontend PDFs now score ~8/10 (avg) on automated layout analysis (vs 6/10 before): content fill 7/10, section spacing 8/10, signature placement 9/10, visual harmony 9/10.
 - [x] 52/52 pytest pass · lint clean on both `application_pdf.py` + `applicationPdf.js`.
 
+## Implementation status — 2026-02-26 (iteration 41: PDF anti-crowding fix — signature no longer crashes into footer)
+- [x] **Fixed crowding between signature block and footer** that the user reported on the SREENANDA V B PDF. The previous logic floored sig_y at `FOOTER_BAR_HEIGHT + 60` (=90pt from bottom), which only left ~25pt between the "I have read…" subtitle and the contact line. **Now strictly pinned at `FOOTER_BAR_HEIGHT + 140` (=170pt from bottom in ReportLab; `pageHeight - 170` from top in jsPDF) — gives a generous ~75pt of clear air** between the signature subtitle and the footer contact line.
+- [x] **Bumped body padding** so the content stretches to fill the page (previously content ended ~50% of page from top, leaving a big blank zone):
+  - KV table row padding 8pt → 10pt top/bottom
+  - Academic table row padding 9pt → 11pt top/bottom
+  - Section gaps 22pt → 26pt
+- [x] **Final layout distribution** verified by image analysis: Header 0-14% · Applicant 15-22% · Candidate Details 24-43% · Parents & Address 45-65% · Academic Qualifications 67-77% · Declaration 77-83% · Signature 83-88% · Footer 92-97%. Even, balanced, no crowding.
+- [x] **No overlap** between signature block and footer (confirmed via pixel-level scan: 105pt clean white gap between subtitle baseline and contact line baseline).
+- [x] **Pinned at fixed distance** strategy now eliminates the previous Math.min vs Math.max coordinate confusion bug in jsPDF — signature ALWAYS at a deterministic Y regardless of declaration length.
+- [x] **Frontend service worker restart** triggered to ensure the updated jsPDF code is picked up (the user's reported PDF was generated from a stale bundle).
+- [x] 52/52 pytest pass, lint clean.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook

@@ -229,7 +229,7 @@ function drawKvBlock(doc, fonts, rows, startY) {
       fontStyle: "normal",
       fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 8, right: 6, bottom: 8, left: 0 },
+      cellPadding: { top: 10, right: 6, bottom: 10, left: 0 },
       valign: "top",
     },
     columnStyles: {
@@ -254,7 +254,7 @@ function drawWideRow(doc, fonts, label, value, startY) {
       fontStyle: "normal",
       fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 8, right: 6, bottom: 8, left: 0 },
+      cellPadding: { top: 10, right: 6, bottom: 10, left: 0 },
       valign: "top",
     },
     columnStyles: {
@@ -305,7 +305,7 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
       fontStyle: "normal",
       fontSize: 9.5,
       textColor: INK,
-      cellPadding: { top: 9, right: 6, bottom: 9, left: 6 },
+      cellPadding: { top: 11, right: 6, bottom: 11, left: 6 },
       valign: "middle",
     },
     columnStyles: {
@@ -446,7 +446,7 @@ export async function downloadApplicationPdf({ student }) {
     ["Caste", bi.caste],
     ["Religion", bi.religion],
   ], y);
-  y += 22;
+  y += 26;
 
   // ---- PARENTS & ADDRESS ----
   const addrLine = [cm.address_line_1, cm.address_line_2].filter(Boolean).join(", ");
@@ -464,24 +464,21 @@ export async function downloadApplicationPdf({ student }) {
     ["State", cm.state],
     ["", ""],
   ], y + 4);
-  y += 22;
+  y += 26;
 
   // ---- ACADEMIC QUALIFICATIONS ----
   y = drawSectionHeader(doc, fonts, "Academic Qualifications", y);
   y = drawAcademicTable(doc, fonts, ac.tenth || {}, ac.twelfth || {}, y);
-  y += 22;
+  y += 26;
 
   // ---- DECLARATION ----
   y = drawDeclaration(doc, fonts, co.preferred_college, y);
 
-  // ---- Signature strip — pinned near the page bottom so the body fills ----
+  // ---- Signature strip — pinned at a fixed distance from page bottom ----
   const pageHeight = doc.internal.pageSize.getHeight();
-  // jsPDF coords: y=0 is the TOP, so LARGER y = lower on page. Use Math.max
-  // to push the signature toward the bottom; clamp to avoid overlapping
-  // the footer (subtitle below sig sits at sigY + 23).
-  let sigY = Math.max(y + 40, pageHeight - FOOTER_BAR_HEIGHT - 82);
-  const maxSigY = pageHeight - FOOTER_BAR_HEIGHT - 34;
-  if (sigY > maxSigY) sigY = maxSigY;
+  // Signature sits 140pt above the footer strip → ~70pt clear air between
+  // the subtitle and the footer contact line. Body content above stretches.
+  const sigY = pageHeight - FOOTER_BAR_HEIGHT - 140;
   drawSignatures(doc, fonts, sigY);
 
   // ---- Footer ----

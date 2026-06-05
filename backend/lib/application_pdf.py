@@ -295,8 +295,8 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         # Generous vertical breathing room — pushes the form to fill the page.
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
     return table
 
@@ -311,8 +311,8 @@ def _wide_row(label: str, value: Any) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
     ]))
     return table
 
@@ -378,8 +378,8 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 1), (-1, -1), 6),
         ("RIGHTPADDING", (0, 1), (-1, -1), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 9),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 9),
+        ("TOPPADDING", (0, 1), (-1, -1), 11),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 11),
     ]
     table.setStyle(TableStyle(style))
     return table
@@ -506,7 +506,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 22  # consistent breathable gap between sections
+    y -= h + 26  # consistent breathable gap between sections
 
     # ---- PARENTS & ADDRESS ----
     cm = app.get("communication") or {}
@@ -535,7 +535,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 22
+    y -= h + 26
 
     # ---- ACADEMIC QUALIFICATIONS ----
     ac = app.get("academic") or {}
@@ -543,17 +543,16 @@ def render_application_pdf(student: dict) -> bytes:
     block = _academic_table(ac.get("tenth") or {}, ac.get("twelfth") or {})
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 22
+    y -= h + 26
 
     # ---- DECLARATION ----
     y = _draw_declaration(c, co.get("preferred_college"), y)
 
-    # ---- Signature strip — anchored above the footer with comfortable gap ----
-    # Force signature to sit at a fixed Y near the bottom so the content area
-    # naturally fills the page. If the declaration runs long, push it lower.
-    sig_y = min(y - 40, FOOTER_BAR_HEIGHT + 82)
-    if sig_y < FOOTER_BAR_HEIGHT + 60:
-        sig_y = FOOTER_BAR_HEIGHT + 60  # safety floor
+    # ---- Signature strip — pinned at a fixed distance from page bottom ----
+    # The signature ALWAYS sits 140pt above the footer strip so there is a
+    # consistent ~70pt of clear air between the "I have read…" subtitle
+    # and the footer contact line. Body content above stretches to fill.
+    sig_y = FOOTER_BAR_HEIGHT + 140
     _draw_signature(c, sig_y)
 
     # ---- Footer ----
