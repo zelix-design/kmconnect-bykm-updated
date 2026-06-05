@@ -105,6 +105,7 @@ DECLARATION_TEXT = (
     "best of my knowledge. I agree to abide by all the rules and regulations "
     "on the institution. I understand that with holding or giving false "
     "information will make me in-eligble for admission. "
+    
     "I understand the fee paid to {college_name} are neither refundable nor "
     "transferrable any circumstances."
 )
@@ -233,14 +234,14 @@ def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 20)
-    c.drawString(MARGIN, y, name)
+    c.drawString(MARGIN, y - 8, name)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.drawString(MARGIN, y - 15, course)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y - 28, college)
+    c.drawString(MARGIN, y - 20, college)
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
@@ -346,20 +347,20 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("BACKGROUND", (0, 3), (-1, 3), PINK_ACCENT),
         ("FONTNAME", (0, 0), (-1, 0), _FONT_FAMILY_BOLD),
         ("FONTNAME", (0, 3), (-1, 3), _FONT_FAMILY_BOLD),
-        ("FONTSIZE", (0, 0), (-1, 0), 9.5),
-        ("FONTSIZE", (0, 3), (-1, 3), 9.5),
+        ("FONTSIZE", (0, 0), (-1, 0), 9),
+        ("FONTSIZE", (0, 3), (-1, 3), 9),
         ("TEXTCOLOR", (0, 0), (-1, 0), INK),
         ("TEXTCOLOR", (0, 3), (-1, 3), INK),
-        ("LEFTPADDING", (0, 0), (-1, 0), 6),
-        ("LEFTPADDING", (0, 3), (-1, 3), 6),
+        ("LEFTPADDING", (0, 0), (-1, 0), 3),
+        ("LEFTPADDING", (0, 3), (-1, 3), 3),
         ("TOPPADDING", (0, 0), (-1, 0), 4),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
         ("TOPPADDING", (0, 3), (-1, 3), 4),
         ("BOTTOMPADDING", (0, 3), (-1, 3), 4),
         ("FONTNAME", (0, 1), (-1, 2), _FONT_FAMILY_SEMI),
         ("FONTNAME", (0, 4), (-1, 5), _FONT_FAMILY_SEMI),
-        ("FONTSIZE", (0, 1), (-1, 2), 9.5),
-        ("FONTSIZE", (0, 4), (-1, 5), 9.5),
+        ("FONTSIZE", (0, 1), (-1, 2), 9),
+        ("FONTSIZE", (0, 4), (-1, 5), 9),
         ("TEXTCOLOR", (0, 1), (0, 2), MUTED),
         ("TEXTCOLOR", (2, 1), (2, 2), MUTED),
         ("TEXTCOLOR", (4, 1), (4, 2), MUTED),
@@ -375,8 +376,8 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("LINEBELOW", (0, 1), (-1, 1), 0.3, RULE),
         ("LINEBELOW", (0, 4), (-1, 4), 0.3, RULE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 1), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 1), (-1, -1), 6),
+        ("LEFTPADDING", (0, 1), (-1, -1), 3),
+        ("RIGHTPADDING", (0, 1), (-1, -1), 3),
         ("TOPPADDING", (0, 1), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
     ]
@@ -404,23 +405,13 @@ def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
 
 
 def _draw_signature(c: Canvas, y: float) -> None:
-    """Two signature panels — Applicant on the left with a Place/Date stub,
-    Admissions Officer on the right. The Place/Date lines give the form
+    """Two signature panels — Applicant on the left,
+    Admissions Officer on the right. The lines give the form
     legal-document weight and naturally pull more content toward the page
     bottom so the layout reads as balanced rather than top-heavy.
     """
     panel_w = 200
     right_x = PAGE_WIDTH - MARGIN - panel_w
-
-    # Place / Date small lines just above the signature line
-    c.setFont(_FONT_FAMILY_SEMI, 8)
-    c.setFillColor(MUTED)
-    c.drawString(MARGIN, y + 14, "Place")
-    c.drawString(MARGIN + 100, y + 14, "Date")
-    c.setStrokeColor(RULE)
-    c.setLineWidth(0.4)
-    c.line(MARGIN + 26, y + 12, MARGIN + 96, y + 12)
-    c.line(MARGIN + 121, y + 12, MARGIN + 200, y + 12)
 
     # Signature lines
     c.setStrokeColor(INK)
