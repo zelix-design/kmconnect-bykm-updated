@@ -108,8 +108,11 @@ def test_application_pdf_renderer_smoke() -> None:
     """Direct unit-test on render_application_pdf with a minimal student doc.
 
     Confirms the backend ReportLab generator boots without raising for a
-    typical payload + that the bytes are a valid PDF (start with %PDF).
+    typical payload + that the bytes are a valid PDF (start with %PDF)
+    AND that the output is a SINGLE PAGE (regression test for the bug where
+    body padding pushed content onto page 2).
     """
+    import re
     from lib.application_pdf import render_application_pdf
 
     student = {
@@ -152,3 +155,7 @@ def test_application_pdf_renderer_smoke() -> None:
     assert isinstance(pdf_bytes, bytes)
     assert pdf_bytes.startswith(b"%PDF"), "Output is not a valid PDF"
     assert len(pdf_bytes) > 5_000, f"Suspiciously small PDF ({len(pdf_bytes)} bytes)"
+    # Regression: the PDF MUST be a single page. Multi-page output indicates
+    # body padding has crept above the single-page budget.
+    page_count = len(re.findall(rb"/Type\s*/Page[^s]", pdf_bytes))
+    assert page_count == 1, f"Expected single-page PDF, got {page_count} pages"

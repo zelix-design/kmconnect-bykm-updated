@@ -222,9 +222,8 @@ def _draw_header(c: Canvas, ref_code: str, submitted_at: str) -> float:
     c.setFont(_FONT_FAMILY_PRIMARY, 7)
     c.drawString(value_x, sub_y, _fmt_date(submitted_at))
 
-    # Body content begins 22pt below the banner (gives the applicant name room
-    # to breathe instead of bumping into the banner's bottom edge).
-    return img_bottom - 22
+    # Body content begins 16pt below the banner.
+    return img_bottom - 16
 
 
 def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
@@ -233,27 +232,27 @@ def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
     college = (opts.get("college") or "—").upper()
 
     c.setFillColor(INK)
-    c.setFont(_FONT_FAMILY_BOLD, 22)
+    c.setFont(_FONT_FAMILY_BOLD, 20)
     c.drawString(MARGIN, y, name)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
-    c.drawString(MARGIN, y - 18, course)
+    c.drawString(MARGIN, y - 15, course)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y - 34, college)
+    c.drawString(MARGIN, y - 28, college)
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
     c.drawRightString(PAGE_WIDTH - MARGIN, y - 4,
                       f"Admission Type:  {opts.get('admission_type') or '—'}")
-    c.drawRightString(PAGE_WIDTH - MARGIN, y - 20,
+    c.drawRightString(PAGE_WIDTH - MARGIN, y - 18,
                       f"Academic Year:  {opts.get('academic_year') or '—'}")
 
     c.setStrokeColor(RULE)
     c.setLineWidth(0.4)
-    c.line(MARGIN, y - 50, PAGE_WIDTH - MARGIN, y - 50)
-    return y - 70
+    c.line(MARGIN, y - 40, PAGE_WIDTH - MARGIN, y - 40)
+    return y - 54
 
 
 def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None) -> float:
@@ -266,9 +265,9 @@ def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None
     if sub:
         c.setFillColor(MUTED)
         c.setFont(_FONT_FAMILY_PRIMARY, 7)
-        c.drawString(MARGIN, y - 14, sub)
-        return y - 26
-    return y - 18
+        c.drawString(MARGIN, y - 13, sub)
+        return y - 22
+    return y - 14
 
 
 def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
@@ -294,9 +293,9 @@ def _kv_table(pairs: list[tuple[str, Any]]) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        # Generous vertical breathing room — pushes the form to fill the page.
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        # Compact vertical padding so all sections fit on a single A4 page.
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     return table
 
@@ -311,8 +310,8 @@ def _wide_row(label: str, value: Any) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     return table
 
@@ -378,8 +377,8 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 1), (-1, -1), 6),
         ("RIGHTPADDING", (0, 1), (-1, -1), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 11),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 11),
+        ("TOPPADDING", (0, 1), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
     ]
     table.setStyle(TableStyle(style))
     return table
@@ -393,14 +392,14 @@ def _draw_declaration(c: Canvas, college_name: str | None, y: float) -> float:
     c.setLineWidth(0.7)
     c.line(MARGIN, y - 3, PAGE_WIDTH - MARGIN, y - 3)
 
-    y -= 18
+    y -= 14
     text = _render_declaration(college_name)
-    c.setFont(_FONT_FAMILY_LIGHT, 9)
+    c.setFont(_FONT_FAMILY_LIGHT, 8.5)
     c.setFillColor(INK)
-    lines = wrap(text, width=112)
+    lines = wrap(text, width=120)
     for ln in lines:
         c.drawString(MARGIN, y, ln)
-        y -= 13
+        y -= 11
     return y
 
 
@@ -506,7 +505,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 26  # consistent breathable gap between sections
+    y -= h + 16  # consistent breathable gap between sections
 
     # ---- PARENTS & ADDRESS ----
     cm = app.get("communication") or {}
@@ -520,12 +519,12 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 4
+    y -= h + 2
 
     block = _wide_row("Address", addr or "—")
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 4
+    y -= h + 2
 
     block = _kv_table([
         ("City", cm.get("city")),
@@ -535,7 +534,7 @@ def render_application_pdf(student: dict) -> bytes:
     ])
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 26
+    y -= h + 16
 
     # ---- ACADEMIC QUALIFICATIONS ----
     ac = app.get("academic") or {}
@@ -543,16 +542,16 @@ def render_application_pdf(student: dict) -> bytes:
     block = _academic_table(ac.get("tenth") or {}, ac.get("twelfth") or {})
     w, h = block.wrap(CONTENT_WIDTH, y)
     block.drawOn(c, MARGIN, y - h)
-    y -= h + 26
+    y -= h + 16
 
     # ---- DECLARATION ----
     y = _draw_declaration(c, co.get("preferred_college"), y)
 
     # ---- Signature strip — pinned at a fixed distance from page bottom ----
-    # The signature ALWAYS sits 140pt above the footer strip so there is a
-    # consistent ~70pt of clear air between the "I have read…" subtitle
-    # and the footer contact line. Body content above stretches to fill.
-    sig_y = FOOTER_BAR_HEIGHT + 140
+    # The signature sits 90pt above the footer strip (≈30pt clear air between
+    # the "I have read…" subtitle and the footer contact line). Body content
+    # above stretches naturally to fill the remaining space.
+    sig_y = FOOTER_BAR_HEIGHT + 90
     _draw_signature(c, sig_y)
 
     # ---- Footer ----

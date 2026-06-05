@@ -561,6 +561,22 @@
 - [x] **Frontend service worker restart** triggered to ensure the updated jsPDF code is picked up (the user's reported PDF was generated from a stale bundle).
 - [x] 52/52 pytest pass, lint clean.
 
+## Implementation status — 2026-02-26 (iteration 42: PDF forced to single page — academic table no longer splits)
+- [x] **FIXED: Multi-page PDF bug** the user reported — the latest SREENANDA V B PDF was rendering as a 2-page document with the 12th Standard academic rows + Declaration + Signature + Footer spilling onto page 2. Root cause: my previous iteration bumped body padding (KV 10pt, academic 11pt, section gaps 26pt) which pushed the total content height past the single-page A4 budget.
+- [x] **Re-tuned all spacing to fit on ONE page** while maintaining visual clarity:
+  - KV table padding 10pt → 5pt top/bottom
+  - Academic table padding 11pt → 5pt top/bottom
+  - Section gaps 26pt → 16pt
+  - Banner-to-content gap 22pt → 16pt
+  - Applicant banner spacing tightened (name 22pt → 20pt, course at +15pt, college at +28pt)
+  - Section header sub-padding 22pt → 22pt (same)
+  - Declaration line height 13pt → 11pt, font 9pt → 8.5pt
+  - Signature anchor 140pt → 90pt above footer
+- [x] **Defensive guard**: added `pageBreak: 'avoid'` + `rowPageBreak: 'avoid'` to the academic table in jsPDF so even if content ever expands past the budget again, the academic block won't split — it'd shift forward instead, which is a more recoverable failure mode.
+- [x] **Regression test added** in `test_public_application_v2.py::test_application_pdf_renderer_smoke` — asserts `len(re.findall(rb"/Type\s*/Page[^s]", pdf_bytes)) == 1` so any future change that breaks single-page output fails CI immediately.
+- [x] **Verified end-to-end**: backend PDF = 1 page (559KB), frontend PDF = 1 page (12.6MB with embedded Montserrat). All 8 sections present (header banner, applicant, candidate details, parents & address, academic 10th + 12th complete, declaration, signature with Place/Date, footer). Image analyzer scored 8/10 on visual spacing.
+- [x] 52/52 pytest pass · lint clean.
+
 ## Prioritized backlog
 **P1**
 - Brute-force lockout on login (5-fail → 15 min) per auth playbook
