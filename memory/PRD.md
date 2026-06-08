@@ -610,3 +610,16 @@
 
 ## Test credentials
 See `/app/memory/test_credentials.md`.
+
+## Implementation status — 2026-02-26 (iteration 36: Add Payment dialog overhaul + SC Adjusted as fee type)
+- [x] **"Add entry" → "Add Payment"** header button renamed (`data-testid=add-payment-btn`). Now opens `PaymentDialog` directly (legacy `AddEntryDialog` removed from the StudentDetail flow). The schedule-row creation step inside the combined dialog is gone.
+- [x] **Fee Type catalogue (7 options)** wired in `constants.js` + `routers/students.py`:
+  - `application_fees` · `registration_fees` · `admission_fees` · `tuition_fees` · `uniform_fees` · `other_fees` · `sc_adjusted`. Legacy keys (`booking_admission` / `tution` / `other`) retained so historical payments still deserialise.
+- [x] **Conditional "Collected in"** logic in `PaymentDialog.jsx`:
+  - Default: type dropdown (College Acc. / Cash / Bank Acc.) + Account dropdown (auto-logs income tx).
+  - When fee_type=`sc_adjusted`: single dropdown of Sub-Agent / Consultant / KM-Office clients (grouped by category via `SelectGroup`/`SelectLabel`), pulled from `/api/clients` and filtered by `SC_ADJUSTED_CLIENT_TYPES`. Staff clients excluded. Adjustments block hidden (SC Adjusted IS the adjustment).
+- [x] **Backend `ReceivedIn.client_id`** new optional field — set when SC Adjusted picks a client.
+- [x] **`_resolve_default_account_id`** helper: when an SC Adjusted payment lands without explicit account_id (or `cash` route without explicit account), backend auto-picks first cash → bank → any account so the real income transaction still gets logged.
+- [x] **Default seed categories** extended with Application Fees / Registration Fees / Tuition Fees / Uniform Fees / SC Adjusted income categories so the auto-log income tx can resolve a category by label.
+- [x] **3 new pytest cases** (`/app/backend/tests/test_add_payment_v2.py`): new fee types accepted, SC Adjusted auto-logs income tx on default account, SC Adjusted routes through agent-ledger.
+- [x] **Testing**: iteration_27.json — 55/55 backend pytest pass, 10/10 frontend review-request checks pass, zero defects.
