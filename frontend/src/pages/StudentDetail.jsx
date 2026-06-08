@@ -19,11 +19,10 @@ import HeaderCard from "@/components/student-detail/HeaderCard";
 import EditApplicationDialog from "@/components/student-detail/EditApplicationDialog";
 import SummaryTiles from "@/components/student-detail/SummaryTiles";
 import PaymentDialog from "@/components/student-detail/PaymentDialog";
-import AddEntryDialog from "@/components/student-detail/AddEntryDialog";
 import {
   RECEIVED_IN, FEE_TYPE_LABELS, PAYMENT_MODES, SUB_AGENT_TYPES,
   PRESET_SCHEDULE_LABELS,
-  nextScheduleLabel, emptyPayment, emptyEntry,
+  nextScheduleLabel, emptyPayment,
 } from "@/components/student-detail/constants";
 
 export default function StudentDetail() {
@@ -38,7 +37,6 @@ export default function StudentDetail() {
   const [header, setHeader] = useState({});
   const [schDlg, setSchDlg] = useState({ open: false, editing: null, form: { label: "1st Payment", amount: "", remarks: "", due_date: "" } });
   const [payDlg, setPayDlg] = useState({ open: false, editing: null, form: emptyPayment() });
-  const [entryDlg, setEntryDlg] = useState({ open: false, form: emptyEntry() });
   const [convertOpen, setConvertOpen] = useState(false);
   const [editAppOpen, setEditAppOpen] = useState(false);
   const [expanded, setExpanded] = useState({});
@@ -106,11 +104,12 @@ export default function StudentDetail() {
   const openPayEdit = (p) => setPayDlg({
     open: true, editing: p,
     form: {
-      date: p.date, amount: String(p.amount), fee_type: p.fee_type || "other",
+      date: p.date, amount: String(p.amount), fee_type: p.fee_type || "other_fees",
       received_in: {
         type: p.received_in?.type || "college",
         name: p.received_in?.name || "",
         account_id: p.received_in?.account_id || "",
+        client_id: p.received_in?.client_id || "",
       },
       has_adjustment: !!p.has_adjustment,
       adjustments: (p.adjustments || []).map((a) => ({
@@ -142,7 +141,12 @@ export default function StudentDetail() {
   const submitPay = async (e) => {
     e.preventDefault();
     const f = payDlg.form;
-    const adjErr = validateAdjustments(f.adjustments, f.has_adjustment);
+    const isSc = f.fee_type === "sc_adjusted";
+    if (isSc && !f.received_in.client_id) {
+      toast.error("Pick the Sub-Agent / Consultant / KM Office that absorbed the SC.");
+      return;
+    }
+    const adjErr = isSc ? null : validateAdjustments(f.adjustments, f.has_adjustment);
     if (adjErr) { toast.error(adjErr); return; }
     const payload = {
       date: f.date,
@@ -152,9 +156,10 @@ export default function StudentDetail() {
         type: f.received_in.type,
         name: f.received_in.name || null,
         account_id: f.received_in.account_id || null,
+        client_id: f.received_in.client_id || null,
       },
-      has_adjustment: !!f.has_adjustment,
-      adjustments: f.has_adjustment ? f.adjustments.map((a) => ({
+      has_adjustment: isSc ? false : !!f.has_adjustment,
+      adjustments: (!isSc && f.has_adjustment) ? f.adjustments.map((a) => ({
         kind: a.kind,
         amount: parseFloat(a.amount) || 0,
         payment_date: a.payment_date,
@@ -180,80 +185,8 @@ export default function StudentDetail() {
     const { data } = await api.delete(`/students/${id}/payments/${pid}`); setS(data);
   };
 
-  // ----- Combined Add Entry -----
-  const openEntryAdd = () => {
-    const defaultLabel = nextScheduleLabel(s.schedules);
-    setEntryDlg({
-      open: true,
-      form: {
-        ...emptyEntry(),
-        schedule: { ...emptyEntry().schedule, label: defaultLabel },
-      },
-    });
-  };
-
-  const submitEntry = async (e) => {
-    e.preventDefault();
-    const f = entryDlg.form;
-    if (!f.create_schedule && !f.log_payment) {
-      toast.error("Select at least one of Schedule or Payment");
-      return;
-    }
-    if (f.log_payment) {
-      const adjErr = validateAdjustments(f.payment.adjustments, f.payment.has_adjustment);
-      if (adjErr) { toast.error(adjErr); return; }
-    }
-    try {
-      let scheduleId = f.existing_schedule_id || null;
-      let updated = s;
-      if (f.create_schedule) {
-        const schPayload = {
-          label: f.schedule.label,
-          amount: parseFloat(f.schedule.amount) || 0,
-          remarks: f.schedule.remarks || "",
-          due_date: f.schedule.due_date || null,
-        };
-        const { data } = await api.post(`/students/${id}/schedules`, schPayload);
-        updated = data;
-        const created = (data.schedules || []).find((x) =>
-          x.label === schPayload.label && x.amount === schPayload.amount
-        );
-        scheduleId = created?.id || null;
-      }
-      if (f.log_payment) {
-        const pf = f.payment;
-        const payPayload = {
-          date: pf.date,
-          amount: parseFloat(pf.amount) || (f.create_schedule ? (parseFloat(f.schedule.amount) || 0) : 0),
-          fee_type: pf.fee_type,
-          received_in: {
-            type: pf.received_in.type,
-            name: pf.received_in.name || null,
-            account_id: pf.received_in.account_id || null,
-          },
-          has_adjustment: !!pf.has_adjustment,
-          adjustments: pf.has_adjustment ? pf.adjustments.map((a) => ({
-            kind: a.kind,
-            amount: parseFloat(a.amount) || 0,
-            payment_date: a.payment_date,
-            payment_mode: a.payment_mode,
-            sub_agent_type: a.kind === "sc_adjusted" ? (a.sub_agent_type || null) : null,
-            sub_agent_name: a.kind === "sc_adjusted" ? (a.sub_agent_name || null) : null,
-            remarks: a.remarks || "",
-          })) : [],
-          schedule_id: scheduleId,
-          remarks: pf.remarks || "",
-        };
-        const { data } = await api.post(`/students/${id}/payments`, payPayload);
-        updated = data;
-      }
-      setS(updated);
-      setEntryDlg({ open: false, form: emptyEntry() });
-      toast.success("Entry saved");
-    } catch (err) {
-      toast.error(formatApiError(err.response?.data?.detail) || "Failed");
-    }
-  };
+  // ----- "Add Payment" header button — now opens the PaymentDialog directly -----
+  // (replaces the legacy combined Add-Entry flow which also created schedule rows).
 
   const onExportPdf = () => {
     try {
@@ -291,7 +224,7 @@ export default function StudentDetail() {
         currency={currency}
         onSave={saveHeader}
         onDelete={removeStudent}
-        onAddEntry={openEntryAdd}
+        onAddEntry={openPayAdd}
         onExportPdf={onExportPdf}
         onExportApplicationPdf={onExportApplicationPdf}
         onEditApplication={user?.role === "super_admin" ? () => setEditAppOpen(true) : undefined}
@@ -481,18 +414,8 @@ export default function StudentDetail() {
         setState={setPayDlg}
         schedules={s.schedules}
         accounts={accounts}
+        clients={clients}
         onSubmit={submitPay}
-      />
-
-      <AddEntryDialog
-        open={entryDlg.open}
-        onOpenChange={(v) => setEntryDlg({ ...entryDlg, open: v })}
-        state={entryDlg}
-        setState={setEntryDlg}
-        schedules={s.schedules}
-        accounts={accounts}
-        currency={currency}
-        onSubmit={submitEntry}
       />
 
       <ConvertToEnrolledDialog

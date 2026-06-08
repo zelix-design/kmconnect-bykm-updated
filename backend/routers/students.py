@@ -62,7 +62,20 @@ class ScheduleItemIn(BaseModel):
 ReceivedInType = Literal["college", "km", "sub_agent", "associate", "cash", "bank"]
 SubAgentType = Literal["sub_agent", "associate", "km"]
 PaymentMode = Literal["cash", "bank_transfer", "upi", "cheque", "card", "other"]
-FeeType = Literal["booking_admission", "tution", "other"]
+FeeType = Literal[
+    # Current catalogue
+    "application_fees",
+    "registration_fees",
+    "admission_fees",
+    "tuition_fees",
+    "uniform_fees",
+    "other_fees",
+    "sc_adjusted",
+    # Legacy values — kept so historical payments deserialize
+    "booking_admission",
+    "tution",
+    "other",
+]
 AdjustmentKind = Literal["paid_to_college", "sc_adjusted"]
 
 
@@ -70,6 +83,7 @@ class ReceivedIn(BaseModel):
     type: ReceivedInType
     name: Optional[str] = None      # sub-agent / KM / associate / contact name
     account_id: Optional[str] = None  # internal account where money was received
+    client_id: Optional[str] = None   # set when SC Adjusted — references clients._id
 
     @model_validator(mode="after")
     def _name_required_for_agent(self):
@@ -124,7 +138,7 @@ def _normalize_legacy_payment(p: dict) -> dict:
         # Ensure adjustments exist
         p.setdefault("has_adjustment", bool(p.get("adjustments")))
         p.setdefault("adjustments", [])
-        p.setdefault("fee_type", "other")
+        p.setdefault("fee_type", "other_fees")
         return p
 
     route = p.get("route", "cash")
@@ -139,7 +153,7 @@ def _normalize_legacy_payment(p: dict) -> dict:
         p["received_in"] = {"type": "college", "name": None, "account_id": p.get("account_id")}
     else:
         p["received_in"] = {"type": route or "cash", "name": None, "account_id": p.get("account_id")}
-    p.setdefault("fee_type", "other")
+    p.setdefault("fee_type", "other_fees")
     p["has_adjustment"] = False
     p["adjustments"] = []
     return p
@@ -280,20 +294,34 @@ def _student_filter(student_id: str, user: dict) -> dict:
 
 
 
+async def _resolve_default_account_id(user_id: str) -> Optional[str]:
+    """Pick a sensible default account when the payment has no explicit
+    account_id (used by SC Adjusted entries and the cash-route fallback).
+    Preference: first cash → first bank → first available account."""
+    for acc_type in ("cash", "bank"):
+        acc = await db.accounts.find_one(
+            {"user_id": user_id, "type": acc_type}, {"_id": 0, "id": 1},
+        )
+        if acc:
+            return acc["id"]
+    any_acc = await db.accounts.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+    return any_acc["id"] if any_acc else None
+
+
 async def _auto_log_payment_transaction(user_id: str, student: dict, payment: dict) -> None:
     """Mirror of invoice auto-log: create an income transaction when the
     payment's received_in carries an account_id (or is plain cash routed to
-    the user's first cash account)."""
+    the user's first cash account). SC-Adjusted entries also auto-log on a
+    default account so they show up on the books."""
     received = payment.get("received_in") or {}
     account_id = received.get("account_id")
+    fee_type = payment.get("fee_type", "other_fees")
 
     if not account_id:
-        # Optional: fall back to first cash account for received_in.type == 'cash'
-        if received.get("type") == "cash":
-            cash_acc = await db.accounts.find_one(
-                {"user_id": user_id, "type": "cash"}, {"_id": 0}
-            )
-            account_id = cash_acc["id"] if cash_acc else None
+        if fee_type == "sc_adjusted":
+            account_id = await _resolve_default_account_id(user_id)
+        elif received.get("type") == "cash":
+            account_id = await _resolve_default_account_id(user_id)
 
     # Clean up any prior linked tx for this payment id (idempotent)
     await db.transactions.delete_many({
@@ -306,11 +334,19 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
 
     # Resolve income category from fee_type label
     fee_label_map = {
+        "application_fees": "Application Fees",
+        "registration_fees": "Registration Fees",
+        "admission_fees": "Admission Fees",
+        "tuition_fees": "Tuition Fees",
+        "uniform_fees": "Uniform Fees",
+        "other_fees": "Other Fees",
+        "sc_adjusted": "SC Adjusted",
+        # legacy
         "booking_admission": "Admission Fees",
-        "tution": "Tution Fees",
+        "tution": "Tuition Fees",
         "other": "Other Fees",
     }
-    cat_name = fee_label_map.get(payment.get("fee_type", "other"), "Other Fees")
+    cat_name = fee_label_map.get(fee_type, "Other Fees")
     cat = await db.categories.find_one(
         {"user_id": user_id, "type": "income", "name": cat_name},
         {"_id": 0, "id": 1},
@@ -319,8 +355,11 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
     desc_bits = [
         f"Student fee — {student.get('name')}",
         cat_name,
-        payment.get("remarks") or "",
     ]
+    if fee_type == "sc_adjusted" and received.get("name"):
+        desc_bits.append(f"SC absorbed by {received.get('name')}")
+    if payment.get("remarks"):
+        desc_bits.append(payment.get("remarks"))
     description = " · ".join([b for b in desc_bits if b])
 
     await db.transactions.insert_one({

@@ -18,10 +18,59 @@ export const RECEIVED_IN = {
   km: { label: "KM Acc.", icon: IdentificationBadge, color: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
 };
 
+// Order matters — drives the Fee Type dropdown in PaymentDialog.
+// Legacy keys (booking_admission / tution / other) are preserved for
+// historical payments so the UI / PDFs / XLSX exports keep showing the
+// correct label even after the catalogue overhaul.
 export const FEE_TYPE_LABELS = {
+  application_fees: "Application Fees",
+  registration_fees: "Registration Fees",
+  admission_fees: "Admission Fees",
+  tuition_fees: "Tuition Fees",
+  uniform_fees: "Uniform Fees",
+  other_fees: "Other Fees",
+  sc_adjusted: "SC Adjusted",
+  // legacy
   booking_admission: "Booking / Admission Fees",
   tution: "Tution Fees",
   other: "Other Fees",
+};
+
+export const FEE_TYPE_OPTIONS = [
+  { value: "application_fees", label: "Application Fees" },
+  { value: "registration_fees", label: "Registration Fees" },
+  { value: "admission_fees", label: "Admission Fees" },
+  { value: "tuition_fees", label: "Tuition Fees" },
+  { value: "uniform_fees", label: "Uniform Fees" },
+  { value: "other_fees", label: "Other Fees" },
+  { value: "sc_adjusted", label: "SC Adjusted" },
+];
+
+// Client types that can absorb an SC Adjusted entry (everyone but staff).
+export const SC_ADJUSTED_CLIENT_TYPES = [
+  "sub_agent_associate",
+  "associate_consultant",
+  "km_blr_office",
+  "km_tcr_office",
+  "km_kmly_office",
+];
+
+// Maps a client_type → the received_in.type stored on the payment so the
+// ledger / agent-payments aggregation keeps working.
+export const CLIENT_TYPE_TO_RECEIVED_TYPE = {
+  sub_agent_associate: "sub_agent",
+  associate_consultant: "associate",
+  km_blr_office: "km",
+  km_tcr_office: "km",
+  km_kmly_office: "km",
+};
+
+export const CLIENT_TYPE_LABEL = {
+  sub_agent_associate: "Sub-Agent / Associate",
+  associate_consultant: "Associate Consultant",
+  km_blr_office: "KM BLR Office",
+  km_tcr_office: "KM TCR Office",
+  km_kmly_office: "KM KMLY Office",
 };
 
 export const PAYMENT_MODES = [
@@ -58,8 +107,8 @@ export function emptyPayment() {
   return {
     date: todayISO(),
     amount: "",
-    fee_type: "booking_admission",
-    received_in: { type: "college", name: "", account_id: "" },
+    fee_type: "admission_fees",
+    received_in: { type: "college", name: "", account_id: "", client_id: "" },
     has_adjustment: false,
     adjustments: [],
     schedule_id: "",

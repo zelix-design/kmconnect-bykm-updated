@@ -124,8 +124,8 @@ export default function HeaderCard({
                 <GraduationCap size={14} className="mr-1.5" /> Convert to enrolled
               </Button>
             )}
-            <Button onClick={onAddEntry} className="btn-amber border-0" data-testid="add-entry-btn">
-              <Plus size={14} className="mr-1.5" /> Add entry
+            <Button onClick={onAddEntry} className="btn-amber border-0" data-testid="add-payment-btn">
+              <Plus size={14} className="mr-1.5" /> Add Payment
             </Button>
             <Button variant="outline" onClick={onExportPdf} data-testid="export-student-pdf">
               <FilePdf size={14} className="mr-1.5" /> PDF

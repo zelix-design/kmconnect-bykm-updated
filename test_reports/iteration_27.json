@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 36 'Add Payment' dialog overhaul fully verified end-to-end. Backend: 55/55 pytest pass (including 3 new test_add_payment_v2.py cases: new_fee_types_accepted, sc_adjusted_creates_tx, sc_adjusted_routes_through_agent_ledger). Frontend: header button renamed to 'Add Payment' (data-testid=add-payment-btn) — legacy add-entry-btn absent. PaymentDialog opens with default fee type 'Admission Fees'; Collected-in shows pay-collected-type=College Acc. + pay-collected-account. Fee Type dropdown exposes exactly the 7 required options in order: Application Fees, Registration Fees, Admission Fees, Tuition Fees, Uniform Fees, Other Fees, SC Adjusted. On selecting SC Adjusted the dialog switches: pay-collected-type/account vanish, pay-collected-client appears grouped by Sub-Agent/Associate, Associate Consultant, KM BLR Office, KM TCR Office (no staff clients present), the adjustment block disappears, helper text 'Sub-Agent · Consultant · KM Office'. Picking a sub-agent renders 'Selected: <name>' preview. Save (amount 1234) closes the dialog, new payment row in Payments table shows received-in chip 'Sub Agent Acc. ATHUL KRISHNAN - SAMI' with ₹1,234.00. GET /api/transactions confirmed an auto-logged income tx (type=income, amount=1234.0, account_id set, linked_student_payment_id matches). Edit-flow: pencil pre-fills fee_type=SC Adjusted, amount=1234, client preview re-selected. Switching back to Admission Fees reverts UI: pay-collected-type+account return and adjustment block reappears.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_add_payment_v2.py", "/app/test_reports/pytest/iteration27.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PaymentDialog.jsx — branching on fee_type=sc_adjusted is clean. Consider extracting the SC-Adjusted received_in payload builder into a small helper to keep submitPay tight (low priority).",
+    "Backend _resolve_default_account_id falls back to 'any' account if no cash/bank exists; logged tx will still post but on an arbitrary account. Worth surfacing a warning in the audit log so super admin notices misconfigured offices (nice-to-have).",
+    "Dialog uses a native <input type=date> (browser default picker) instead of shadcn Calendar — consistent with existing screens but flagged per design guideline.",
+    "FEE_TYPE_OPTIONS keeps booking_admission/tution/other legacy keys server-side for back-compat. Confirmed historical rows still deserialise; recommend adding a one-off migration script in the next iteration to normalise stored values."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (55/55)", "frontend": "100% (all 10 review-request checks)"},
+  "test_credentials": "admin@kmfoundation.online / Admin@786 (super_admin). Office admin not exercised because the feature is super-admin facing.",
+  "seed_data_creation": "Test SC-Adjusted payment id=ba081c94... created on student 5c3649fb... and deleted (DELETE 200) so the student is back to the original single ₹10,000 collected row. No other test users / students were created.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 36 dialog redesign is solid: 7 fee types, SC Adjusted branch (group-by-category sub-agent picker, no staff), auto-log income tx via /api/transactions, edit roundtrip including client_id preservation, and revert-to-non-SC all confirmed. Pre-existing failing pytest suites in /app/backend/tests/test_iteration{4,5,6,8}.py (admin vs super_admin role assertions per handoff) were intentionally NOT executed — they pre-date this iteration. Test student used: 5c3649fb-8166-4761-a47f-f46f00f1ffc5 (SHAHABAN P S).",
+  "rca of the issue": "Not applicable — no bugs found this iteration."
+}
