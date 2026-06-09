@@ -79,7 +79,11 @@ FeeType = Literal[
     "tution",
     "other",
 ]
-AdjustmentKind = Literal["paid_to_college", "sc_adjusted"]
+AdjustmentKind = Literal[
+    "paid_to_college",   # legacy
+    "sc_adjusted",        # SC absorbed by a sub-agent / associate / KM
+    "internal_credit",    # money landed in an internal KM Foundation account
+]
 
 
 class ReceivedIn(BaseModel):
@@ -106,10 +110,12 @@ class Adjustment(BaseModel):
     payment_mode: PaymentMode = "bank_transfer"
     sub_agent_type: Optional[SubAgentType] = None  # only when kind=sc_adjusted
     sub_agent_name: Optional[str] = None
+    account_id: Optional[str] = None  # only when kind=internal_credit
+    client_id: Optional[str] = None   # references clients._id when picked from list
     remarks: Optional[str] = ""
 
     @model_validator(mode="after")
-    def _sub_agent_required_for_sc_adjusted(self):
+    def _per_kind_requirements(self):
         if self.kind == "sc_adjusted":
             if not self.sub_agent_type:
                 raise ValueError(
@@ -118,6 +124,11 @@ class Adjustment(BaseModel):
             if not self.sub_agent_name or not self.sub_agent_name.strip():
                 raise ValueError(
                     "sub_agent_name is required when adjustment kind is 'sc_adjusted'"
+                )
+        if self.kind == "internal_credit":
+            if not self.account_id or not str(self.account_id).strip():
+                raise ValueError(
+                    "account_id is required when adjustment kind is 'internal_credit'"
                 )
         return self
 
@@ -348,9 +359,6 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
         "linked_student_payment_id": payment["id"],
     })
 
-    if not account_id:
-        return
-
     # Resolve income category from fee_type label
     fee_label_map = {
         "application_fees": "Application Fees",
@@ -371,29 +379,60 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
         {"_id": 0, "id": 1},
     )
 
-    desc_bits = [
-        f"Student fee — {student.get('name')}",
-        cat_name,
-    ]
-    if fee_type == "sc_adjusted" and received.get("name"):
-        desc_bits.append(f"SC absorbed by {received.get('name')}")
-    if payment.get("remarks"):
-        desc_bits.append(payment.get("remarks"))
-    description = " · ".join([b for b in desc_bits if b])
+    # Main payment tx — only created when there's an account to credit
+    if account_id:
+        desc_bits = [
+            f"Student fee — {student.get('name')}",
+            cat_name,
+        ]
+        if fee_type == "sc_adjusted" and received.get("name"):
+            desc_bits.append(f"SC absorbed by {received.get('name')}")
+        if payment.get("remarks"):
+            desc_bits.append(payment.get("remarks"))
+        description = " · ".join([b for b in desc_bits if b])
 
-    await db.transactions.insert_one({
-        "id": gen_id(),
-        "user_id": user_id,
-        "created_at": now_iso(),
-        "type": "income",
-        "amount": round(payment.get("amount") or 0, 2),
-        "account_id": account_id,
-        "category_id": cat["id"] if cat else None,
-        "date": payment.get("date"),
-        "description": description,
-        "linked_student_id": student.get("id"),
-        "linked_student_payment_id": payment["id"],
-    })
+        await db.transactions.insert_one({
+            "id": gen_id(),
+            "user_id": user_id,
+            "created_at": now_iso(),
+            "type": "income",
+            "amount": round(payment.get("amount") or 0, 2),
+            "account_id": account_id,
+            "category_id": cat["id"] if cat else None,
+            "date": payment.get("date"),
+            "description": description,
+            "linked_student_id": student.get("id"),
+            "linked_student_payment_id": payment["id"],
+        })
+
+    # Also auto-log every internal_credit adjustment as its own income tx on
+    # the picked KM-Foundation account. SC-adjusted rows are tracked by the
+    # agent-ledger aggregation and intentionally do NOT create real money
+    # transactions on the books.
+    for idx, adj in enumerate(payment.get("adjustments") or []):
+        if adj.get("kind") != "internal_credit":
+            continue
+        adj_account_id = adj.get("account_id")
+        if not adj_account_id:
+            continue
+        await db.transactions.insert_one({
+            "id": gen_id(),
+            "user_id": user_id,
+            "created_at": now_iso(),
+            "type": "income",
+            "amount": round(adj.get("amount") or 0, 2),
+            "account_id": adj_account_id,
+            "category_id": cat["id"] if cat else None,
+            "date": adj.get("payment_date") or payment.get("date"),
+            "description": " · ".join(filter(None, [
+                f"Student fee — {student.get('name')}",
+                "KM Foundation (adjustment)",
+                adj.get("remarks") or "",
+            ])),
+            "linked_student_id": student.get("id"),
+            "linked_student_payment_id": payment["id"],
+            "linked_adjustment_idx": idx,
+        })
 
 
 async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
@@ -514,17 +553,33 @@ async def agent_ledger(user: dict = Depends(get_current_user)):
         for p in payments:
             received = p.get("received_in") or {}
             r_type = received.get("type")
-            if r_type not in _AGENT_TYPES:
-                continue
-            name = (received.get("name") or "—").strip() or "—"
-            key = (r_type, name)
-            row = ledger.setdefault(key, _new_ledger_bucket(r_type, name))
-            paid, sc = _split_adjustments(p)
-            row["total_received"] += float(p.get("amount") or 0)
-            row["paid_to_college"] += paid
-            row["sc_adjusted"] += sc
-            row["payments_count"] += 1
-            row["students"].add(st["id"])
+            if r_type in _AGENT_TYPES:
+                name = (received.get("name") or "—").strip() or "—"
+                key = (r_type, name)
+                row = ledger.setdefault(key, _new_ledger_bucket(r_type, name))
+                paid, sc = _split_adjustments(p)
+                row["total_received"] += float(p.get("amount") or 0)
+                row["paid_to_college"] += paid
+                row["sc_adjusted"] += sc
+                row["payments_count"] += 1
+                row["students"].add(st["id"])
+            # Also pick up SC-Adjusted adjustments on non-agent payments
+            # (e.g. a College-Acc. payment with a "SUB AGENT" adjustment row).
+            for adj in (p.get("adjustments") or []):
+                if adj.get("kind") != "sc_adjusted":
+                    continue
+                adj_type = adj.get("sub_agent_type")
+                adj_name = (adj.get("sub_agent_name") or "—").strip() or "—"
+                if adj_type not in _AGENT_TYPES:
+                    continue
+                # Don't double-count when the parent payment is already
+                # attributed to the same agent.
+                if r_type == adj_type and (received.get("name") or "—").strip() == adj_name:
+                    continue
+                key = (adj_type, adj_name)
+                row = ledger.setdefault(key, _new_ledger_bucket(adj_type, adj_name))
+                row["sc_adjusted"] += float(adj.get("amount") or 0)
+                row["students"].add(st["id"])
 
     out = [_finalise_ledger_row(row) for row in ledger.values()]
     out.sort(key=lambda r: r["total_received"], reverse=True)
@@ -541,14 +596,18 @@ def _payment_matches_agent(payment: dict, type_: str, name: str) -> bool:
 
 
 def _split_adjustments(payment: dict) -> tuple[float, float]:
-    """Return ``(paid_to_college_total, sc_adjusted_total)`` for one payment."""
+    """Return ``(paid_total, sc_adjusted_total)`` for one payment.
+    `paid_total` includes both legacy "paid_to_college" rows and the new
+    "internal_credit" rows since both represent money that landed in a real
+    account (i.e., not SC absorbed by a sub-agent)."""
     paid = 0.0
     sc = 0.0
     for a in (payment.get("adjustments") or []):
         amt = float(a.get("amount") or 0)
-        if a.get("kind") == "paid_to_college":
+        kind = a.get("kind")
+        if kind in ("paid_to_college", "internal_credit"):
             paid += amt
-        elif a.get("kind") == "sc_adjusted":
+        elif kind == "sc_adjusted":
             sc += amt
     return paid, sc
 

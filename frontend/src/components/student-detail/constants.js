@@ -126,15 +126,27 @@ export function emptyEntry() {
   };
 }
 
+// Options for the per-row "Kind" dropdown in the adjustments block.
+// Each one maps to a different backend representation (see submitPay in
+// StudentDetail.jsx) so the ledger / agent-payments aggregation keeps
+// working.
+export const ADJUSTMENT_KIND_OPTIONS = [
+  { value: "km_foundation", label: "KM FOUNDATION" },
+  { value: "sub_agent", label: "SUB AGENT" },
+  { value: "associate_consultant", label: "ASSOCIATE CONSULTANT" },
+];
+
 export function emptyAdjustment(date) {
   return {
     _key: _uid(),
-    kind: "paid_to_college",
+    kind: "km_foundation",
     amount: "",
     payment_date: date,
     payment_mode: "bank_transfer",
     sub_agent_type: "sub_agent",
     sub_agent_name: "",
+    account_id: "",
+    client_id: "",
     remarks: "",
   };
 }

@@ -611,6 +611,21 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 40: Add Payment dialog refinements per user screenshots)
+- [x] **Title** renamed: `Add Payment` → **`New Payment`** (on add); edit still says "Edit Payment".
+- [x] **Amount field shrunk** to a narrower column (Date takes the rest of the row).
+- [x] **Internal account dropdown hidden** when `received_in.type = "college"` — College Acc. doesn't need an auto-log account per user spec.
+- [x] **Adjustment block redesigned** (`AdjustmentsSection.jsx` rewrite). Kind dropdown now offers three explicit destinations: **KM FOUNDATION** / **SUB AGENT** / **ASSOCIATE CONSULTANT**.
+  - KM FOUNDATION → second dropdown lists internal accounts (`accounts[]`). On save, backend records `kind="internal_credit"` with `account_id` and auto-logs a real income transaction on that account (so the books reflect the partial money landing in KM's books).
+  - SUB AGENT → second dropdown lists clients with `client_type="sub_agent_associate"`. On save, backend records `kind="sc_adjusted"`, `sub_agent_type="sub_agent"`, `sub_agent_name=<picked>`, `client_id=<picked>`.
+  - ASSOCIATE CONSULTANT → second dropdown lists clients with `client_type="associate_consultant"`. On save, backend records `kind="sc_adjusted"`, `sub_agent_type="associate"`, `sub_agent_name=<picked>`, `client_id=<picked>`.
+  - Date · Amount · Remarks rows follow the kind/target row.
+- [x] **Agent-ledger aggregation extended** so SC-Adjusted adjustment rows on a College-Acc. payment ALSO surface the absorbed sub-agent in `/api/students/agent-ledger`. Previously only top-level `received_in` payments were aggregated.
+- [x] **Backend models extended**: `AdjustmentKind` now accepts `internal_credit` (in addition to legacy `paid_to_college` and `sc_adjusted`). `Adjustment` model gains optional `account_id` + `client_id` fields. Validator enforces `account_id` when `kind=internal_credit`.
+- [x] **`_split_adjustments`** updated so `internal_credit` rows are counted as paid (not SC absorbed) for the existing "paid vs SC" breakdown in the ledger.
+- [x] **Edit roundtrip**: `openPayEdit` reverse-maps backend `internal_credit` → frontend `km_foundation`, and `sc_adjusted` with `sub_agent_type="associate"` → frontend `associate_consultant`. Legacy `paid_to_college` rows surface as `km_foundation` (user can re-pick the actual account).
+- [x] **Tests**: 3 new pytest cases in `test_adjustment_kinds_v2.py` — internal_credit auto-logs income tx, sc_adjusted with sub-agent client routes to agent ledger, legacy `paid_to_college` still accepted. Full suite: **68/68 passing**.
+
 ## Implementation status — 2026-02-26 (iteration 39: College → Course cascade on New Student)
 - [x] Swapped the order in the **Add Student** dialog: **College picker** is now first (left), **Course** is second (right).
 - [x] Course turned into a **dropdown** that lists the picked college's `courses[]` (from the College catalogue). When the user changes the college, the course value is reset (unless the prior selection is still in the new college's catalogue).

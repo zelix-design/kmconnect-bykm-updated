@@ -125,7 +125,7 @@ export default function PaymentDialog({
       >
         <DialogHeader>
           <DialogTitle className="font-display">
-            {state.editing ? "Edit Payment" : "Add Payment"}
+            {state.editing ? "Edit Payment" : "New Payment"}
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Record a fee collection. When fee type is &ldquo;SC Adjusted&rdquo;, pick the
@@ -135,7 +135,7 @@ export default function PaymentDialog({
 
         <form onSubmit={onSubmit} className="space-y-4">
           {/* Row 1: Date · Amount */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_minmax(0,180px)] gap-3">
             <div>
               <Label>Date</Label>
               <Input
@@ -233,9 +233,13 @@ export default function PaymentDialog({
                 <Label>Collected in</Label>
                 <Select
                   value={f.received_in.type}
-                  onValueChange={(v) =>
-                    setRecv({ type: v, client_id: "" })
-                  }
+                  onValueChange={(v) => {
+                    // Clear the auto-log account when switching to College
+                    // (per spec: College Acc. doesn't need an internal account).
+                    const next = { type: v, client_id: "" };
+                    if (v === "college") next.account_id = "";
+                    setRecv(next);
+                  }}
                 >
                   <SelectTrigger data-testid="pay-collected-type">
                     <SelectValue />
@@ -249,32 +253,34 @@ export default function PaymentDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>
-                  Account{" "}
-                  <span className="text-xs text-muted-foreground font-normal">
-                    (auto-logs as income tx)
-                  </span>
-                </Label>
-                <Select
-                  value={f.received_in.account_id || "_none"}
-                  onValueChange={(v) =>
-                    setRecv({ account_id: v === "_none" ? "" : v })
-                  }
-                >
-                  <SelectTrigger data-testid="pay-collected-account">
-                    <SelectValue placeholder="No auto-log" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">No auto-log</SelectItem>
-                    {(accounts || []).map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {f.received_in.type !== "college" && (
+                <div>
+                  <Label>
+                    Account{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (auto-logs as income tx)
+                    </span>
+                  </Label>
+                  <Select
+                    value={f.received_in.account_id || "_none"}
+                    onValueChange={(v) =>
+                      setRecv({ account_id: v === "_none" ? "" : v })
+                    }
+                  >
+                    <SelectTrigger data-testid="pay-collected-account">
+                      <SelectValue placeholder="No auto-log" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">No auto-log</SelectItem>
+                      {(accounts || []).map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
@@ -319,6 +325,8 @@ export default function PaymentDialog({
               onRemove={onAdjRemove}
               amount={f.amount}
               currency={state.currency}
+              accounts={accounts}
+              clients={clients}
               testIdPrefix="adj"
               paymentDate={f.date}
             />

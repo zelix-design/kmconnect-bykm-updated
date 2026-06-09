@@ -103,6 +103,30 @@ export default function StudentDetail() {
 
   // ----- Payments -----
   const openPayAdd = () => setPayDlg({ open: true, editing: null, form: emptyPayment() });
+  const _mapAdjustmentForForm = (a) => {
+    const base = {
+      _key: a.id || a._key || `loaded-${a.kind}-${a.amount}-${a.payment_date}`,
+      amount: String(a.amount ?? ""),
+      payment_date: a.payment_date,
+      payment_mode: a.payment_mode || "bank_transfer",
+      account_id: a.account_id || "",
+      client_id: a.client_id || "",
+      sub_agent_type: a.sub_agent_type || "sub_agent",
+      sub_agent_name: a.sub_agent_name || "",
+      remarks: a.remarks || "",
+    };
+    if (a.kind === "internal_credit") return { ...base, kind: "km_foundation" };
+    if (a.kind === "sc_adjusted") {
+      return {
+        ...base,
+        kind: a.sub_agent_type === "associate" ? "associate_consultant" : "sub_agent",
+      };
+    }
+    // legacy paid_to_college rows — surface as KM Foundation (user can re-pick)
+    if (a.kind === "paid_to_college") return { ...base, kind: "km_foundation" };
+    return { ...base, kind: a.kind };
+  };
+
   const openPayEdit = (p) => setPayDlg({
     open: true, editing: p,
     form: {
@@ -114,11 +138,7 @@ export default function StudentDetail() {
         client_id: p.received_in?.client_id || "",
       },
       has_adjustment: !!p.has_adjustment,
-      adjustments: (p.adjustments || []).map((a) => ({
-        _key: a.id || a._key || `loaded-${a.kind}-${a.amount}-${a.payment_date}`,
-        ...a,
-        amount: String(a.amount),
-      })),
+      adjustments: (p.adjustments || []).map(_mapAdjustmentForForm),
       schedule_id: p.schedule_id || "",
       remarks: p.remarks || "",
     },
@@ -132,12 +152,47 @@ export default function StudentDetail() {
       const rowLabel = `Adjustment #${i + 1}`;
       if (!a.payment_date) return `${rowLabel}: pick a payment date.`;
       if (!(parseFloat(a.amount) > 0)) return `${rowLabel}: enter an amount greater than zero.`;
+      if (a.kind === "km_foundation" && !a.account_id) {
+        return `${rowLabel}: pick a KM Foundation internal account.`;
+      }
+      if ((a.kind === "sub_agent" || a.kind === "associate_consultant") && !a.client_id) {
+        return `${rowLabel}: pick a ${a.kind === "sub_agent" ? "sub-agent" : "associate consultant"}.`;
+      }
+      // legacy back-compat (rows loaded from older payments may still carry sc_adjusted)
       if (a.kind === "sc_adjusted") {
         if (!a.sub_agent_type) return `${rowLabel}: pick Sub Agent / Associate / KM.`;
         if (!a.sub_agent_name?.trim()) return `${rowLabel}: name is required for SC-adjusted rows.`;
       }
     }
     return null;
+  };
+
+  const _mapAdjustmentForApi = (a) => {
+    const base = {
+      amount: parseFloat(a.amount) || 0,
+      payment_date: a.payment_date,
+      payment_mode: a.payment_mode || "bank_transfer",
+      remarks: a.remarks || "",
+    };
+    if (a.kind === "km_foundation") {
+      return { ...base, kind: "internal_credit", account_id: a.account_id || null };
+    }
+    if (a.kind === "sub_agent" || a.kind === "associate_consultant") {
+      return {
+        ...base,
+        kind: "sc_adjusted",
+        sub_agent_type: a.kind === "sub_agent" ? "sub_agent" : "associate",
+        sub_agent_name: a.sub_agent_name || null,
+        client_id: a.client_id || null,
+      };
+    }
+    // legacy paid_to_college / sc_adjusted rows — pass through unchanged
+    return {
+      ...base,
+      kind: a.kind,
+      sub_agent_type: a.kind === "sc_adjusted" ? (a.sub_agent_type || null) : null,
+      sub_agent_name: a.kind === "sc_adjusted" ? (a.sub_agent_name || null) : null,
+    };
   };
 
   const submitPay = async (e) => {
@@ -161,15 +216,7 @@ export default function StudentDetail() {
         client_id: f.received_in.client_id || null,
       },
       has_adjustment: isSc ? false : !!f.has_adjustment,
-      adjustments: (!isSc && f.has_adjustment) ? f.adjustments.map((a) => ({
-        kind: a.kind,
-        amount: parseFloat(a.amount) || 0,
-        payment_date: a.payment_date,
-        payment_mode: a.payment_mode,
-        sub_agent_type: a.kind === "sc_adjusted" ? (a.sub_agent_type || null) : null,
-        sub_agent_name: a.kind === "sc_adjusted" ? (a.sub_agent_name || null) : null,
-        remarks: a.remarks || "",
-      })) : [],
+      adjustments: (!isSc && f.has_adjustment) ? f.adjustments.map(_mapAdjustmentForApi) : [],
       schedule_id: f.schedule_id || null,
       remarks: f.remarks || "",
     };
