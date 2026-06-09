@@ -643,6 +643,15 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
     # Office admin can never re-scope a record outside their office.
     if user.get("role") == "office_admin":
         data["home_office"] = user.get("office")
+    elif "home_office" not in payload.model_fields_set:
+        # Super-admin partial PATCH that didn't send home_office — preserve
+        # the existing scope so the record doesn't silently drop off the
+        # office admin's dashboard.
+        existing = await db.students.find_one(
+            {"id": student_id}, {"_id": 0, "home_office": 1}
+        )
+        if existing is not None:
+            data["home_office"] = existing.get("home_office")
     fees_plan = data.get("fees_plan")
     # Reconcile fees_plan rows with existing schedules. Preserve manual ones,
     # and don't drop fee_plan rows that already have payments linked.

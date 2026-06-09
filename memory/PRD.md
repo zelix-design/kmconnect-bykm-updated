@@ -611,6 +611,14 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 37: Cross-office visibility — Super Admin records reach Office Admins)
+- [x] **Issue addressed**: User reported "Super Admin already updated the staffs of KM BLR and students details, but not reflect the KM BLR Admin dashboard." Records owned by super_admin were invisible to office admins because their list query only matched `{user_id: self}`.
+- [x] **Visibility model**: Added `home_office: Optional[Literal["KM_BLR","KM_TCR","KM_KMLY","ALL"]]` to `StudentIn` + `ClientIn`. Office Admin list/get queries now match `{$or: [{user_id: self.id}, {home_office: self.office}, {home_office: "ALL"}]}` via `_office_visibility_clause()`. Super Admin sees everything.
+- [x] **Server-side enforcement**: On every create/update, office_admin's `home_office` is forced to `user.office` (they can't widen their own scope). Super Admin's value is honored. Partial PATCHes that omit `home_office` preserve the existing value via `model_fields_set`.
+- [x] **UI dropdowns** (Super Admin only): `data-testid=st-home-office` (Students Add), `cli-home-office` (Clients Add), `hdr-home-office` (StudentDetail edit header). Office Admins do NOT see the dropdown.
+- [x] **One-shot backfill**: `/app/backend/scripts/backfill_home_office.py` tagged 10 legacy super-admin-owned students → KM_BLR; office_admin-owned records → their own office; super-admin-owned clients by client_type (`km_blr_office → KM_BLR`, sub_agents / consultants → ALL).
+- [x] **Tests**: 5 new pytest cases in `test_home_office_visibility.py`. Full pytest suite passing **60/60**. Iteration 28 testing report: 100% e2e success on both backend and frontend UI matrix.
+
 ## Implementation status — 2026-02-26 (iteration 36: Add Payment dialog overhaul + SC Adjusted as fee type)
 - [x] **"Add entry" → "Add Payment"** header button renamed (`data-testid=add-payment-btn`). Now opens `PaymentDialog` directly (legacy `AddEntryDialog` removed from the StudentDetail flow). The schedule-row creation step inside the combined dialog is gone.
 - [x] **Fee Type catalogue (7 options)** wired in `constants.js` + `routers/students.py`:

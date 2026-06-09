@@ -63,6 +63,12 @@ async def update_client(client_id: str, payload: ClientIn, user: dict = Depends(
     data = payload.model_dump()
     if user.get("role") == "office_admin":
         data["home_office"] = user.get("office")
+    elif "home_office" not in payload.model_fields_set:
+        existing = await db.clients.find_one(
+            {"id": client_id}, {"_id": 0, "home_office": 1}
+        )
+        if existing is not None:
+            data["home_office"] = existing.get("home_office")
     res = await db.clients.update_one(
         _client_filter(client_id, user),
         {"$set": data},
