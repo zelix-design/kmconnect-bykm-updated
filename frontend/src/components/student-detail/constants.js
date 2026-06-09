@@ -1,6 +1,6 @@
 // Shared constants + small helpers for the Student Detail page and its dialogs.
 // Extracted to keep the page component small and let dialogs be reused.
-import { Bank, Wallet, UsersThree, Briefcase, IdentificationBadge } from "@phosphor-icons/react";
+import { Bank, UsersThree, Briefcase, IdentificationBadge } from "@phosphor-icons/react";
 import { todayISO } from "@/lib/format";
 
 export const STATUS_OPTIONS = [
@@ -11,8 +11,7 @@ export const STATUS_OPTIONS = [
 
 export const RECEIVED_IN = {
   college: { label: "College Acc.", icon: Bank, color: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400" },
-  cash: { label: "Cash", icon: Wallet, color: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  bank: { label: "Bank Acc.", icon: Bank, color: "bg-muted text-foreground" },
+  bank: { label: "Other Bank Acc.", icon: Bank, color: "bg-muted text-foreground" },
   sub_agent: { label: "Sub Agent Acc.", icon: UsersThree, color: "bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400" },
   associate: { label: "Associate Acc.", icon: Briefcase, color: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" },
   km: { label: "KM Acc.", icon: IdentificationBadge, color: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
@@ -29,7 +28,7 @@ export const FEE_TYPE_LABELS = {
   tuition_fees: "Tuition Fees",
   uniform_fees: "Uniform Fees",
   other_fees: "Other Fees",
-  sc_adjusted: "SC Adjusted",
+  //sc_adjusted: "SC Adjusted",
   // legacy
   booking_admission: "Booking / Admission Fees",
   tution: "Tution Fees",
@@ -43,16 +42,13 @@ export const FEE_TYPE_OPTIONS = [
   { value: "tuition_fees", label: "Tuition Fees" },
   { value: "uniform_fees", label: "Uniform Fees" },
   { value: "other_fees", label: "Other Fees" },
-  { value: "sc_adjusted", label: "SC Adjusted" },
+  //{ value: "sc_adjusted", label: "SC Adjusted" },
 ];
 
-// Client types that can absorb an SC Adjusted entry (everyone but staff).
+// Client types that can absorb an SC Adjusted entry (everyone).
 export const SC_ADJUSTED_CLIENT_TYPES = [
   "sub_agent_associate",
   "associate_consultant",
-  "km_blr_office",
-  "km_tcr_office",
-  "km_kmly_office",
 ];
 
 // Maps a client_type → the received_in.type stored on the payment so the
@@ -60,35 +56,26 @@ export const SC_ADJUSTED_CLIENT_TYPES = [
 export const CLIENT_TYPE_TO_RECEIVED_TYPE = {
   sub_agent_associate: "sub_agent",
   associate_consultant: "associate",
-  km_blr_office: "km",
-  km_tcr_office: "km",
-  km_kmly_office: "km",
 };
 
 export const CLIENT_TYPE_LABEL = {
   sub_agent_associate: "Sub-Agent / Associate",
   associate_consultant: "Associate Consultant",
-  km_blr_office: "KM BLR Office",
-  km_tcr_office: "KM TCR Office",
-  km_kmly_office: "KM KMLY Office",
 };
 
 export const PAYMENT_MODES = [
   { value: "cash", label: "Cash" },
   { value: "bank_transfer", label: "Bank Transfer" },
   { value: "upi", label: "UPI" },
-  { value: "cheque", label: "Cheque" },
-  { value: "card", label: "Card" },
   { value: "other", label: "Other" },
 ];
 
 export const SUB_AGENT_TYPES = [
   { value: "sub_agent", label: "Sub Agent" },
   { value: "associate", label: "Associate" },
-  { value: "km", label: "KM" },
 ];
 
-export const PRESET_SCHEDULE_LABELS = ["1st Payment", "2nd Payment", "3rd Payment", "4th Payment", "5th Payment"];
+export const PRESET_SCHEDULE_LABELS = ["1st Payment", "2nd Payment", "3rd Payment", "4th Payment"];
 
 export const _uid = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID)

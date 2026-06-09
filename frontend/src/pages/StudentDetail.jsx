@@ -388,7 +388,7 @@ export default function StudentDetail() {
             </thead>
             <tbody className="divide-y divide-border">
               {s.payments.map((p) => {
-                const ri = RECEIVED_IN[p.received_in?.type] || RECEIVED_IN.cash;
+                const ri = RECEIVED_IN[p.received_in?.type] || RECEIVED_IN.bank;
                 const Icon = ri.icon;
                 const sch = (s.schedules || []).find((x) => x.id === p.schedule_id);
                 const isExp = !!expanded[p.id];

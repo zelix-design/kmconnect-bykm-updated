@@ -31,8 +31,7 @@ import { formatMoney } from "@/lib/format";
 
 const RECEIVED_IN_TYPES = [
   { value: "college", label: "College Acc." },
-  { value: "cash", label: "Cash" },
-  { value: "bank", label: "Bank Acc." },
+  { value: "bank", label: "Other Bank Acc." },
 ];
 
 /**
