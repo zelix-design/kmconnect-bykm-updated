@@ -5,6 +5,10 @@ from pydantic import BaseModel, Field, EmailStr
 
 # ---------- Users ----------
 OfficeCode = Literal["KM_BLR", "KM_TCR", "KM_KMLY"]
+# Visibility scope on records: an office code → only that office's admins,
+# or "ALL" → every office admin can see it. Records left as None remain
+# private to the super_admin who owns them.
+RecordOffice = Literal["KM_BLR", "KM_TCR", "KM_KMLY", "ALL"]
 UserRole = Literal["super_admin", "office_admin"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 
@@ -87,6 +91,10 @@ class ClientIn(BaseModel):
     office: Optional[OfficeCode] = None
     eligible_incentive: Optional[float] = None  # ₹ per admission for staff
     date_of_birth: Optional[str] = None  # ISO date
+    # Cross-user visibility: when set to KM_BLR / KM_TCR / KM_KMLY, all office
+    # admins of that office see the record. "ALL" → every office admin sees it.
+    # Office admins always have this overridden server-side to their own office.
+    home_office: Optional[RecordOffice] = None
 
 
 # ---------- Expense Requests (Office Admin → Super Admin approval) ----------

@@ -43,7 +43,15 @@ const TYPE_BADGE = {
 const empty = {
   name: "", client_type: "sub_agent_associate", email: "", phone: "", company: "",
   office: "", eligible_incentive: "", date_of_birth: "",
+  home_office: "",
 };
+
+const HOME_OFFICE_OPTIONS = [
+  { value: "KM_BLR", label: "KM BLR" },
+  { value: "KM_TCR", label: "KM TCR" },
+  { value: "KM_KMLY", label: "KM KMLY" },
+  { value: "ALL", label: "Shared (all offices)" },
+];
 
 export default function Clients() {
   const { user } = useAuth();
@@ -86,6 +94,7 @@ export default function Clients() {
       office: c.office || "",
       eligible_incentive: c.eligible_incentive ?? "",
       date_of_birth: c.date_of_birth || "",
+      home_office: c.home_office || "",
     });
     setOpen(true);
   };
@@ -98,6 +107,7 @@ export default function Clients() {
       office: form.office || null,
       eligible_incentive: form.eligible_incentive === "" ? null : Number(form.eligible_incentive),
       date_of_birth: form.date_of_birth || null,
+      home_office: form.home_office || null,
     };
     try {
       if (editing) await api.patch(`/clients/${editing.id}`, payload);
@@ -197,6 +207,32 @@ export default function Clients() {
                   </>
                 ) : (
                   <div><Label>Company</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="cli-company" /></div>
+                )}
+                {!isOfficeAdmin && (
+                  <div data-testid="cli-home-office-row">
+                    <Label>
+                      Visible to office{" "}
+                      <span className="text-xs text-muted-foreground font-normal">
+                        (Super Admin scoping — leave blank to keep private)
+                      </span>
+                    </Label>
+                    <Select
+                      value={form.home_office || "_none"}
+                      onValueChange={(v) =>
+                        setForm({ ...form, home_office: v === "_none" ? "" : v })
+                      }
+                    >
+                      <SelectTrigger data-testid="cli-home-office">
+                        <SelectValue placeholder="Private to me (default)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Private to me (default)</SelectItem>
+                        {HOME_OFFICE_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

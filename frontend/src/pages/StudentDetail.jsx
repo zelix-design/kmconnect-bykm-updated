@@ -54,6 +54,7 @@ export default function StudentDetail() {
         reference: sr.data.reference || "", sc_out_fixed: sr.data.sc_out_fixed || 0,
         status: sr.data.status, enrollment_date: sr.data.enrollment_date || "", notes: sr.data.notes || "",
         fees_plan: feesPlanFromApi(sr.data.fees_plan),
+        home_office: sr.data.home_office || "",
       });
     } catch {
       toast.error("Could not load student"); nav("/students");
@@ -69,6 +70,7 @@ export default function StudentDetail() {
         ...header,
         sc_out_fixed: parseFloat(header.sc_out_fixed) || 0,
         fees_plan: normalizeFeesPlanForApi(header.fees_plan),
+        home_office: header.home_office || null,
       };
       const { data } = await api.patch(`/students/${id}`, payload);
       setS(data); setEditHeader(false); toast.success("Saved");
@@ -222,6 +224,7 @@ export default function StudentDetail() {
         setHeader={setHeader}
         clients={clients}
         currency={currency}
+        isSuperAdmin={user?.role === "super_admin"}
         onSave={saveHeader}
         onDelete={removeStudent}
         onAddEntry={openPayAdd}

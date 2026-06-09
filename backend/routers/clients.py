@@ -8,11 +8,25 @@ from models import ClientIn
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 
+def _office_visibility_clause(user: dict) -> dict:
+    """For office_admin, build a Mongo filter that matches records the admin
+    is allowed to see: records owned by them OR scoped to their office OR
+    shared with ALL via home_office."""
+    return {
+        "$or": [
+            {"user_id": user["id"]},
+            {"home_office": user.get("office")},
+            {"home_office": "ALL"},
+        ]
+    }
+
+
 @router.get("")
 async def list_clients(user: dict = Depends(get_current_user)):
-    """Office admin sees their own clients. Super admin sees clients from ALL users
-    (so staff onboarded by office admins are visible too). Each returned doc gets a
-    `_creator_name` / `_creator_office` for UI attribution."""
+    """Office admin sees own clients PLUS clients scoped to their office (or
+    shared with ALL) via home_office. Super admin sees clients from ALL users
+    (so staff onboarded by office admins are visible too). Each returned doc
+    gets a `_creator_name` / `_creator_office` for UI attribution."""
     if user.get("role") == "super_admin":
         docs = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
         if docs:
@@ -28,12 +42,17 @@ async def list_clients(user: dict = Depends(get_current_user)):
                     d["_creator_name"] = u.get("name")
                     d["_creator_office"] = u.get("office")
         return docs
-    return await db.clients.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return await db.clients.find(
+        _office_visibility_clause(user), {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
 
 
 @router.post("")
 async def create_client(payload: ClientIn, user: dict = Depends(require_edit("clients"))):
-    doc = {"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **payload.model_dump()}
+    data = payload.model_dump()
+    if user.get("role") == "office_admin":
+        data["home_office"] = user.get("office")
+    doc = {"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **data}
     await db.clients.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -41,9 +60,12 @@ async def create_client(payload: ClientIn, user: dict = Depends(require_edit("cl
 
 @router.patch("/{client_id}")
 async def update_client(client_id: str, payload: ClientIn, user: dict = Depends(require_edit("clients"))):
+    data = payload.model_dump()
+    if user.get("role") == "office_admin":
+        data["home_office"] = user.get("office")
     res = await db.clients.update_one(
         _client_filter(client_id, user),
-        {"$set": payload.model_dump()},
+        {"$set": data},
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Client not found")
@@ -60,10 +82,12 @@ async def delete_client(client_id: str, user: dict = Depends(require_edit("clien
 
 
 def _client_filter(client_id: str, user: dict) -> dict:
-    q: dict = {"id": client_id}
-    if user.get("role") != "super_admin":
-        q["user_id"] = user["id"]
-    return q
+    if user.get("role") == "super_admin":
+        return {"id": client_id}
+    return {
+        "id": client_id,
+        **_office_visibility_clause(user),
+    }
 
 
 @router.get("/{client_id}/detail")

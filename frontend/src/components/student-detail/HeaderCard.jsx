@@ -25,6 +25,7 @@ export default function HeaderCard({
   setHeader,
   clients,
   currency,
+  isSuperAdmin,
   onSave,
   onDelete,
   onAddEntry,
@@ -77,6 +78,24 @@ export default function HeaderCard({
             </div>
             <div><Label>Enrollment Date</Label><Input type="date" value={header.enrollment_date} onChange={(e) => setHeader({ ...header, enrollment_date: e.target.value })} /></div>
           </div>
+          {isSuperAdmin && (
+            <div data-testid="hdr-home-office-row">
+              <Label>Visible to office <span className="text-xs text-muted-foreground font-normal">(blank = private to me)</span></Label>
+              <Select
+                value={header.home_office || "_none"}
+                onValueChange={(v) => setHeader({ ...header, home_office: v === "_none" ? "" : v })}
+              >
+                <SelectTrigger data-testid="hdr-home-office"><SelectValue placeholder="Private to me (default)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">Private to me (default)</SelectItem>
+                  <SelectItem value="KM_BLR">KM BLR</SelectItem>
+                  <SelectItem value="KM_TCR">KM TCR</SelectItem>
+                  <SelectItem value="KM_KMLY">KM KMLY</SelectItem>
+                  <SelectItem value="ALL">Shared (all offices)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <FeesPlanFields
             fp={header.fees_plan || emptyFeesPlan()}
             onChange={(next) => setHeader({ ...header, fees_plan: next })}

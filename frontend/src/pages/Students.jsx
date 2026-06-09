@@ -29,7 +29,15 @@ const emptyForm = () => ({
   name: "", course: "", college: "", reference: "",
   sc_out_fixed: 0, status: "inquiry", enrollment_date: "", notes: "",
   fees_plan: emptyFeesPlan(),
+  home_office: "",
 });
+
+const HOME_OFFICE_OPTIONS = [
+  { value: "KM_BLR", label: "KM BLR" },
+  { value: "KM_TCR", label: "KM TCR" },
+  { value: "KM_KMLY", label: "KM KMLY" },
+  { value: "ALL", label: "Shared (all offices)" },
+];
 
 function recentRank(s) {
   // Sort: enrollment_date desc, then created_at desc
@@ -127,6 +135,7 @@ export default function Students() {
         ...form,
         sc_out_fixed: parseFloat(form.sc_out_fixed) || 0,
         fees_plan: normalizeFeesPlanForApi(form.fees_plan),
+        home_office: form.home_office || null,
       };
       await api.post("/students", payload);
       toast.success("Student added");
@@ -279,6 +288,33 @@ export default function Students() {
                 </div>
                 <div><Label>Enrollment Date</Label><Input type="date" value={form.enrollment_date} onChange={(e) => setForm({ ...form, enrollment_date: e.target.value })} data-testid="st-enroll-date" /></div>
               </div>
+
+              {isSuper && (
+                <div data-testid="st-home-office-row">
+                  <Label>
+                    Visible to office{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Super Admin scoping — leave blank to keep private)
+                    </span>
+                  </Label>
+                  <Select
+                    value={form.home_office || "_none"}
+                    onValueChange={(v) =>
+                      setForm({ ...form, home_office: v === "_none" ? "" : v })
+                    }
+                  >
+                    <SelectTrigger data-testid="st-home-office">
+                      <SelectValue placeholder="Private to me (default)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Private to me (default)</SelectItem>
+                      {HOME_OFFICE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <FeesPlanFields
                 fp={form.fees_plan}

@@ -50,6 +50,9 @@ class StudentIn(BaseModel):
     enrollment_date: Optional[str] = None
     notes: Optional[str] = ""
     fees_plan: Optional[FeesPlan] = None
+    # Cross-user visibility (super_admin sets via UI; office_admin gets it
+    # forced server-side to their own office).
+    home_office: Optional[Literal["KM_BLR", "KM_TCR", "KM_KMLY", "ALL"]] = None
 
 
 class ScheduleItemIn(BaseModel):
@@ -284,13 +287,29 @@ def _merge_fees_plan_schedules(
     return out
 
 
+def _office_visibility_clause(user: dict) -> dict:
+    """For office_admin, build a Mongo filter that matches records the admin
+    is allowed to see: records owned by them OR records assigned to their
+    office (home_office == user.office) OR records marked shared ("ALL")."""
+    return {
+        "$or": [
+            {"user_id": user["id"]},
+            {"home_office": user.get("office")},
+            {"home_office": "ALL"},
+        ]
+    }
+
+
 def _student_filter(student_id: str, user: dict) -> dict:
     """Compose the MongoDB filter so super_admin can find ANY student, while
-    office_admin remains scoped to their own user_id."""
-    q: dict = {"id": student_id}
-    if user.get("role") != "super_admin":
-        q["user_id"] = user["id"]
-    return q
+    office_admin sees their own records + records scoped to their office /
+    shared with ALL via home_office."""
+    if user.get("role") == "super_admin":
+        return {"id": student_id}
+    return {
+        "id": student_id,
+        **_office_visibility_clause(user),
+    }
 
 
 
@@ -409,7 +428,7 @@ async def list_students(user: dict = Depends(get_current_user)):
             return out
         return []
     items = await db.students.find(
-        {"user_id": user["id"]}, {"_id": 0}
+        _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
     return [_summarize(s) for s in items]
 
@@ -417,6 +436,10 @@ async def list_students(user: dict = Depends(get_current_user)):
 @router.post("")
 async def create_student(payload: StudentIn, user: dict = Depends(require_edit("students"))):
     data = payload.model_dump()
+    # Office admin: force home_office to their own office so other office
+    # admins in the same office (and super_admin) can see the record.
+    if user.get("role") == "office_admin":
+        data["home_office"] = user.get("office")
     fees_plan = data.get("fees_plan")
     schedules = _merge_fees_plan_schedules([], fees_plan, set()) if fees_plan else []
     doc = {
@@ -482,7 +505,8 @@ async def agent_ledger(user: dict = Depends(get_current_user)):
     """Aggregate payments routed through sub-agents / associates / KMs.
 
     Returns a row per (received_in.type, received_in.name) combo with totals."""
-    students = await db.students.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
+    scope = {} if user.get("role") == "super_admin" else _office_visibility_clause(user)
+    students = await db.students.find(scope, {"_id": 0}).to_list(2000)
     ledger: dict[tuple, dict] = {}
 
     for st in students:
@@ -567,7 +591,8 @@ async def agent_payments(
     breakdown of adjustments (paid_to_college / sc_adjusted)."""
     if type not in {"sub_agent", "associate", "km"}:
         raise HTTPException(400, "type must be one of sub_agent, associate, km")
-    students = await db.students.find({"user_id": user["id"]}, {"_id": 0}).to_list(2000)
+    scope = {} if user.get("role") == "super_admin" else _office_visibility_clause(user)
+    students = await db.students.find(scope, {"_id": 0}).to_list(2000)
 
     target = name.strip()
     rows: list[dict] = []
@@ -615,6 +640,9 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
         raise HTTPException(404, "Student not found")
 
     data = payload.model_dump()
+    # Office admin can never re-scope a record outside their office.
+    if user.get("role") == "office_admin":
+        data["home_office"] = user.get("office")
     fees_plan = data.get("fees_plan")
     # Reconcile fees_plan rows with existing schedules. Preserve manual ones,
     # and don't drop fee_plan rows that already have payments linked.

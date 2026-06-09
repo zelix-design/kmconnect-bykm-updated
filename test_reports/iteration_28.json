@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 37 home_office cross-office visibility model verified end-to-end. Backend: 60/60 pytest pass (5 new test_home_office_visibility + 3 test_add_payment_v2 + 4 test_cross_user_edit + 8 test_colleges + 6 test_create_user + 26 test_lib_helpers + 3 test_paste_application + 4 test_public_application_v2 + 1 PDF smoke). Direct API e2e: Super-admin POST /api/students with home_office=KM_BLR → visible in BLR office admin's GET list + GET /{id}=200. home_office=ALL → also visible to BLR. No home_office (private) → NOT in list, GET /{id}=404 for office admin. Sub-agent client with home_office=KM_BLR → visible to BLR. Office admin POST with home_office=ALL was coerced server-side to KM_BLR (confirmed via super-admin GET). Backfill verified: BLR office admin /api/students returns 12 (all home_office=KM_BLR) vs super-admin's 17 total (12 KM_BLR + 5 private). UI: Super-admin Add-Student dialog shows st-home-office-row with default label 'Private to me (default)'; Add-Client dialog shows cli-home-office-row (Visible to office). Office-admin variants: st-home-office-row and cli-home-office-row both absent from DOM as required.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/students/{id}", "issue": "Uses StudentIn model_dump() with $set, so a PATCH that omits home_office silently wipes the field to None (verified: PATCH {name:'X'} on a KM_BLR-scoped student clears home_office in DB). Today's frontend (StudentDetail.jsx saveHeader at line 73) always sends home_office so it's dormant, but any partial-PATCH caller will accidentally drop office scoping. Same pattern likely in PATCH /api/clients/{id}. Recommend either using exclude_unset=True / a dedicated StudentPatch model, or re-applying existing.home_office when payload doesn't carry it."},
+      {"endpoint": "PATCH /api/students/{id}", "issue": "Sending {home_office: 'KM_TCR'} alone (without required 'name') returns 422 silently in our curl (no name → ValidationError). Acceptable Pydantic behavior, but combined with the wipe issue above it means re-scoping a record requires the caller to round-trip the entire StudentIn payload."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_home_office_visibility.py",
+    "/app/backend/tests/test_add_payment_v2.py",
+    "/app/backend/tests/test_cross_user_edit.py",
+    "/app/test_reports/pytest/iteration28.xml"
+  ],
+  "action_items": [
+    "Harden PATCH /api/students/{id} (and /api/clients/{id}) so partial updates don't silently nullify home_office. Either switch to a Patch-style model with Optional fields and exclude_unset=True, or fall back to existing.home_office when payload's value is None and the field wasn't explicitly provided."
+  ],
+  "critical_code_review_comments": [
+    "routers/students.py update_student: `data = payload.model_dump()` then `{$set: data}` overwrites every field including the visibility-scope home_office. Combined with the office-admin force-override below (lines 644-645), super-admin partial PATCHes are the only callers at risk, but the failure mode (student silently disappears from BLR dashboard) is exactly the bug class iteration 37 set out to fix.",
+    "routers/students.py and routers/clients.py: _office_visibility_clause is cleanly factored ($or by user_id / home_office / ALL). The dual-write pattern (force home_office in both create and update for office_admin) is correct and matches the pytest assertions.",
+    "frontend StudentDetail.jsx saveHeader at line 73 maps empty string to null when sending home_office — good. HeaderCard.jsx correctly gates hdr-home-office-row behind isSuperAdmin (lines 82-88).",
+    "Students.jsx: Add-Student flow opens ClientPickerDialog first for super_admin, then the real new-student dialog after Skip. The st-home-office-row lives in the second dialog (verified visible with default 'Private to me (default)'). Mention this two-step flow in any future regression docs so testers don't get false-negatives."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (60/60 pytest + all 6 manual API scenarios)", "frontend": "100% on the dropdown visibility matrix (4/4: super/office × students/clients)"},
+  "test_credentials": "admin@kmfoundation.online / Admin@786 (super_admin), blr1@finflow.com / Office@123 (BLR office_admin)",
+  "seed_data_creation": "All test students/clients (REVIEW QA *, Cross-Office QA *, Shared QA *, Private QA *, Office Scope Forced QA, Shared SubAgent QA) were created and deleted within the test runs — no residue. Backfill of 10 super-admin-owned students to home_office=KM_BLR is in place and verified (BLR list count = 12).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 37 visibility model is solid for create/list/get. The one latent issue is PATCH /api/students (and likely /api/clients) silently nullifying home_office when payload omits it — not user-visible today because the only caller (StudentDetail.jsx saveHeader) always sends home_office, but it's a footgun for any future partial-PATCH integration. When testing the Super-Admin Add-Student dropdown via UI, remember the click on add-student-btn first opens ClientPickerDialog — skip-reference button must be clicked before the actual new-student dialog (with st-home-office-row) appears. HeaderCard edit testid is `edit-header` (not edit-header-btn).",
+  "rca of the issue": "Reported user issue ('Super Admin already updated staffs of KM BLR and students, but not reflected on KM BLR Admin dashboard') is fixed. RCA was that records created/owned by super_admin had no home_office linkage to the office, so the office_admin filter (user_id == self) skipped them. Fix introduces home_office field + visibility clause ($or user_id|home_office==office|home_office=='ALL') + backfill of legacy super-admin-owned students to KM_BLR. Verified: BLR office admin /students list now contains 12 students (was 1 pre-backfill)."
+}
