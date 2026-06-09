@@ -611,6 +611,12 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 38: Super Admin password reset for other users)
+- [x] **Endpoint**: `POST /api/users/{user_id}/reset-password` accepts `{new_password}` (min 8, max 128 chars). Super-admin-only via `_require_super_admin`. Hashes with the existing `auth_lib.hash_password` (bcrypt). On success: clears any active brute-force lockout on `login_attempts` for that user, stamps `password_reset_at` + `password_reset_by` audit fields.
+- [x] **UI**: `/users` (Team & approvals) page now shows a **"Reset password"** button (key icon, `data-testid=reset-pwd-<id>`) on every user card except the logged-in super admin's own. Opens a dialog (`data-testid=reset-pwd-dialog`) with `New password` + `Confirm` fields (with eye-icon show/hide toggle) + a "share securely" reminder.
+- [x] **Scope per user request**: Only Super Admin can use this; Office Admins do not get any self-change option (matches user's "a/i/n" spec).
+- [x] **Tests**: 5 new pytest cases (`test_reset_password.py`) — happy path, ≥8 char enforcement, office_admin 403, 404 on unknown user, lockout-clear after reset. Full pytest suite: **65/65** passing.
+
 ## Implementation status — 2026-02-26 (iteration 37: Cross-office visibility — Super Admin records reach Office Admins)
 - [x] **Issue addressed**: User reported "Super Admin already updated the staffs of KM BLR and students details, but not reflect the KM BLR Admin dashboard." Records owned by super_admin were invisible to office admins because their list query only matched `{user_id: self}`.
 - [x] **Visibility model**: Added `home_office: Optional[Literal["KM_BLR","KM_TCR","KM_KMLY","ALL"]]` to `StudentIn` + `ClientIn`. Office Admin list/get queries now match `{$or: [{user_id: self.id}, {home_office: self.office}, {home_office: "ALL"}]}` via `_office_visibility_clause()`. Super Admin sees everything.

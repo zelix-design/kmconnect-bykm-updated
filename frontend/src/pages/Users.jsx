@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass, Lock, ShieldCheck, UserPlus, Eye, EyeSlash } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, ClockClockwise, Buildings, Trash, MagnifyingGlass, Lock, ShieldCheck, UserPlus, Eye, EyeSlash, Key } from "@phosphor-icons/react";
 
 const OFFICE_OPTIONS = [
   { value: "KM_BLR", label: "KM BLR" },
@@ -51,6 +51,10 @@ export default function Users() {
   const [createForm, setCreateForm] = useState(emptyNewUser);
   const [createSaving, setCreateSaving] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  const [resetTarget, setResetTarget] = useState(null); // user obj when reset-password dialog is open
+  const [resetForm, setResetForm] = useState({ new_password: "", confirm: "" });
+  const [resetShow, setResetShow] = useState(false);
+  const [resetSaving, setResetSaving] = useState(false);
 
   const load = async (status) => {
     setLoading(true);
@@ -86,6 +90,36 @@ export default function Users() {
       load(tab);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Reject failed");
+    }
+  };
+
+  const openReset = (u) => {
+    setResetTarget(u);
+    setResetForm({ new_password: "", confirm: "" });
+    setResetShow(false);
+  };
+
+  const submitReset = async () => {
+    if (!resetTarget) return;
+    const pwd = resetForm.new_password;
+    if (!pwd || pwd.length < 8) {
+      toast.error("New password must be at least 8 characters.");
+      return;
+    }
+    if (pwd !== resetForm.confirm) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    setResetSaving(true);
+    try {
+      await api.post(`/users/${resetTarget.id}/reset-password`, { new_password: pwd });
+      toast.success(`Password reset for ${resetTarget.name}`);
+      setResetTarget(null);
+      setResetForm({ new_password: "", confirm: "" });
+    } catch (e) {
+      toast.error(formatApiError(e.response?.data?.detail) || "Reset failed");
+    } finally {
+      setResetSaving(false);
     }
   };
 
@@ -266,6 +300,11 @@ export default function Users() {
                   {u.approval_status === "approved" && (
                     <Button size="sm" variant="outline" onClick={() => openPermissions(u)} data-testid={`permissions-${u.id}`} className="h-8">
                       <Lock size={14} className="mr-1" /> Permissions
+                    </Button>
+                  )}
+                  {u.id !== currentUser?.id && (
+                    <Button size="sm" variant="outline" onClick={() => openReset(u)} data-testid={`reset-pwd-${u.id}`} className="h-8">
+                      <Key size={14} className="mr-1" /> Reset password
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => remove(u)} data-testid={`delete-${u.id}`} className="h-8 text-muted-foreground hover:text-rose-600">
@@ -483,6 +522,79 @@ export default function Users() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password dialog (super_admin only) */}
+      <Dialog
+        open={!!resetTarget}
+        onOpenChange={(o) => {
+          if (!o) {
+            setResetTarget(null);
+            setResetForm({ new_password: "", confirm: "" });
+            setResetShow(false);
+          }
+        }}
+      >
+        <DialogContent data-testid="reset-pwd-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key size={20} weight="duotone" className="text-amber-500" />
+              Reset password for {resetTarget?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Set a new password directly. The user can sign in with the new password
+              immediately. They will not receive any email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 inline-block">New password</label>
+              <div className="relative">
+                <Input
+                  type={resetShow ? "text" : "password"}
+                  value={resetForm.new_password}
+                  onChange={(e) => setResetForm({ ...resetForm, new_password: e.target.value })}
+                  placeholder="Min 8 characters"
+                  data-testid="reset-pwd-new"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setResetShow((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="reset-pwd-toggle"
+                >
+                  {resetShow ? <EyeSlash size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 inline-block">Confirm new password</label>
+              <Input
+                type={resetShow ? "text" : "password"}
+                value={resetForm.confirm}
+                onChange={(e) => setResetForm({ ...resetForm, confirm: e.target.value })}
+                placeholder="Type the same password again"
+                data-testid="reset-pwd-confirm"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Make a note of this password and share it with{" "}
+              <strong>{resetTarget?.name}</strong> securely.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetTarget(null)}>Cancel</Button>
+            <Button
+              onClick={submitReset}
+              disabled={resetSaving}
+              className="btn-amber border-0"
+              data-testid="reset-pwd-save"
+            >
+              {resetSaving ? "Saving…" : "Reset password"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

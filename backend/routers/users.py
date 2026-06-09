@@ -126,3 +126,36 @@ async def delete_user(user_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="User not found")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}
+
+
+class ResetPasswordIn(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: str,
+    payload: ResetPasswordIn,
+    user: dict = Depends(get_current_user),
+):
+    """Super-admin-only: directly set a new password for any user (including
+    other super admins). The target user can sign in with the new password
+    immediately. Existing JWT tokens issued before the reset stay valid
+    until they expire — out of scope for this iteration."""
+    _require_super_admin(user)
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "email": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    # Clear any active brute-force lockout so the target can sign in right away.
+    await db.login_attempts.delete_one({"email": target.get("email")})
+    res = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "password_hash": hash_password(payload.new_password),
+            "password_reset_at": now_iso(),
+            "password_reset_by": user["id"],
+        }},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True, "user_id": user_id}
