@@ -56,21 +56,29 @@ export default function AdjustmentsSection({
 
   const onKindChange = (idx, nextKind) => {
     // Reset the dependent target field when the kind flips so we don't keep
-    // a stale client_id selected on KM Foundation, etc.
-    const patch = { kind: nextKind, account_id: "", client_id: "", sub_agent_name: "" };
-    Object.entries(patch).forEach(([k, v]) => onChange(idx, k, v));
+    // a stale client_id selected on KM Foundation, etc. Apply ALL changes
+    // in one onChange call to avoid stale-state races (each setState in the
+    // parent reads from a frozen closure of `adjustments`).
+    onChange(idx, {
+      kind: nextKind,
+      account_id: "",
+      client_id: "",
+      sub_agent_name: "",
+    });
   };
 
   const onTargetChange = (idx, kind, value) => {
     if (kind === "km_foundation") {
-      onChange(idx, "account_id", value);
+      onChange(idx, { account_id: value });
       return;
     }
     // sub_agent / associate_consultant — value is a client_id
     const pool = kind === "sub_agent" ? subAgents : consultants;
     const picked = pool.find((c) => c.id === value);
-    onChange(idx, "client_id", value);
-    onChange(idx, "sub_agent_name", picked ? picked.name : "");
+    onChange(idx, {
+      client_id: value,
+      sub_agent_name: picked ? picked.name : "",
+    });
   };
 
   return (

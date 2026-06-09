@@ -107,8 +107,16 @@ export default function PaymentDialog({
   };
 
   const onAdjChange = (idx, k, v) => {
+    // Support either (idx, key, value) for single-field edits or
+    // (idx, patchObject) for multi-field edits done in one render — the
+    // latter avoids stale-state races when changing `kind` resets the
+    // dependent target fields in a single click.
     const adjs = f.adjustments.slice();
-    adjs[idx] = { ...adjs[idx], [k]: v };
+    if (k && typeof k === "object" && v === undefined) {
+      adjs[idx] = { ...adjs[idx], ...k };
+    } else {
+      adjs[idx] = { ...adjs[idx], [k]: v };
+    }
     setForm({ adjustments: adjs });
   };
   const onAdjAdd = () =>
