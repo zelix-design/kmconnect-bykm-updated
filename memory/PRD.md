@@ -611,6 +611,12 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 39: College → Course cascade on New Student)
+- [x] Swapped the order in the **Add Student** dialog: **College picker** is now first (left), **Course** is second (right).
+- [x] Course turned into a **dropdown** that lists the picked college's `courses[]` (from the College catalogue). When the user changes the college, the course value is reset (unless the prior selection is still in the new college's catalogue).
+- [x] Graceful fallback: if a college has no courses listed in the catalogue, the Course field falls back to a free-text input so legacy data still works.
+- [x] `collegeCourses` is a local-only form field — explicitly stripped from the API payload before POSTing.
+
 ## Implementation status — 2026-02-26 (iteration 38: Super Admin password reset for other users)
 - [x] **Endpoint**: `POST /api/users/{user_id}/reset-password` accepts `{new_password}` (min 8, max 128 chars). Super-admin-only via `_require_super_admin`. Hashes with the existing `auth_lib.hash_password` (bcrypt). On success: clears any active brute-force lockout on `login_attempts` for that user, stamps `password_reset_at` + `password_reset_by` audit fields.
 - [x] **UI**: `/users` (Team & approvals) page now shows a **"Reset password"** button (key icon, `data-testid=reset-pwd-<id>`) on every user card except the logged-in super admin's own. Opens a dialog (`data-testid=reset-pwd-dialog`) with `New password` + `Confirm` fields (with eye-icon show/hide toggle) + a "share securely" reminder.

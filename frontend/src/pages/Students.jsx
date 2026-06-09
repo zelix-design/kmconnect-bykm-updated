@@ -30,6 +30,7 @@ const emptyForm = () => ({
   sc_out_fixed: 0, status: "inquiry", enrollment_date: "", notes: "",
   fees_plan: emptyFeesPlan(),
   home_office: "",
+  collegeCourses: [],
 });
 
 const HOME_OFFICE_OPTIONS = [
@@ -137,6 +138,7 @@ export default function Students() {
         fees_plan: normalizeFeesPlanForApi(form.fees_plan),
         home_office: form.home_office || null,
       };
+      delete payload.collegeCourses; // local-only field, not part of the API schema
       await api.post("/students", payload);
       toast.success("Student added");
       setOpen(false); setForm(emptyForm()); load();
@@ -241,16 +243,56 @@ export default function Students() {
                 </Select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><Label>Course</Label><Input value={form.course} onChange={(e) => setForm({ ...form, course: e.target.value })} placeholder="B.Tech CSE" data-testid="st-course" /></div>
                 <div>
                   <Label>College</Label>
                   <CollegeSelect
                     value={form.college}
                     onChange={(name) => setForm({ ...form, college: name })}
+                    onCollegeMeta={(c) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        collegeCourses: c ? (c.courses || []) : [],
+                        // Reset course when college changes, unless the prior
+                        // value still appears in the new college's catalogue.
+                        course:
+                          c && (c.courses || []).includes(prev.course)
+                            ? prev.course
+                            : "",
+                      }))
+                    }
                     testid="st-college"
                     placeholder={form.collegePlace ? `Pick a college in ${form.collegePlace}` : "Pick a college"}
                     placeFilter={form.collegePlace}
                   />
+                </div>
+                <div>
+                  <Label>Course</Label>
+                  {(form.collegeCourses || []).length > 0 ? (
+                    <Select
+                      value={form.course || "_none"}
+                      onValueChange={(v) =>
+                        setForm({ ...form, course: v === "_none" ? "" : v })
+                      }
+                    >
+                      <SelectTrigger data-testid="st-course">
+                        <SelectValue placeholder="Pick a course" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">— Select course —</SelectItem>
+                        {(form.collegeCourses || []).map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={form.course}
+                      onChange={(e) => setForm({ ...form, course: e.target.value })}
+                      placeholder={form.college ? "No courses listed for this college — type one" : "Pick a college first"}
+                      disabled={!form.college && !form.course}
+                      data-testid="st-course"
+                    />
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
