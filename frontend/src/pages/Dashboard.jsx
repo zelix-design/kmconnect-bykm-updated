@@ -203,7 +203,7 @@ function SuperAdminDashboard() {
       {/* Tile-driven overview */}
       <div data-testid={`overview-${activeTile}`} className="space-y-7">
         {activeTile === "transactions" && (
-          <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} transactions={transactions} currency={currency} range={range} />
+          <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} transactions={transactions} currency={currency} range={range} hideActivityChart={isLightUser} />
         )}
         {activeTile === "students" && (
           <StudentsOverview students={students} currency={currency} range={range} />
@@ -267,7 +267,7 @@ function SuperAdminDashboard() {
 
 // -------- Tile-specific overview blocks --------
 
-function TransactionsOverview({ summary, cashflow, byCat, transactions, currency, range }) {
+function TransactionsOverview({ summary, cashflow, byCat, transactions, currency, range, hideActivityChart }) {
   const cfTrend = useMemo(() => {
     if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
     const cur = cashflow[cashflow.length - 1];
@@ -291,31 +291,33 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
         <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight} />
         <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue" />
       </section>
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
-          <ChartHeader eyebrow="Activity" title="Last 6 months" right={
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Income</span>
-              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-600 inline-block" />Expense</span>
+      <section className={`grid grid-cols-1 ${hideActivityChart ? "" : "lg:grid-cols-3"} gap-4`}>
+        {!hideActivityChart && (
+          <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
+            <ChartHeader eyebrow="Activity" title="Last 6 months" right={
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600 inline-block" />Income</span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-600 inline-block" />Expense</span>
+              </div>
+            } />
+            <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={cashflow}>
+                  <defs>
+                    <linearGradient id="grad-inc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="100%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
+                  <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
+                  <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
+                  <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
-          } />
-          <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={cashflow}>
-                <defs>
-                  <linearGradient id="grad-inc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={0.35} /><stop offset="100%" stopColor="#10b981" stopOpacity={0} /></linearGradient>
-                  <linearGradient id="grad-exp" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f43f5e" stopOpacity={0.3} /><stop offset="100%" stopColor="#f43f5e" stopOpacity={0} /></linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
-                <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
-                <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
+          </Card>
+        )}
         <Card className="p-6 border border-border bg-card rounded-xl shadow-none">
           <ChartHeader eyebrow="Latest spendings" title="By category" right={<span className="text-xs text-muted-foreground">{formatMoney(totalSpendings, currency)}</span>} />
           {byCat.length === 0 ? (
