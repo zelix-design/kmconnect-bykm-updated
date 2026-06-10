@@ -274,6 +274,7 @@ export default function Users() {
                   <p className="font-medium text-foreground truncate">{u.name}</p>
                   <Badge className={`${STATUS_STYLE[u.approval_status] || ""} border-0`}>{u.approval_status}</Badge>
                   {u.role === "super_admin" && <Badge variant="outline">super admin</Badge>}
+                  {u.role === "user" && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">user</Badge>}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -465,6 +466,7 @@ export default function Users() {
                   <SelectContent>
                     <SelectItem value="office_admin">Office Admin</SelectItem>
                     <SelectItem value="super_admin">Super Admin</SelectItem>
+                    <SelectItem value="user">User (personal finance)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

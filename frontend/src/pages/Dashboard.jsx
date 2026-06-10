@@ -25,9 +25,9 @@ import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashbo
 
 const TILES = [
   { key: "transactions", label: "Transactions", icon: Receipt, palette: "amber" },
-  { key: "students", label: "Students", icon: Student, palette: "emerald" },
-  { key: "clients", label: "Clients", icon: UsersThree, palette: "sky" },
-  { key: "ledger", label: "Ledger", icon: Notebook, palette: "violet" },
+  { key: "students", label: "Students", icon: Student, palette: "emerald", roles: ["super_admin", "office_admin"] },
+  { key: "clients", label: "Clients", icon: UsersThree, palette: "sky", roles: ["super_admin", "office_admin"] },
+  { key: "ledger", label: "Ledger", icon: Notebook, palette: "violet", roles: ["super_admin", "office_admin"] },
 ];
 
 // Module-level Recharts style constants — referencing the same object on every
@@ -54,6 +54,8 @@ export default function Dashboard() {
 
 function SuperAdminDashboard() {
   const { user } = useAuth();
+  const role = user?.role;
+  const isLightUser = role === "user";
   const currency = user?.currency || "USD";
   const [preset, setPreset] = useState("this_month");
   const [custom, setCustom] = useState({ start: "", end: "" });
@@ -79,14 +81,17 @@ function SuperAdminDashboard() {
   useEffect(() => {
     (async () => {
       const params = range ? { start: range.start, end: range.end } : {};
+      // For the lightweight "user" role, students / clients / ledger are
+      // forbidden — skip those calls and short-circuit empty data.
+      const studentCalls = isLightUser
+        ? [Promise.resolve({ data: [] }), Promise.resolve({ data: [] }), Promise.resolve({ data: [] })]
+        : [api.get("/students"), api.get("/clients"), api.get("/students/agent-ledger")];
       const [s, c, b, t, st, cl, lg] = await Promise.all([
         api.get("/dashboard/summary", { params }),
         api.get("/dashboard/cashflow", { params: { months: 6 } }),
         api.get("/dashboard/expense-by-category", { params }),
         api.get("/transactions"),
-        api.get("/students"),
-        api.get("/clients"),
-        api.get("/students/agent-ledger"),
+        ...studentCalls,
       ]);
       setSummary(s.data);
       setCashflow(c.data);
@@ -128,15 +133,17 @@ function SuperAdminDashboard() {
           <Link to="/quick-entry" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg btn-amber text-sm font-medium">
             <Receipt size={16} /> Quick entry
           </Link>
-          <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm hover:bg-muted lift">
-            <FileText size={16} /> New invoice
-          </Link>
+          {!isLightUser && (
+            <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm hover:bg-muted lift">
+              <FileText size={16} /> New invoice
+            </Link>
+          )}
         </div>
       </header>
 
       {/* Inline tile tabs */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="quick-nav-tiles">
-        {TILES.map((t) => {
+        {TILES.filter((t) => !t.roles || t.roles.includes(role)).map((t) => {
           const p = PALETTES[t.palette];
           const active = activeTile === t.key;
           return (

@@ -14,11 +14,13 @@ import {
 // Sidebar nav with role gating.
 //   roles: array of roles that can see this item. Omitting `roles` means all.
 //   perm: page-permission key — when present, item is hidden if canView(user, perm) is false.
+//   userRoleAllowed: explicit allow-list flag for the lightweight "user" role.
+//     Omit (or set falsy) to hide the item from "user" role accounts.
 const ALL_NAV = [
-  { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview", perm: "overview" },
-  { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry" },
-  { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions", perm: "transactions" },
-  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", perm: "accounts" },
+  { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview", perm: "overview", userRoleAllowed: true },
+  { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry", userRoleAllowed: true },
+  { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions", perm: "transactions", userRoleAllowed: true },
+  { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", perm: "accounts", userRoleAllowed: true },
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices", roles: ["super_admin"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients", perm: "clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students", perm: "students" },
@@ -28,7 +30,7 @@ const ALL_NAV = [
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
   { to: "/users", label: "Team", icon: ShieldCheck, tid: "nav-users", roles: ["super_admin"] },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories", roles: ["super_admin"] },
-  { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings", perm: "settings" },
+  { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings", perm: "settings", userRoleAllowed: true },
 ];
 
 const PAGE_TITLES = {
@@ -57,6 +59,7 @@ function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
   const navItems = ALL_NAV.filter((i) => {
     if (i.roles && !i.roles.includes(role)) return false;
+    if (role === "user" && !i.userRoleAllowed) return false;
     if (i.perm && !canView(user, i.perm)) return false;
     return true;
   });

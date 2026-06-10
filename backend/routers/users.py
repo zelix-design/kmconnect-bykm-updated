@@ -7,6 +7,7 @@ from db import db
 from auth_lib import get_current_user, hash_password, gen_id, now_iso
 from models import (
     UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS,
+    USER_DEFAULT_PERMISSIONS,
     OfficeCode,
 )
 
@@ -32,7 +33,7 @@ class CreateUserIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str = Field(min_length=1)
-    role: Literal["super_admin", "office_admin"] = "office_admin"
+    role: Literal["super_admin", "office_admin", "user"] = "office_admin"
     office: Optional[OfficeCode] = None  # required when role=office_admin
     business_name: Optional[str] = None
     currency: Literal["USD", "INR"] = "INR"
@@ -42,7 +43,8 @@ class CreateUserIn(BaseModel):
 async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_user)):
     """Super-admin creates a user directly (skips self-registration flow).
     Office admins are created already approved with default permissions so
-    they can sign in immediately."""
+    they can sign in immediately. The lightweight `user` role gets a
+    stripped-down permission map covering only their personal finance pages."""
     _require_super_admin(user)
     if payload.role == "office_admin" and not payload.office:
         raise HTTPException(400, "Office is required for office admin")
@@ -62,9 +64,10 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         "created_at": now_iso(),
         "created_by_admin": user["id"],
     }
-    # Office admins get the full edit map by default — super admins ignore it.
     if payload.role == "office_admin":
         doc["permissions"] = dict(DEFAULT_PERMISSIONS)
+    elif payload.role == "user":
+        doc["permissions"] = dict(USER_DEFAULT_PERMISSIONS)
     await db.users.insert_one(doc)
     return await db.users.find_one({"id": doc["id"]}, {"_id": 0, "password_hash": 0})
 

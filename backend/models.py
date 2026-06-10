@@ -9,7 +9,7 @@ OfficeCode = Literal["KM_BLR", "KM_TCR", "KM_KMLY"]
 # or "ALL" → every office admin can see it. Records left as None remain
 # private to the super_admin who owns them.
 RecordOffice = Literal["KM_BLR", "KM_TCR", "KM_KMLY", "ALL"]
-UserRole = Literal["super_admin", "office_admin"]
+UserRole = Literal["super_admin", "office_admin", "user"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 
 # Page-level permission keys controllable by super_admin (office_admin only).
@@ -19,6 +19,20 @@ PERMISSION_PAGES = (
 )
 PermissionLevel = Literal["edit", "view", "none"]
 DEFAULT_PERMISSIONS = {p: "edit" for p in PERMISSION_PAGES}
+
+# "user" role is a stripped-down personal finance account: only their own
+# Overview / Quick Entry / Transactions / Accounts / Settings. Everything
+# else is hard-locked at "none".
+USER_DEFAULT_PERMISSIONS = {
+    "overview": "edit",
+    "quick_entry": "edit",
+    "transactions": "edit",
+    "accounts": "edit",
+    "settings": "edit",
+    "clients": "none",
+    "students": "none",
+    "expense_requests": "none",
+}
 
 
 class RegisterIn(BaseModel):

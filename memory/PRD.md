@@ -611,6 +611,14 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 44: New lightweight "user" role for personal finance)
+- [x] **Backend**: `UserRole` Literal now `super_admin | office_admin | user`. Added `USER_DEFAULT_PERMISSIONS` granting only `overview / quick_entry / transactions / accounts / settings = edit` and explicitly `clients / students / expense_requests = none`. `require_edit` defaults to `none` (instead of `edit`) when the user has role `"user"` so untyped routes 403 by default.
+- [x] **Create flow**: `/api/users` POST accepts `role="user"` (no office required). Super Admin's Create User dialog has a new option **"User (personal finance)"**.
+- [x] **UI scoping**: AppShell sidebar items carry an explicit `userRoleAllowed` flag — user-role accounts see only Overview / Quick entry / Transactions / Accounts / Settings (5 items total). Dashboard tiles for Students/Clients/Ledger and the "New invoice" CTA hide for the user role; the dashboard's `/students /clients /agent-ledger` auto-fetches are skipped to avoid 403s. A small **`user`** badge surfaces on the Team list.
+- [x] **Data isolation**: User-role records (accounts, transactions) are scoped by `user_id` per the existing per-user query model — verified by pytest that User A cannot see User B's accounts.
+- [x] **Tests**: 4 new pytest cases in `test_user_role.py` — create flow, allowed endpoints, forbidden endpoints (students/clients return 403), and inter-user isolation. Full suite: **75/75 passing**.
+
+
 ## Implementation status — 2026-02-26 (iteration 43: Staff detail surfaces office-wide referrals)
 - [x] **Bug**: `/api/clients/{id}/detail` queried `{user_id: client.owner_id}`, so a staff page showed "No students linked yet" whenever the admissions were created by a different office admin (or super_admin) of the same office.
 - [x] **Fix** in `routers/clients.py`: student scope now widens to `$or: [{user_id: owner_id}, {home_office: <staff.office>}, {home_office: "ALL"}]`. Super Admin sees admissions across the entire DB. Linked transactions scope widened analogously.

@@ -127,13 +127,15 @@ async def get_current_user(request: Request) -> dict:
 def require_edit(page: str):
     """Dependency factory: ensures the current user has `edit` permission on a given page.
     Super admins always pass. Office admins are checked against `user.permissions[page]`.
-    Missing permissions default to `edit` (backward-compatible with users created before
-    this feature shipped)."""
+    Missing permissions default to `edit` for office admins (backward-compatible
+    with users created before perms shipped) and to `none` for the lightweight
+    `user` role so unrelated CRUD endpoints reject them by default."""
     async def _checker(user: dict = Depends(get_current_user)) -> dict:
         if user.get("role") == "super_admin":
             return user
         perms = user.get("permissions") or {}
-        level = perms.get(page) or "edit"
+        default_level = "none" if user.get("role") == "user" else "edit"
+        level = perms.get(page) or default_level
         if level != "edit":
             raise HTTPException(
                 status_code=403,
