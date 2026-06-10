@@ -119,9 +119,21 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
     is_staff = client.get("client_type") == "staff"
     incentive_amount = float(client.get("eligible_incentive") or 0)
 
-    # Students whose `reference` matches this client (same owner_id only —
-    # admissions only matter to the office_admin who created them).
-    students_raw = await db.students.find({"user_id": owner_id}, {"_id": 0}).to_list(2000)
+    # Students whose `reference` matches this client.
+    # Scope so that all admissions visible to the staff's office surface here
+    # (an office-admin staff's referrals can be created by ANY admin of the
+    # same office, including super_admin records with home_office matching).
+    office_code = client.get("home_office") or client.get("office")
+    if user.get("role") == "super_admin":
+        # Super admin sees every student across the database.
+        student_scope: dict = {}
+    else:
+        scope_or: list = [{"user_id": owner_id}]
+        if office_code:
+            scope_or.append({"home_office": office_code})
+        scope_or.append({"home_office": "ALL"})
+        student_scope = {"$or": scope_or}
+    students_raw = await db.students.find(student_scope, {"_id": 0}).to_list(2000)
     matched = filter_admissions_by_reference(students_raw, client.get("name"))
     month_counts = compute_monthly_admission_counts(matched)
 
@@ -136,8 +148,20 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
     ]
     enriched_students.sort(key=lambda x: x.get("enrollment_date") or "", reverse=True)
 
+    if user.get("role") == "super_admin":
+        tx_query: dict = {"client_id": client_id}
+    else:
+        # Same office-scoping logic for tx linked to this client.
+        owner_ids = {owner_id}
+        if office_code:
+            office_admins = await db.users.find(
+                {"role": "office_admin", "office": office_code},
+                {"_id": 0, "id": 1},
+            ).to_list(100)
+            owner_ids.update(u["id"] for u in office_admins)
+        tx_query = {"user_id": {"$in": list(owner_ids)}, "client_id": client_id}
     txs = await db.transactions.find(
-        {"user_id": owner_id, "client_id": client_id}, {"_id": 0}
+        tx_query, {"_id": 0}
     ).sort("date", -1).to_list(500)
 
     return {

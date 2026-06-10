@@ -611,6 +611,12 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 43: Staff detail surfaces office-wide referrals)
+- [x] **Bug**: `/api/clients/{id}/detail` queried `{user_id: client.owner_id}`, so a staff page showed "No students linked yet" whenever the admissions were created by a different office admin (or super_admin) of the same office.
+- [x] **Fix** in `routers/clients.py`: student scope now widens to `$or: [{user_id: owner_id}, {home_office: <staff.office>}, {home_office: "ALL"}]`. Super Admin sees admissions across the entire DB. Linked transactions scope widened analogously.
+- [x] **Tests**: 3 new pytest cases (`test_staff_detail_office_scope.py`) — referrals from other office admins now surface, super_admin sees all, cross-office isolation preserved. Full suite **71/71 passing**.
+
+
 ## Implementation status — 2026-02-26 (iteration 40: Add Payment dialog refinements per user screenshots)
 - [x] **Title** renamed: `Add Payment` → **`New Payment`** (on add); edit still says "Edit Payment".
 - [x] **Amount field shrunk** to a narrower column (Date takes the rest of the row).
