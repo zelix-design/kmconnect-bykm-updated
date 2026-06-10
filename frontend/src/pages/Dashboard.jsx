@@ -42,6 +42,10 @@ const CHART_TOOLTIP_STYLE = {
 };
 const CHART_MARGIN_SM = { top: 12, right: 8, left: 4, bottom: 0 };
 const CHART_MARGIN_TIGHT = { top: 4, right: 4, left: 4, bottom: 0 };
+const CHART_MARGIN_X8 = { left: 8, right: 8 };
+const CHART_AXIS_TICK_MUTED = { fill: "hsl(var(--muted-foreground))", fontSize: 11 };
+const CHART_AXIS_TICK_FG = { fill: "hsl(var(--foreground))", fontSize: 12 };
+const CHART_BAR_RADIUS_R = [0, 4, 4, 0];
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -714,12 +718,12 @@ function LedgerOverview({ ledger, students, currency }) {
               <p className="label-eyebrow mb-2">Top contacts</p>
               <div className="h-44 -ml-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart layout="vertical" data={topAgents} margin={{ left: 8, right: 8 }}>
+                  <BarChart layout="vertical" data={topAgents} margin={CHART_MARGIN_X8}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
-                    <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--foreground))", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
+                    <XAxis type="number" tick={CHART_AXIS_TICK_MUTED} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
+                    <YAxis dataKey="name" type="category" tick={CHART_AXIS_TICK_FG} axisLine={false} tickLine={false} width={120} />
                     <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    <Bar dataKey="value" radius={CHART_BAR_RADIUS_R}>
                       {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
                     </Bar>
                   </BarChart>

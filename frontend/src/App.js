@@ -46,6 +46,10 @@ function PublicOnly({ children }) {
   return children;
 }
 
+// Module-level constants so the `roles` prop on PermGate doesn't allocate a
+// fresh array each render — keeps PermGate / its children stable.
+const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -65,12 +69,12 @@ export default function App() {
             <Route path="/clients/:id" element={<PermGate page="clients"><ClientDetail /></PermGate>} />
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
-            <Route path="/colleges" element={<PermGate roles={["super_admin"]}><Colleges /></PermGate>} />
+            <Route path="/colleges" element={<PermGate roles={SUPER_ADMIN_ONLY}><Colleges /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<PermGate page="settings"><Settings /></PermGate>} />
-            <Route path="/users" element={<PermGate roles={["super_admin"]}><Users /></PermGate>} />
+            <Route path="/users" element={<PermGate roles={SUPER_ADMIN_ONLY}><Users /></PermGate>} />
             <Route path="/expense-requests" element={<PermGate page="expense_requests"><ExpenseRequests /></PermGate>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

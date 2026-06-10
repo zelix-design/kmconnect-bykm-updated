@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import api, { formatApiError, setStoredToken } from "./api";
 
 const AuthContext = createContext(null);
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     };
   }, [user, fetchMe]);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     setError("");
     try {
       const { data } = await api.post("/auth/login", { email, password });
@@ -49,9 +49,9 @@ export function AuthProvider({ children }) {
       setError(formatApiError(e.response?.data?.detail) || e.message);
       return false;
     }
-  };
+  }, []);
 
-  const register = async (payload) => {
+  const register = useCallback(async (payload) => {
     setError("");
     try {
       const { data } = await api.post("/auth/register", payload);
@@ -61,9 +61,9 @@ export function AuthProvider({ children }) {
       setError(formatApiError(e.response?.data?.detail) || e.message);
       return { ok: false };
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await api.post("/auth/logout");
     } catch (err) {
@@ -73,16 +73,24 @@ export function AuthProvider({ children }) {
     }
     setStoredToken(null);
     setUser(false);
-  };
+  }, []);
 
-  const updateProfile = async (payload) => {
+  const updateProfile = useCallback(async (payload) => {
     const { data } = await api.patch("/auth/me", payload);
     setUser(data);
     return data;
-  };
+  }, []);
+
+  // Stabilise the context value so consumers don't re-render whenever
+  // AuthProvider re-renders for unrelated reasons. New reference is only
+  // produced when one of the actual deps changes.
+  const ctxValue = useMemo(
+    () => ({ user, error, setError, login, register, logout, updateProfile, refresh: fetchMe }),
+    [user, error, login, register, logout, updateProfile, fetchMe],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, error, setError, login, register, logout, updateProfile, refresh: fetchMe }}>
+    <AuthContext.Provider value={ctxValue}>
       {children}
     </AuthContext.Provider>
   );

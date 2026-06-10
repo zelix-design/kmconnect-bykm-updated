@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -62,6 +62,17 @@ export default function StudentDetail() {
   }, [id, nav]);
   useEffect(() => { load(); }, [load]);
 
+  // Stable PaymentDialog props — must be declared BEFORE the early-return
+  // below so React hook ordering stays consistent on every render.
+  const payDlgState = useMemo(
+    () => ({ ...payDlg, currency }),
+    [payDlg, currency],
+  );
+  const onPayDlgOpenChange = useCallback(
+    (v) => setPayDlg((prev) => ({ ...prev, open: v })),
+    [],
+  );
+
   if (!s) return <div className="p-8 text-sm text-muted-foreground" data-testid="loading">Loading…</div>;
 
   const saveHeader = async () => {
@@ -103,6 +114,7 @@ export default function StudentDetail() {
 
   // ----- Payments -----
   const openPayAdd = () => setPayDlg({ open: true, editing: null, form: emptyPayment() });
+
   const _mapAdjustmentForForm = (a) => {
     const base = {
       _key: a.id || a._key || `loaded-${a.kind}-${a.amount}-${a.payment_date}`,
@@ -459,8 +471,8 @@ export default function StudentDetail() {
 
       <PaymentDialog
         open={payDlg.open}
-        onOpenChange={(v) => setPayDlg({ ...payDlg, open: v })}
-        state={{ ...payDlg, currency }}
+        onOpenChange={onPayDlgOpenChange}
+        state={payDlgState}
         setState={setPayDlg}
         schedules={s.schedules}
         accounts={accounts}

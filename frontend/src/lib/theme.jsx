@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 const ThemeCtx = createContext({ theme: "light", toggle: () => {}, setTheme: () => {} });
 
@@ -21,9 +21,19 @@ export function ThemeProvider({ children }) {
     try { localStorage.setItem("finflow-theme", theme); } catch (e) { void e; }
   }, [theme]);
 
-  const toggle = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+  const toggle = useCallback(
+    () => setTheme((t) => (t === "dark" ? "light" : "dark")),
+    [],
+  );
 
-  return <ThemeCtx.Provider value={{ theme, toggle, setTheme }}>{children}</ThemeCtx.Provider>;
+  // Stabilise the context value so consumers don't re-render on every parent
+  // render — only when `theme` actually flips.
+  const ctxValue = useMemo(
+    () => ({ theme, toggle, setTheme }),
+    [theme, toggle],
+  );
+
+  return <ThemeCtx.Provider value={ctxValue}>{children}</ThemeCtx.Provider>;
 }
 
 export function useTheme() {

@@ -49,13 +49,23 @@ export default function CollegeSelect({
       const target = placeFilter.toLowerCase();
       pool = pool.filter((c) => (c.place || "").trim().toLowerCase() === target);
     }
-    if (!q) return pool;
-    const term = q.toLowerCase();
-    return pool.filter((c) =>
-      (c.name || "").toLowerCase().includes(term)
-      || (c.place || "").toLowerCase().includes(term)
-      || (c.courses || []).some((co) => co.toLowerCase().includes(term))
-    );
+    let result = pool;
+    if (q) {
+      const term = q.toLowerCase();
+      result = pool.filter((c) =>
+        (c.name || "").toLowerCase().includes(term)
+        || (c.place || "").toLowerCase().includes(term)
+        || (c.courses || []).some((co) => co.toLowerCase().includes(term))
+      );
+    }
+    // Pre-compute the subtitle once per college so the JSX render stays cheap.
+    return result.map((c) => {
+      const courses = c.courses || [];
+      const head = courses.slice(0, 3).join(" · ");
+      const subtitle = [c.place, head].filter(Boolean).join(" · ");
+      const extra = courses.length > 3 ? ` +${courses.length - 3}` : "";
+      return { ...c, _subtitle: subtitle + extra };
+    });
   }, [list, q, placeFilter]);
 
   const pick = (c) => {
@@ -144,8 +154,7 @@ export default function CollegeSelect({
                 <span className="flex-1 min-w-0">
                   <span className="block font-medium truncate">{c.name}</span>
                   <span className="block text-[11px] text-muted-foreground truncate">
-                    {[c.place, (c.courses || []).slice(0, 3).join(" · ")].filter(Boolean).join(" · ")}
-                    {(c.courses || []).length > 3 && ` +${c.courses.length - 3}`}
+                    {c._subtitle}
                   </span>
                 </span>
                 {value === c.name && (

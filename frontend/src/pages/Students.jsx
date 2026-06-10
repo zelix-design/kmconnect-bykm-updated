@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -84,11 +84,11 @@ export default function Students() {
     setOpen(true);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [s, c] = await Promise.all([api.get("/students"), api.get("/clients")]);
     setList(s.data); setClients(c.data);
-  };
-  useEffect(() => { load(); }, []);
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   // Auto-open the Add dialog when arriving with ?new=1 (from Quick Entry hub or Add-an-admission flow)
   const [searchParams, setSearchParams] = useSearchParams();
