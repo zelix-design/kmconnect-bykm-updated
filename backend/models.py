@@ -29,9 +29,9 @@ USER_DEFAULT_PERMISSIONS = {
     "transactions": "edit",
     "accounts": "edit",
     "settings": "edit",
+    "expense_requests": "edit",  # users can submit (not approve) — backend enforces
     "clients": "none",
     "students": "none",
-    "expense_requests": "none",
 }
 
 

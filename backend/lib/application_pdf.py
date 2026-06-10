@@ -233,26 +233,26 @@ def _draw_applicant_banner(c: Canvas, opts: dict, y: float) -> float:
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 20)
-    c.drawString(MARGIN, y, name)
+    c.drawString(MARGIN, y - 3, name)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
-    c.drawString(MARGIN, y - 15, course)
+    c.drawString(MARGIN, y - 18, course)
 
     c.setFont(_FONT_FAMILY_SEMI, 10)
     c.setFillColor(MUTED)
-    c.drawString(MARGIN, y - 28, college)
+    c.drawString(MARGIN, y - 31, college)
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_SEMI, 8.5)
-    c.drawRightString(PAGE_WIDTH - MARGIN, y - 4,
+    c.drawRightString(PAGE_WIDTH - MARGIN, y - 6,
                       f"Admission Type:  {opts.get('admission_type') or '—'}")
-    c.drawRightString(PAGE_WIDTH - MARGIN, y - 18,
+    c.drawRightString(PAGE_WIDTH - MARGIN, y - 20,
                       f"Academic Year:  {opts.get('academic_year') or '—'}")
 
     c.setStrokeColor(RULE)
     c.setLineWidth(0.4)
     c.line(MARGIN, y - 40, PAGE_WIDTH - MARGIN, y - 40)
-    return y - 54
+    return y - 53
 
 
 def _draw_section_header(c: Canvas, title: str, y: float, sub: str | None = None) -> float:
@@ -340,12 +340,12 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
     # Column widths tuned so the "Percentage" label fits without wrapping
     # (was breaking as "Percenta\nge" on the previous 60pt label column).
     col_widths = [
-        70,                 # 0: label – Register No. / School
-        110,                # 1: value
+        75,                 # 0: label – Register No. / School
+        150,                # 1: value
         50,                 # 2: label – Board / Place
         100,                # 3: value
-        72,                 # 4: label – Year / Percentage  ← fits "Percentage"
-        CONTENT_WIDTH - 70 - 110 - 50 - 100 - 72,  # 5: value (rest)
+        75,                 # 4: label – Year / Percentage  ← fits "Percentage"
+        CONTENT_WIDTH - 75 - 150 - 50 - 100 - 75,  # 5: value (rest)
     ]
     table = Table(norm, colWidths=col_widths)
     style = [
@@ -396,9 +396,8 @@ def _academic_table(tenth: dict, twelfth: dict) -> Table:
 def _draw_declaration_box(c: Canvas, college_name: str | None, y: float) -> None:
     """Draw the DECLARATION heading + black-bordered box containing:
         - declaration paragraph (with top padding inside the box)
-        - "Date" stub (stacked ABOVE "Place")
         - "Place" stub
-        - Applicant Signature / Admissions Officer signature lines + labels + subtitles
+        - Applicant Signature lines + labels + subtitles
           (with bottom padding inside the box)
     """
     # 1) Heading — drawn ABOVE the box (outside)
@@ -421,7 +420,7 @@ def _draw_declaration_box(c: Canvas, college_name: str | None, y: float) -> None
 
     # Draw the outer border
     c.setStrokeColor(INK)
-    c.setLineWidth(0.8)
+    c.setLineWidth(0.4)
     c.rect(box_left, box_bottom, box_right - box_left, box_top - box_bottom,
            stroke=1, fill=0)
 
@@ -445,34 +444,28 @@ def _draw_declaration_box(c: Canvas, college_name: str | None, y: float) -> None
     right_x = box_right - inner_pad_x - panel_w
     left_x = box_left + inner_pad_x
 
-    # 5) Date + Place stubs (Date ABOVE Place)
-    # Each stub: label + thin filled-in line. Place stacked below Date.
+    # 5) Place stubs - box_bottom + inner_bottom_pad (place_y - 23)
+    # stub: label + thin filled-in line.
     stub_height = 18
-    date_y = sig_y + stub_height + 14   # date label baseline
-    place_y = sig_y + 14                # place label baseline
+    place_y = box_bottom + inner_bottom_pad + 23 + 10   # place label baseline
     c.setFont(_FONT_FAMILY_SEMI, 8)
     c.setFillColor(MUTED)
-    c.drawString(left_x, date_y, "Date")
     c.drawString(left_x, place_y, "Place")
     c.setStrokeColor(RULE)
     c.setLineWidth(0.4)
-    c.line(left_x + 30, date_y - 2, left_x + 200, date_y - 2)
     c.line(left_x + 30, place_y - 2, left_x + 200, place_y - 2)
 
     # 6) Signature lines + labels + subtitles
     c.setStrokeColor(INK)
     c.setLineWidth(0.6)
-    c.line(left_x, sig_y, left_x + panel_w, sig_y)
     c.line(right_x, sig_y, right_x + panel_w, sig_y)
 
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 9)
-    c.drawString(left_x, sig_y - 13, "Applicant Signature")
-    c.drawString(right_x, sig_y - 13, "Admissions Officer")
+    c.drawString(right_x, sig_y - 13, "Applicant Signature")
     c.setFont(_FONT_FAMILY_PRIMARY, 7)
     c.setFillColor(MUTED)
-    c.drawString(left_x, sig_y - 23, "I have read and agreed to the declaration above.")
-    c.drawString(right_x, sig_y - 23, "For office use only · KM Foundation")
+    c.drawString(right_x, sig_y - 23, "I have read and agreed to the declaration above.")
 
 
 def _draw_footer(c: Canvas) -> None:
@@ -483,7 +476,7 @@ def _draw_footer(c: Canvas) -> None:
     centred above it.
     """
     # Contact line — sits above the strip
-    contact_y = FOOTER_BAR_HEIGHT + 12
+    contact_y = FOOTER_BAR_HEIGHT + 15
     c.setFillColor(INK)
     c.setFont(_FONT_FAMILY_BOLD, 7)
     c.drawCentredString(

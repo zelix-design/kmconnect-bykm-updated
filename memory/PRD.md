@@ -611,6 +611,12 @@
 ## Test credentials
 See `/app/memory/test_credentials.md`.
 
+## Implementation status — 2026-02-26 (iteration 45: "Expense requests" extended to user role)
+- [x] **Backend**: `USER_DEFAULT_PERMISSIONS.expense_requests` flipped to `"edit"`. `POST /api/expense-requests` now accepts `role ∈ {office_admin, user}` (was office_admin only). New user-role accounts created from now on get the new permission baked in; legacy ones can be updated via super admin's permissions UI.
+- [x] **UI**: AppShell sidebar adds an **"Expense requests"** entry for the user role (`data-testid=nav-user-expenses`) pointing at `/expense-requests`. Page header reads "My expense requests" for user role (vs "Office expense requests" for office admins, "Expense approvals" for super admin).
+- [x] **Tests**: 1 new pytest case (`test_user_role_can_submit_expense_request`) — user creates account → submits expense request → request appears in their listing. Full suite **76/76 passing**.
+
+
 ## Implementation status — 2026-02-26 (iteration 44: New lightweight "user" role for personal finance)
 - [x] **Backend**: `UserRole` Literal now `super_admin | office_admin | user`. Added `USER_DEFAULT_PERMISSIONS` granting only `overview / quick_entry / transactions / accounts / settings = edit` and explicitly `clients / students / expense_requests = none`. `require_edit` defaults to `none` (instead of `edit`) when the user has role `"user"` so untyped routes 403 by default.
 - [x] **Create flow**: `/api/users` POST accepts `role="user"` (no office required). Super Admin's Create User dialog has a new option **"User (personal finance)"**.

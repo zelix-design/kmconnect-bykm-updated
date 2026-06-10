@@ -137,6 +137,45 @@ def test_user_role_blocked_from_students_clients_invoices() -> None:
         _delete_user(super_token, body["id"])
 
 
+def test_user_role_can_submit_expense_request() -> None:
+    """User-role accounts can submit expense requests (iter 45)."""
+    super_token = _login(*admin_credentials())
+    body = _create_user_role_account(super_token)
+    try:
+        token = _login(body["email"], body["password"])
+        # Create an account first (needed by the expense request payload)
+        ar = requests.post(
+            f"{API}/accounts",
+            headers=_h(token),
+            json={"name": "User Bank", "type": "bank", "opening_balance": 5000},
+            timeout=15,
+        )
+        ar.raise_for_status()
+        account_id = ar.json()["id"]
+        # Submit expense request
+        er = requests.post(
+            f"{API}/expense-requests",
+            headers=_h(token),
+            json={
+                "kind": "expense",
+                "amount": 750,
+                "account_id": account_id,
+                "category_id": None,
+                "date": "2026-02-26",
+                "description": "User-role expense QA",
+            },
+            timeout=15,
+        )
+        assert er.status_code == 200, er.text
+        # And the user can see their own request in the list
+        lr = requests.get(f"{API}/expense-requests", headers=_h(token), timeout=15)
+        lr.raise_for_status()
+        rows = lr.json()
+        assert any(r.get("description") == "User-role expense QA" for r in rows)
+    finally:
+        _delete_user(super_token, body["id"])
+
+
 def test_user_role_records_are_private() -> None:
     """Two separate user-role accounts should never see each other's accounts/
     transactions, even when both are created by the same super_admin."""

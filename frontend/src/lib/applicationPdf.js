@@ -163,29 +163,29 @@ function drawApplicantBanner(doc, fonts, opts, y) {
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(20);
   doc.setTextColor(...INK);
-  doc.text((opts.studentName || "—").toUpperCase(), MARGIN, y);
+  doc.text((opts.studentName || "—").toUpperCase(), MARGIN, y + 3);
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(10);
-  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 15);
+  doc.text((opts.course || "—").toUpperCase(), MARGIN, y + 18);
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 28);
+  doc.text((opts.college || "—").toUpperCase(), MARGIN, y + 31);
 
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
   doc.text(`Admission Type:  ${opts.admissionType || "—"}`,
-    pageWidth - MARGIN, y + 4, { align: "right" });
+    pageWidth - MARGIN, y + 6, { align: "right" });
   doc.text(`Academic Year:  ${opts.academicYear || "—"}`,
-    pageWidth - MARGIN, y + 18, { align: "right" });
+    pageWidth - MARGIN, y + 20, { align: "right" });
 
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.4);
   doc.line(MARGIN, y + 40, pageWidth - MARGIN, y + 40);
-  return y + 54;
+  return y + 53;
 }
 
 function drawSectionHeader(doc, fonts, title, y, sub) {
@@ -272,12 +272,12 @@ function drawAcademicTable(doc, fonts, tenth, twelfth, startY) {
   // Column widths tuned so "Percentage" label fits on one line (was wrapping
   // as "Percenta\nge" on the previous 60pt column).
   const colWidths = [
-    70,                   // 0: label – Register No. / School
-    110,                  // 1: value
+    75,                   // 0: label – Register No. / School
+    150,                  // 1: value
     50,                   // 2: label – Board / Place
     100,                  // 3: value
-    72,                   // 4: label – Year / Percentage  ← fits "Percentage"
-    contentW - 70 - 110 - 50 - 100 - 72,  // 5: value (rest)
+    75,                   // 4: label – Year / Percentage  ← fits "Percentage"
+    contentW - 75 - 150 - 50 - 100 - 75,  // 5: value (rest)
   ];
 
   const body = [
@@ -360,7 +360,7 @@ function drawDeclarationBox(doc, fonts, collegeName, headingY) {
 
   // Outer black border
   doc.setDrawColor(...INK);
-  doc.setLineWidth(0.8);
+  doc.setLineWidth(0.4);
   doc.rect(boxLeft, boxTop, boxRight - boxLeft, boxBottom - boxTop, "S");
 
   // 3) Declaration paragraph — starts BELOW the box top line
@@ -382,48 +382,41 @@ function drawDeclarationBox(doc, fonts, collegeName, headingY) {
   //     label baseline    = subtitle - 10
   //     signature line    = label - 13 (=> sigY)
   //     Place row above (label + line)
-  //     Date row above Place
   const sigY = boxBottom - innerBottomPad - 10 - 13;
   const panelW = 200;
   const leftX = boxLeft + innerPadX;
   const rightX = boxRight - innerPadX - panelW;
 
-  // 5) Date + Place stubs (Date ABOVE Place)
-  const placeY = sigY - 18;
-  const dateY = sigY - 18 - 22;
+  // 5) Place stubs
+  const placeY = boxBottom - innerBottomPad - 10 - 13;
   doc.setFont(fonts.semi, "normal");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("Date", leftX, dateY);
   doc.text("Place", leftX, placeY);
   doc.setDrawColor(...RULE);
   doc.setLineWidth(0.4);
-  doc.line(leftX + 30, dateY + 2, leftX + 200, dateY + 2);
   doc.line(leftX + 30, placeY + 2, leftX + 200, placeY + 2);
 
   // 6) Signature lines + labels + subtitles
   doc.setDrawColor(...INK);
   doc.setLineWidth(0.6);
-  doc.line(leftX, sigY, leftX + panelW, sigY);
   doc.line(rightX, sigY, rightX + panelW, sigY);
 
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(9);
   doc.setTextColor(...INK);
-  doc.text("Applicant Signature", leftX, sigY + 13);
-  doc.text("Admissions Officer", rightX, sigY + 13);
+  doc.text("Applicant Signature", rightX, sigY + 13);
   doc.setFont(fonts.primary, "normal");
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
-  doc.text("I have read and agreed to the declaration above.", leftX, sigY + 23);
-  doc.text("For office use only · KM Foundation", rightX, sigY + 23);
+  doc.text("I have read and agreed to the declaration above.", rightX, sigY + 23);
 }
 
 function drawFooter(doc, fonts) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   // Contact line above the strip
-  const contactY = pageHeight - FOOTER_BAR_HEIGHT - 12;
+  const contactY = pageHeight - FOOTER_BAR_HEIGHT - 15;
   doc.setFont(fonts.bold, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...INK);

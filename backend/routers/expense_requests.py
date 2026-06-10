@@ -42,8 +42,8 @@ async def list_requests(user: dict = Depends(get_current_user), status: str | No
 
 @router.post("")
 async def create_request(payload: ExpenseRequestIn, user: dict = Depends(require_edit("expense_requests"))):
-    if user.get("role") != "office_admin":
-        raise HTTPException(status_code=403, detail="Only office admins can submit expense requests")
+    if user.get("role") not in {"office_admin", "user"}:
+        raise HTTPException(status_code=403, detail="Only office admins and users can submit expense requests")
     doc = {
         "id": gen_id(),
         "requested_by_user_id": user["id"],

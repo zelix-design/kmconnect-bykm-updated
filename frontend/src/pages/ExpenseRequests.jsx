@@ -145,12 +145,14 @@ export default function ExpenseRequests() {
         <div>
           <p className="label-eyebrow">{isSuper ? "Approvals" : "My requests"}</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
-            {isSuper ? "Expense approvals" : "Office expense requests"}
+            {isSuper ? "Expense approvals" : (user?.role === "user" ? "My expense requests" : "Office expense requests")}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isSuper
               ? "Review pending office-admin requests. Approving creates the expense transaction automatically."
-              : "Raise an office expense or salary. A super admin will review and approve."}
+              : (user?.role === "user"
+                  ? "Submit an expense for a super admin to review and approve."
+                  : "Raise an office expense or salary. A super admin will review and approve.")}
           </p>
         </div>
         {!isSuper && allowEdit && (

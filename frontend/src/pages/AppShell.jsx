@@ -28,6 +28,7 @@ const ALL_NAV = [
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
+  { to: "/expense-requests", label: "Expense requests", icon: ReceiptX, tid: "nav-user-expenses", roles: ["user"], userRoleAllowed: true, perm: "expense_requests" },
   { to: "/users", label: "Team", icon: ShieldCheck, tid: "nav-users", roles: ["super_admin"] },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories", roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings", perm: "settings", userRoleAllowed: true },
