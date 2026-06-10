@@ -444,9 +444,7 @@ def _draw_declaration_box(c: Canvas, college_name: str | None, y: float) -> None
     right_x = box_right - inner_pad_x - panel_w
     left_x = box_left + inner_pad_x
 
-    # 5) Place stubs - box_bottom + inner_bottom_pad (place_y - 23)
-    # stub: label + thin filled-in line.
-    stub_height = 18
+    # 5) Place stubs — label + thin filled-in line.
     place_y = box_bottom + inner_bottom_pad + 23 + 10   # place label baseline
     c.setFont(_FONT_FAMILY_SEMI, 8)
     c.setFillColor(MUTED)

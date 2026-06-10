@@ -313,7 +313,7 @@ export default function Students() {
                   </div>
                 ) : (
                   <div className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2.5 flex items-center text-[12px] text-muted-foreground">
-                    No staff reference (use "Add an admission" on the dashboard to attach one)
+                    No staff reference (use &ldquo;Add an admission&rdquo; on the dashboard to attach one)
                   </div>
                 )}
                 <div><Label>SC Earned</Label><Input type="number" step="0.01" value={form.sc_out_fixed} onChange={(e) => setForm({ ...form, sc_out_fixed: e.target.value })} data-testid="st-sc" /></div>

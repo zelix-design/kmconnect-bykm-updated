@@ -17,7 +17,7 @@ from typing import Optional
 
 import requests
 
-from tests._creds import api_base, admin_credentials
+from tests._creds import api_base, admin_credentials, generate_test_password
 
 API = api_base()
 
@@ -40,7 +40,7 @@ def _h(t: str) -> dict:
 def _create_user_role_account(super_token: str) -> dict:
     stamp = int(time.time() * 1000)
     email = f"user_role_qa_{stamp}@example.com"
-    password = "UserPass#1"
+    password = generate_test_password("UserPwd")
     r = requests.post(
         f"{API}/users",
         headers=_h(super_token),

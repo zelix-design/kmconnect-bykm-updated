@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
@@ -37,8 +37,14 @@ export default function Transactions() {
   }, [filterType]);
   useEffect(() => { load(); }, [load]);
 
-  const accountMap = Object.fromEntries(accounts.map(a => [a.id, a]));
-  const categoryMap = Object.fromEntries(categories.map(c => [c.id, c]));
+  const accountMap = useMemo(
+    () => Object.fromEntries(accounts.map(a => [a.id, a])),
+    [accounts],
+  );
+  const categoryMap = useMemo(
+    () => Object.fromEntries(categories.map(c => [c.id, c])),
+    [categories],
+  );
 
   const openCreate = () => {
     setEditing(null);

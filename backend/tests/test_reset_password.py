@@ -11,7 +11,7 @@ from typing import Optional
 
 import requests
 
-from tests._creds import api_base, admin_credentials, office_credentials
+from tests._creds import api_base, admin_credentials, office_credentials, generate_test_password
 
 API = api_base()
 
@@ -36,7 +36,7 @@ def _create_target_user(super_token: str) -> dict:
     """Create a throwaway office_admin user. Returns the new user dict
     (with embedded 'email' + the 'password' we used)."""
     email = f"pwd_reset_qa_{int(time.time() * 1000)}@example.com"
-    password = "InitPass#1"
+    password = generate_test_password("InitPwd")
     r = requests.post(
         f"{API}/users",
         headers=_h(super_token),
@@ -67,7 +67,7 @@ def test_super_admin_resets_password_target_can_login() -> None:
     super_token = _login(*admin_credentials())
     target = _create_target_user(super_token)
     try:
-        new_password = "BrandNew#42"
+        new_password = generate_test_password("BrandNew")
         r = requests.post(
             f"{API}/users/{target['id']}/reset-password",
             headers=_h(super_token),
@@ -106,7 +106,7 @@ def test_office_admin_cannot_reset_others() -> None:
         r = requests.post(
             f"{API}/users/{target['id']}/reset-password",
             headers=_h(office_token),
-            json={"new_password": "AnotherPass#1"},
+            json={"new_password": generate_test_password("AnotherPwd")},
             timeout=15,
         )
         assert r.status_code == 403, r.text
@@ -119,7 +119,7 @@ def test_reset_password_unknown_user_404() -> None:
     r = requests.post(
         f"{API}/users/nope-no-such-id/reset-password",
         headers=_h(super_token),
-        json={"new_password": "DoesntMatter#1"},
+        json={"new_password": generate_test_password("DoesntMatter")},
         timeout=15,
     )
     assert r.status_code == 404, r.text
@@ -139,16 +139,17 @@ def test_reset_clears_brute_force_lockout() -> None:
                 json={"email": target["email"], "password": "wrong-on-purpose"},
                 timeout=10,
             )
+        fresh_password = generate_test_password("FreshStart")
         # Reset password.
         r = requests.post(
             f"{API}/users/{target['id']}/reset-password",
             headers=_h(super_token),
-            json={"new_password": "FreshStart#9"},
+            json={"new_password": fresh_password},
             timeout=15,
         )
         assert r.status_code == 200, r.text
         # New password should work immediately — no lockout in the way.
-        token = _login(target["email"], "FreshStart#9")
+        token = _login(target["email"], fresh_password)
         assert token is not None
     finally:
         _delete_user(super_token, target["id"])

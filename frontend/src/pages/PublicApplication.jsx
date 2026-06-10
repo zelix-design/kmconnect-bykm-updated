@@ -504,7 +504,7 @@ function StepDeclaration({ app, setField }) {
       <SectionTitle eyebrow="Section F" title="Declaration" subtitle="Please read carefully and tick the box to submit." />
       <div className="rounded-lg border border-border bg-muted/20 p-4 sm:p-5 text-sm leading-relaxed text-foreground" data-testid="declaration-text">
         {paragraphs.map((p, i) => (
-          <p key={i} className={i > 0 ? "mt-3" : ""}>{p}</p>
+          <p key={`para-${p.slice(0, 24)}-${i}`} className={i > 0 ? "mt-3" : ""}>{p}</p>
         ))}
         {!collegeName && (
           <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">

@@ -19,10 +19,10 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL must be set"
 
-SUPER_EMAIL = "admin@kmfoundation.online"
-SUPER_PASSWORD = "Admin@786"
-OFFICE_EMAIL = "blr1@finflow.com"
-OFFICE_PASSWORD = "Office@123"
+SUPER_EMAIL = os.getenv("TEST_ADMIN_EMAIL", "admin@kmfoundation.online")
+SUPER_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD", "Admin@786")
+OFFICE_EMAIL = os.getenv("TEST_OFFICE_EMAIL", "blr1@finflow.com")
+OFFICE_PASSWORD = os.getenv("TEST_OFFICE_PASSWORD", "Office@123")
 
 PUBLIC = f"{BASE_URL}/api/public"
 

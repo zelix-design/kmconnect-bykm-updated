@@ -15,8 +15,18 @@ secrets via environment.
 from __future__ import annotations
 
 import os
+import secrets
 from pathlib import Path
 from typing import Tuple
+
+
+def generate_test_password(prefix: str = "TestPwd") -> str:
+    """Return a strong, random per-call password used for throwaway users
+    created inside tests. Avoids static strings appearing in source code that
+    code-scanning tools flag as hardcoded secrets."""
+    # 16 url-safe chars (~96 bits) + a stable prefix that satisfies the
+    # backend's min-length validators and includes an upper / lower / digit.
+    return f"{prefix}#{secrets.token_urlsafe(12)}"
 
 
 def _read_frontend_env_var(key: str) -> str | None:
