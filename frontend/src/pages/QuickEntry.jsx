@@ -52,7 +52,10 @@ export default function QuickEntry() {
   const currency = user?.currency || "USD";
   const isOfficeAdmin = user?.role === "office_admin";
   const isSuper = user?.role === "super_admin";
-  const [view, setView] = useState("hub"); // "hub" | "transaction"
+  const isLightUser = user?.role === "user";
+  // The lightweight "user" role only needs the debit/credit form — skip the
+  // hub entirely and land them right on the Add Transaction view.
+  const [view, setView] = useState(isLightUser ? "transaction" : "hub"); // "hub" | "transaction"
 
   const [mode, setMode] = useState("debit"); // debit = expense (money out), credit = income (money in)
   const [amount, setAmount] = useState("");
@@ -180,9 +183,11 @@ export default function QuickEntry() {
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl" data-testid="quick-entry-page">
       <header>
-        <button onClick={() => setView("hub")} data-testid="qe-back-to-hub" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
-          <ArrowLeft size={12} /> Back to quick actions
-        </button>
+        {!isLightUser && (
+          <button onClick={() => setView("hub")} data-testid="qe-back-to-hub" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
+            <ArrowLeft size={12} /> Back to quick actions
+          </button>
+        )}
         <p className="label-eyebrow">Quick entry</p>
         <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Log debit or credit</h1>
         <p className="text-sm text-muted-foreground mt-1">Fast money-in / money-out logging. Tap the keypad, pick a category, save.</p>
