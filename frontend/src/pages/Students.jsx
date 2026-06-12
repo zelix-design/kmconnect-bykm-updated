@@ -9,14 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import StudentCard from "@/components/students/StudentCard";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
-import { COLLEGE_PLACES } from "@/lib/places";
+import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 
 const STATUS_OPTIONS = [
@@ -52,6 +52,7 @@ export default function Students() {
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
+  const [colleges, setColleges] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
@@ -59,6 +60,7 @@ export default function Students() {
   const [qName, setQName] = useState("");
   const [qCollege, setQCollege] = useState("");
   const [qRef, setQRef] = useState("");
+  const [qCity, setQCity] = useState("_all"); // "_all" | one of COLLEGE_PLACES | "_other"
 
   // Super admin: client picker dialog before opening the student form
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -85,8 +87,12 @@ export default function Students() {
   };
 
   const load = useCallback(async () => {
-    const [s, c] = await Promise.all([api.get("/students"), api.get("/clients")]);
-    setList(s.data); setClients(c.data);
+    const [s, c, col] = await Promise.all([
+      api.get("/students"),
+      api.get("/clients"),
+      api.get("/colleges"),
+    ]);
+    setList(s.data); setClients(c.data); setColleges(col.data);
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -122,12 +128,46 @@ export default function Students() {
     }
   }, [newFlag, staffParam, pasteFlag, isSuper, searchParams, setSearchParams]);
 
+  // Map college name → canonical place (lowercased keys for tolerant lookup).
+  const collegePlaceByName = useMemo(() => {
+    const map = new Map();
+    for (const c of colleges) {
+      if (c?.name) map.set(String(c.name).toLowerCase(), normalizePlace(c.place || ""));
+    }
+    return map;
+  }, [colleges]);
+
+  const cityOfStudent = useCallback((s) => {
+    if (!s?.college) return "";
+    return collegePlaceByName.get(String(s.college).toLowerCase()) || "";
+  }, [collegePlaceByName]);
+
+  // Per-city enrollment counts (computed on the *unfiltered* list so the
+  // dropdown always shows the same totals regardless of other filters).
+  const cityCounts = useMemo(() => {
+    const counts = { _all: list.length, _other: 0 };
+    for (const p of COLLEGE_PLACES) counts[p] = 0;
+    for (const s of list) {
+      const c = cityOfStudent(s);
+      if (!c) continue;
+      if (COLLEGE_PLACES.includes(c)) counts[c] += 1;
+      else counts._other += 1;
+    }
+    return counts;
+  }, [list, cityOfStudent]);
+
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
     return [...list]
       .filter((s) => m(s.name, qName) && m(s.college, qCollege) && m(s.reference, qRef))
+      .filter((s) => {
+        if (qCity === "_all") return true;
+        const c = cityOfStudent(s);
+        if (qCity === "_other") return c && !COLLEGE_PLACES.includes(c);
+        return c === qCity;
+      })
       .sort((a, b) => String(recentRank(b)).localeCompare(String(recentRank(a))));
-  }, [list, qName, qCollege, qRef]);
+  }, [list, qName, qCollege, qRef, qCity, cityOfStudent]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -395,7 +435,7 @@ export default function Students() {
       </header>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="students-filters">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="students-filters">
         <div className="relative">
           <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
@@ -426,6 +466,29 @@ export default function Students() {
             data-testid="filter-reference"
           />
         </div>
+        <div className="relative">
+          <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
+          <Select value={qCity} onValueChange={setQCity}>
+            <SelectTrigger className="pl-9 bg-card" data-testid="filter-city">
+              <SelectValue placeholder="All cities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all" data-testid="filter-city-all">
+                All cities · {cityCounts._all}
+              </SelectItem>
+              {COLLEGE_PLACES.map((c) => (
+                <SelectItem key={c} value={c} data-testid={`filter-city-${c}`}>
+                  {c} · {cityCounts[c] || 0}
+                </SelectItem>
+              ))}
+              {cityCounts._other > 0 && (
+                <SelectItem value="_other" data-testid="filter-city-other">
+                  Other · {cityCounts._other}
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -435,7 +498,13 @@ export default function Students() {
         </Card>
       ) : (
         <>
-          <p className="label-eyebrow" data-testid="recent-eyebrow">Recent enrollments — {filtered.length}</p>
+          <p className="label-eyebrow" data-testid="recent-eyebrow">
+            {qCity === "_all"
+              ? `Recent enrollments — ${filtered.length}`
+              : qCity === "_other"
+              ? `Other cities — ${filtered.length} enrollments`
+              : `${qCity} — ${filtered.length} enrollments`}
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="students-grid">
             {filtered.map((s) => (
               <StudentCard key={s.id} s={s} currency={currency} isSuper={isSuper} />
