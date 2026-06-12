@@ -678,3 +678,15 @@ See `/app/memory/test_credentials.md`.
 - [x] **Default seed categories** extended with Application Fees / Registration Fees / Tuition Fees / Uniform Fees / SC Adjusted income categories so the auto-log income tx can resolve a category by label.
 - [x] **3 new pytest cases** (`/app/backend/tests/test_add_payment_v2.py`): new fee types accepted, SC Adjusted auto-logs income tx on default account, SC Adjusted routes through agent-ledger.
 - [x] **Testing**: iteration_27.json — 55/55 backend pytest pass, 10/10 frontend review-request checks pass, zero defects.
+
+
+## Implementation status — 2026-02-26 (iteration 29: Permission-aware bottom navigation)
+- [x] **Bottom nav now respects per-user permissions** (`/app/frontend/src/components/BottomNav.jsx`). Replaced the hardcoded 4-item `NAV` array with `ALL_SIDE_NAV` (6 ranked candidates: Home / Students / Clients / Invoices / Transactions / Expenses) filtered via `isVisible(item, user)` that composes optional `roles` whitelist + `canView(user, perm)`. Top 4 visible items render around the center FAB.
+- [x] **Quick-actions sheet** is also permission-gated (`ALL_QUICK_ACTIONS`): Add transaction (perm=`quick_entry`), Add student / Paste application (perm=`students`), Add college (super_admin only), Expense request (perm=`expense_requests`, roles=`office_admin`/`user`). When no quick actions are available, the FAB is hidden and an empty-state message renders inside the sheet.
+- [x] **Permissions dialog copy update** (`/app/frontend/src/pages/Users.jsx`): when the target is a `user` role account, the dialog now shows a 'user' badge and the description reads "Pick which pages this user can see in their sidebar and bottom nav."
+- [x] **Verified matrix** (iteration 29 testing report):
+  - `user` role (defaults): bottom nav = Home / Transactions / Expenses + FAB; quick-sheet = Add transaction + Expense request.
+  - `office_admin` (BLR, all-edit): bottom nav = Home / Students / Clients / Transactions + FAB; quick-sheet = Add transaction / Add student / Paste application / Expense request (no Add college).
+  - `super_admin`: bottom nav = Home / Students / Clients / Invoices + FAB; quick-sheet = all 4 super actions (no Expense request — explicit role whitelist).
+- [x] **Post-grant flip** verified: super admin grants `students=edit` to a user role → user re-login → `bottom-nav-students` + `qa-add-student` + `qa-paste-application` all appear.
+- [x] **Tests**: 4 new pytest cases in `test_iteration29_user_permissions.py`; curated suite 77/77 pass. Frontend matrix 100% pass.
