@@ -48,3 +48,17 @@ export function formatDate(iso) {
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
+
+// Time-of-day greeting based on local hour.
+//   05:00 - 11:59 → Good morning
+//   12:00 - 16:59 → Good afternoon
+//   17:00 - 20:59 → Good evening
+//   21:00 - 04:59 → Good night
+export function greetingForNow(date = new Date()) {
+  const h = date.getHours();
+  if (h >= 5 && h < 12) return "Good morning";
+  if (h >= 12 && h < 17) return "Good afternoon";
+  if (h >= 17 && h < 21) return "Good evening";
+  return "Good night";
+}
+

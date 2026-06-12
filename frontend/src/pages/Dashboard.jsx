@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, greetingForNow } from "@/lib/format";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,6 +61,7 @@ function SuperAdminDashboard() {
   const role = user?.role;
   const isLightUser = role === "user";
   const currency = user?.currency || "USD";
+  const greeting = useMemo(() => greetingForNow(), []);
   const [preset, setPreset] = useState("this_month");
   const [custom, setCustom] = useState({ start: "", end: "" });
   const [activeTile, setActiveTile] = useState("transactions");
@@ -129,8 +130,8 @@ function SuperAdminDashboard() {
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="label-eyebrow">Overview</p>
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">
-            Hi {user?.name?.split(" ")[0] || "there"}, here's your money today.
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="dashboard-greeting">
+            {greeting}, {user?.name?.split(" ")[0] || "there"}.
           </h1>
         </div>
         <div className="flex flex-wrap gap-2">

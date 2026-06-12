@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, greetingForNow } from "@/lib/format";
 import {
   GraduationCap, Trophy, ClockClockwise, UserCircle,
 } from "@phosphor-icons/react";
@@ -103,8 +103,8 @@ export default function OfficeDashboard() {
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <p className="label-eyebrow">{user?.office ? `${OFFICE_LABEL[user.office] || user.office} · office` : "Office"}</p>
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">
-            Hi {user?.name?.split(" ")[0] || "there"}, here's your office today.
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="office-greeting">
+            {greetingForNow()}, {user?.name?.split(" ")[0] || "there"}.
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Track admissions, staff incentives & upcoming birthdays.</p>
         </div>
