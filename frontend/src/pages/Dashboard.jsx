@@ -105,7 +105,7 @@ function SuperAdminDashboard() {
       setClients(cl.data);
       setLedger(lg.data);
     })().catch(() => {});
-  }, [range]);
+  }, [range, isLightUser]);
 
   const filteredTransactions = useMemo(
     () => transactions.filter((t) => withinFilter(t.date, listFilter)),
