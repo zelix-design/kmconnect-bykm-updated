@@ -1,4 +1,8 @@
 {
+  "name": "app-workspace-root",
+  "version": "1.0.0",
+  "private": true,
+  "license": "UNLICENSED",
   "dependencies": {
     "xlsx": "^0.18.5"
   }
