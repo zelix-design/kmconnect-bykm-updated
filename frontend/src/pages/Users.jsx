@@ -343,9 +343,14 @@ export default function Users() {
             <DialogTitle className="flex items-center gap-2">
               <ShieldCheck size={20} weight="duotone" className="text-orange-600 dark:text-orange-400" />
               {permTarget?.name} · permissions
+              {permTarget?.role === "user" && (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 ml-1">user</Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
-              Control what this office-admin can see and edit. Changes take effect on their next sign-in.
+              {permTarget?.role === "user"
+                ? "Pick which pages this user can see in their sidebar and bottom nav. Setting a page to 'No access' hides it from their navigation entirely."
+                : "Control what this office-admin can see and edit. Changes take effect on their next sign-in."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-[55vh] overflow-y-auto py-2" data-testid="permissions-list">

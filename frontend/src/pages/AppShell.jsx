@@ -60,7 +60,6 @@ function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
   const navItems = ALL_NAV.filter((i) => {
     if (i.roles && !i.roles.includes(role)) return false;
-    if (role === "user" && !i.userRoleAllowed) return false;
     if (i.perm && !canView(user, i.perm)) return false;
     return true;
   });
