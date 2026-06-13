@@ -10,15 +10,23 @@ function applyTheme(theme) {
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    if (typeof window === "undefined") return "light";
-    const saved = localStorage.getItem("finflow-theme");
-    if (saved === "dark" || saved === "light") return saved;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    // Boot-time localStorage access can throw on mobile in-app browsers, Safari
+    // private mode, and Android WebViews where DOM storage is disabled. If it
+    // throws here (inside the React tree's root provider), the whole app
+    // white-screens — so guard the access AND the getItem call separately.
+    try {
+      if (typeof window === "undefined") return "light";
+      const saved = window.localStorage?.getItem("finflow-theme");
+      if (saved === "dark" || saved === "light") return saved;
+      return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    } catch {
+      return "light";
+    }
   });
 
   useEffect(() => {
     applyTheme(theme);
-    try { localStorage.setItem("finflow-theme", theme); } catch (e) { void e; }
+    try { window.localStorage?.setItem("finflow-theme", theme); } catch (e) { void e; }
   }, [theme]);
 
   const toggle = useCallback(

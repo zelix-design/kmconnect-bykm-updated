@@ -46,7 +46,12 @@ export function AuthProvider({ children }) {
       setUser(rest);
       return true;
     } catch (e) {
-      setError(formatApiError(e.response?.data?.detail) || e.message);
+      // Prefer the server-side error detail; fall through to the underlying
+      // axios/JS error message when there's no server response (network blip,
+      // CORS rejection, localStorage exception, etc.) so users see something
+      // actionable instead of the generic "Something went wrong".
+      const serverDetail = e?.response?.data?.detail;
+      setError(serverDetail ? formatApiError(serverDetail) : (e?.message || formatApiError(null)));
       return false;
     }
   }, []);
@@ -58,7 +63,8 @@ export function AuthProvider({ children }) {
       // Backend returns {ok, approval_status, message} — user must be approved before login
       return { ok: true, pending: data?.approval_status === "pending", message: data?.message };
     } catch (e) {
-      setError(formatApiError(e.response?.data?.detail) || e.message);
+      const serverDetail = e?.response?.data?.detail;
+      setError(serverDetail ? formatApiError(serverDetail) : (e?.message || formatApiError(null)));
       return { ok: false };
     }
   }, []);

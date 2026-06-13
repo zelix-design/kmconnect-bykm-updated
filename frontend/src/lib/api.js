@@ -7,8 +7,17 @@ export const API = `${BACKEND_URL}/api`;
 // blocked by the browser (e.g. Chrome's third-party cookie deprecation when
 // frontend and backend live on different sub/domains in production).
 //
-// SECURITY NOTE: localStorage is intentionally chosen here as the cross-origin
-// fallback, knowing it is read-accessible to any script running on this origin.
+// MOBILE-SAFE: many mobile webviews & private-mode browsers reject
+// localStorage with QuotaExceededError / SecurityError on the very first
+// write (Safari private mode, Instagram/FB/TikTok in-app browsers, Brave
+// strict shields, some Android WebViews). If we let those throw the login
+// flow surfaces a generic "Something went wrong" toast. Catch defensively
+// and degrade to a same-tab in-memory token store — auth still works for
+// the duration of the session and is automatically restored if persistence
+// becomes available again.
+//
+// SECURITY NOTE: localStorage is intentionally chosen as the cross-origin
+// fallback, knowing it is read-accessible to any script on this origin.
 // Mitigations:
 //   • Same-origin deploys use httpOnly + Secure + SameSite=Strict cookies
 //     (set by backend `/auth/login`) — localStorage is then dormant.
@@ -16,16 +25,47 @@ export const API = `${BACKEND_URL}/api`;
 //     token via the password-reset endpoint which clears `password_reset_at`.
 //   • The codebase has no `dangerouslySetInnerHTML` user-content paths, so XSS
 //     attack surface is limited to vendored deps which are version-pinned.
-// If your deploy environment supports same-origin always, you can disable the
-// fallback by stubbing the helpers below to no-ops.
 const TOKEN_KEY = "finflow_access_token";
+
+// Module-scoped in-memory mirror — only used when localStorage is unavailable.
+let inMemoryToken = null;
+
+function safeLocalStorage() {
+  // Touching `window.localStorage` itself can throw on some browsers (Safari
+  // ITP, some Android WebViews when the host disabled DOM storage). Guard the
+  // *access*, not just the call.
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export const setStoredToken = (t) => {
-  if (typeof window === "undefined") return; // SSR safety
-  if (!t) window.localStorage.removeItem(TOKEN_KEY);
-  else window.localStorage.setItem(TOKEN_KEY, t);
+  inMemoryToken = t || null;
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    if (!t) ls.removeItem(TOKEN_KEY);
+    else ls.setItem(TOKEN_KEY, t);
+  } catch {
+    // QuotaExceededError / SecurityError — fall back to in-memory only.
+  }
 };
-export const getStoredToken = () =>
-  typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
+
+export const getStoredToken = () => {
+  const ls = safeLocalStorage();
+  if (ls) {
+    try {
+      const t = ls.getItem(TOKEN_KEY);
+      if (t) return t;
+    } catch {
+      // ignore — fall through to in-memory mirror
+    }
+  }
+  return inMemoryToken;
+};
 
 const api = axios.create({
   baseURL: API,
