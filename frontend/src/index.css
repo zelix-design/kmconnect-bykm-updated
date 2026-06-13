@@ -6,92 +6,92 @@
 
 @layer base {
     :root {
-        /* Amber Orange · Light theme (Purple Admin inspired) */
-        --background: 30 25% 97%;          /* warm off-white */
-        --foreground: 24 18% 12%;          /* near-black with warm tint */
+        /* Crimson · Light theme — gradient #C70000 → #101010 */
+        --background: 0 0% 98%;            /* soft warm white */
+        --foreground: 0 0% 6%;             /* near-black */
 
         --card: 0 0% 100%;
-        --card-foreground: 24 18% 12%;
+        --card-foreground: 0 0% 6%;
 
         --popover: 0 0% 100%;
-        --popover-foreground: 24 18% 12%;
+        --popover-foreground: 0 0% 6%;
 
-        --primary: 24 95% 53%;             /* orange-500 #F97316 */
-        --primary-foreground: 30 100% 99%;
+        --primary: 0 100% 39%;             /* #C70000 */
+        --primary-foreground: 0 0% 100%;
 
-        --secondary: 30 30% 95%;
-        --secondary-foreground: 24 18% 18%;
+        --secondary: 0 0% 96%;
+        --secondary-foreground: 0 0% 12%;
 
-        --muted: 30 20% 94%;
-        --muted-foreground: 24 8% 42%;
+        --muted: 0 0% 95%;
+        --muted-foreground: 0 0% 38%;
 
-        --accent: 38 92% 50%;              /* amber-500 */
-        --accent-foreground: 24 18% 12%;
+        --accent: 0 75% 45%;               /* slightly softer red */
+        --accent-foreground: 0 0% 100%;
 
-        --destructive: 0 72% 51%;
+        --destructive: 0 75% 50%;
         --destructive-foreground: 0 0% 98%;
 
-        --border: 30 15% 88%;
-        --input: 30 15% 88%;
-        --ring: 24 95% 53%;
+        --border: 0 0% 90%;
+        --input: 0 0% 90%;
+        --ring: 0 100% 39%;
 
         --radius: 0.875rem;
 
         /* Sidebar (light) */
         --sidebar-bg: 0 0% 100%;
-        --sidebar-border: 30 15% 90%;
-        --sidebar-fg: 24 18% 18%;
-        --sidebar-muted: 24 8% 48%;
+        --sidebar-border: 0 0% 92%;
+        --sidebar-fg: 0 0% 12%;
+        --sidebar-muted: 0 0% 42%;
 
-        /* Chart palette */
-        --chart-1: 24 95% 53%;             /* orange */
-        --chart-2: 38 92% 50%;             /* amber */
+        /* Chart palette — anchored on the crimson brand, then spread for contrast */
+        --chart-1: 0 100% 39%;             /* crimson */
+        --chart-2: 0 0% 6%;                /* near-black */
         --chart-3: 160 70% 38%;            /* emerald */
-        --chart-4: 350 75% 50%;            /* rose */
-        --chart-5: 220 75% 55%;            /* blue */
+        --chart-4: 220 75% 55%;            /* blue */
+        --chart-5: 38 92% 50%;             /* amber (kept for category diversity) */
     }
 
     .dark {
-        /* Amber Orange · Dark theme */
-        --background: 222 30% 7%;          /* deep navy-black */
-        --foreground: 30 25% 95%;
+        /* Crimson · Dark theme */
+        --background: 0 0% 4%;             /* deep near-black */
+        --foreground: 0 0% 95%;
 
-        --card: 222 24% 11%;
-        --card-foreground: 30 25% 95%;
+        --card: 0 0% 8%;
+        --card-foreground: 0 0% 95%;
 
-        --popover: 222 24% 11%;
-        --popover-foreground: 30 25% 95%;
+        --popover: 0 0% 8%;
+        --popover-foreground: 0 0% 95%;
 
-        --primary: 28 95% 58%;             /* slightly lighter orange for dark bg */
-        --primary-foreground: 24 30% 8%;
+        --primary: 0 90% 50%;              /* slightly lighter crimson on dark bg */
+        --primary-foreground: 0 0% 100%;
 
-        --secondary: 222 20% 16%;
-        --secondary-foreground: 30 25% 92%;
+        --secondary: 0 0% 14%;
+        --secondary-foreground: 0 0% 92%;
 
-        --muted: 222 20% 16%;
-        --muted-foreground: 30 10% 65%;
+        --muted: 0 0% 14%;
+        --muted-foreground: 0 0% 65%;
 
-        --accent: 38 92% 58%;
-        --accent-foreground: 24 30% 8%;
+        --accent: 0 80% 55%;
+        --accent-foreground: 0 0% 100%;
 
-        --destructive: 0 65% 50%;
+        --destructive: 0 70% 55%;
         --destructive-foreground: 0 0% 98%;
 
-        --border: 222 20% 20%;
-        --input: 222 20% 20%;
-        --ring: 28 95% 58%;
+        --border: 0 0% 18%;
+        --input: 0 0% 18%;
+        --ring: 0 90% 50%;
 
         /* Sidebar (dark) */
-        --sidebar-bg: 222 28% 9%;
-        --sidebar-border: 222 20% 18%;
-        --sidebar-fg: 30 25% 92%;
-        --sidebar-muted: 30 8% 60%;
+        --sidebar-bg: 0 0% 6%;
+        --sidebar-border: 0 0% 16%;
+        --sidebar-fg: 0 0% 92%;
+        --sidebar-muted: 0 0% 60%;
 
-        --chart-1: 28 95% 58%;
-        --chart-2: 38 92% 58%;
+        --chart-1: 0 90% 55%;
+        --chart-2: 0 0% 85%;
         --chart-3: 160 65% 50%;
-        --chart-4: 350 75% 60%;
-        --chart-5: 220 75% 65%;
+        --chart-4: 220 75% 65%;
+        --chart-5: 38 92% 58%;
     }
 }
 
@@ -123,34 +123,36 @@ h1, h2, h3, h4, h5, h6, .font-display {
     color: hsl(var(--muted-foreground));
 }
 
-/* Amber gradient utilities */
+/* Brand gradient — 90° crimson → near-black.
+   Helper class names remain `*-amber-gradient` to preserve every existing
+   reference across the app; only the underlying paint changes. */
 .bg-amber-gradient {
-    background-image: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+    background-image: linear-gradient(90deg, #C70000 0%, #101010 100%);
 }
 .bg-amber-gradient-soft {
-    background-image: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(249, 115, 22, 0.12) 100%);
+    background-image: linear-gradient(90deg, rgba(199, 0, 0, 0.10) 0%, rgba(16, 16, 16, 0.06) 100%);
 }
 .dark .bg-amber-gradient-soft {
-    background-image: linear-gradient(135deg, rgba(251, 191, 36, 0.18) 0%, rgba(249, 115, 22, 0.18) 100%);
+    background-image: linear-gradient(90deg, rgba(199, 0, 0, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%);
 }
 .text-amber-gradient {
-    background-image: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+    background-image: linear-gradient(90deg, #C70000 0%, #101010 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
 }
 
-/* Premium button gradient */
+/* Premium button — crimson gradient */
 .btn-amber {
-    background-image: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+    background-image: linear-gradient(90deg, #C70000 0%, #101010 100%);
     color: #fff;
-    box-shadow: 0 4px 14px -4px rgba(249, 115, 22, 0.45);
+    box-shadow: 0 4px 14px -4px rgba(199, 0, 0, 0.45);
     transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 .btn-amber:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px -4px rgba(249, 115, 22, 0.55);
-    filter: brightness(1.04);
+    box-shadow: 0 6px 20px -4px rgba(199, 0, 0, 0.55);
+    filter: brightness(1.06);
 }
 .btn-amber:active { transform: translateY(0); }
 
@@ -159,11 +161,11 @@ h1, h2, h3, h4, h5, h6, .font-display {
     background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius);
-    box-shadow: 0 1px 2px rgba(24, 18, 12, 0.04);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     transition: box-shadow 200ms ease, border-color 200ms ease, transform 200ms ease;
 }
 .card-premium:hover {
-    box-shadow: 0 8px 24px -8px rgba(24, 18, 12, 0.08);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.08);
 }
 .dark .card-premium {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -195,7 +197,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 .lift:hover { transform: translateY(-1px); }
 
-/* Sidebar nav item active gradient bar */
+/* Sidebar nav item active gradient bar — vertical crimson → black accent rail */
 .nav-active-bar {
     position: relative;
 }
@@ -207,5 +209,5 @@ h1, h2, h3, h4, h5, h6, .font-display {
     bottom: 8px;
     width: 3px;
     border-radius: 0 999px 999px 0;
-    background-image: linear-gradient(180deg, #fbbf24 0%, #f97316 100%);
+    background-image: linear-gradient(180deg, #C70000 0%, #101010 100%);
 }

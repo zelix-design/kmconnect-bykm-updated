@@ -33,6 +33,40 @@ module.exports = {
                     '4': 'hsl(var(--chart-4))',
                     '5': 'hsl(var(--chart-5))',
                 },
+                // ----- Brand palette remap -----
+                // The app historically used Tailwind's `amber` and `orange`
+                // scales as its brand colors. To migrate the whole UI to the
+                // new crimson-to-near-black gradient (#C70000 → #101010) without
+                // editing every component, we override both palettes here so
+                // existing classes like `bg-amber-50`, `text-orange-600`,
+                // `border-amber-200`, `shadow-orange-500/30` pick up the new
+                // brand values automatically.
+                amber: {
+                    50:  '#FEF2F2',  // very pale red tint (panels / badges)
+                    100: '#FEE2E2',
+                    200: '#FECACA',
+                    300: '#FCA5A5',
+                    400: '#F26060',
+                    500: '#C70000',  // primary brand
+                    600: '#A30000',
+                    700: '#7F0202',
+                    800: '#3F0202',
+                    900: '#101010',  // brand end
+                    950: '#0A0A0A',
+                },
+                orange: {
+                    50:  '#FEF2F2',
+                    100: '#FEE2E2',
+                    200: '#FECACA',
+                    300: '#FCA5A5',
+                    400: '#F26060',
+                    500: '#C70000',
+                    600: '#A30000',
+                    700: '#7F0202',
+                    800: '#3F0202',
+                    900: '#101010',
+                    950: '#0A0A0A',
+                },
             },
             keyframes: {
                 'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },
