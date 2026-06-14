@@ -284,10 +284,16 @@ function StepBasic({ app, setField }) {
 // ---- Step 2: Course ----
 function StepCourse({ app, setField, courses, colleges }) {
   const f = app.course;
-  // If a college is selected and has courses, prefer that scoped list.
+  // Strict cascade: City → College → Course. When we have a database-backed
+  // colleges list, the course dropdown stays locked until a college is picked,
+  // and then shows ONLY that college's courses (not the global catalogue).
+  const collegesAvailable = (colleges?.length || 0) > 0;
   const selectedCollege = (colleges || []).find((c) => c.name === f.preferred_college);
   const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
-  const courseOptions = collegeCourses.length > 0 ? collegeCourses : courses;
+  const courseLocked = collegesAvailable && !selectedCollege;
+  // Fallback path (unauthenticated /api/colleges/public returned empty):
+  // there is no per-college catalogue to enforce, so allow the global list.
+  const courseOptions = collegesAvailable ? collegeCourses : courses;
   // Place filter narrows the College dropdown to one city.
   const [place, setPlace] = React.useState(() => {
     if (!selectedCollege?.place) return "";
@@ -309,6 +315,7 @@ function StepCourse({ app, setField, courses, colleges }) {
                 const cnorm = normalizePlace(selectedCollege.place || "");
                 if (cnorm.toLowerCase() !== next.toLowerCase()) {
                   setField("course", "preferred_college", "");
+                  setField("course", "interested_course", "");
                 }
               }
             }}
@@ -321,7 +328,7 @@ function StepCourse({ app, setField, courses, colleges }) {
           </Select>
         </Field>
         <Field label="Preferred College">
-          {(colleges?.length || 0) > 0 ? (
+          {collegesAvailable ? (
             <CollegeSelect
               value={f.preferred_college}
               onChange={(name) => {
@@ -345,9 +352,25 @@ function StepCourse({ app, setField, courses, colleges }) {
           )}
         </Field>
         <Field label="Interested Course" required>
-          <Select value={f.interested_course} onValueChange={(v) => setField("course", "interested_course", v)}>
-            <SelectTrigger data-testid="co-course"><SelectValue placeholder="Pick a course" /></SelectTrigger>
-            <SelectContent>{courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+          <Select
+            value={f.interested_course}
+            onValueChange={(v) => setField("course", "interested_course", v)}
+            disabled={courseLocked}
+          >
+            <SelectTrigger data-testid="co-course">
+              <SelectValue placeholder={courseLocked ? "Select a college first" : "Pick a course"} />
+            </SelectTrigger>
+            <SelectContent>
+              {courseOptions.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground" data-testid="co-course-empty">
+                  {collegesAvailable && selectedCollege
+                    ? "No courses listed for this college yet."
+                    : "No courses available."}
+                </div>
+              ) : (
+                courseOptions.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)
+              )}
+            </SelectContent>
           </Select>
         </Field>
         <Field label="Academic Year">
