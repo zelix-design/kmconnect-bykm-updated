@@ -284,15 +284,16 @@ function StepBasic({ app, setField }) {
 // ---- Step 2: Course ----
 function StepCourse({ app, setField, courses, colleges }) {
   const f = app.course;
-  // Strict cascade: City → College → Course. When we have a database-backed
-  // colleges list, the course dropdown stays locked until a college is picked,
-  // and then shows ONLY that college's courses (not the global catalogue).
+  // Strict 3-step cascade: City → College → Course.
+  //   • City must be picked first; the College dropdown is locked until then.
+  //   • College must be picked next; the Course dropdown is locked until then.
+  //   • Course list comes from the selected college's catalogue ONLY.
   const collegesAvailable = (colleges?.length || 0) > 0;
   const selectedCollege = (colleges || []).find((c) => c.name === f.preferred_college);
   const collegeCourses = (selectedCollege?.courses || []).filter(Boolean);
-  const courseLocked = collegesAvailable && !selectedCollege;
   // Fallback path (unauthenticated /api/colleges/public returned empty):
-  // there is no per-college catalogue to enforce, so allow the global list.
+  // there is no per-college catalogue to enforce, so allow the global list and
+  // skip the city/college locks (we don't have the data to enforce them).
   const courseOptions = collegesAvailable ? collegeCourses : courses;
   // Place filter narrows the College dropdown to one city.
   const [place, setPlace] = React.useState(() => {
@@ -300,17 +301,18 @@ function StepCourse({ app, setField, courses, colleges }) {
     const norm = normalizePlace(selectedCollege.place);
     return COLLEGE_PLACES.includes(norm) ? norm : "";
   });
+  const collegeLocked = collegesAvailable && !place;
+  const courseLocked = collegesAvailable && !selectedCollege;
   return (
     <div>
       <SectionTitle eyebrow="Section B" title="Course & Admission" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Place / City">
+        <Field label="Place / City" required={collegesAvailable}>
           <Select
-            value={place || "_all"}
-            onValueChange={(v) => {
-              const next = v === "_all" ? "" : v;
+            value={place}
+            onValueChange={(next) => {
               setPlace(next);
-              // If current college isn't in the new place, clear the selection
+              // If current college isn't in the new place, clear college + course
               if (next && selectedCollege) {
                 const cnorm = normalizePlace(selectedCollege.place || "");
                 if (cnorm.toLowerCase() !== next.toLowerCase()) {
@@ -320,14 +322,13 @@ function StepCourse({ app, setField, courses, colleges }) {
               }
             }}
           >
-            <SelectTrigger data-testid="co-place"><SelectValue placeholder="Any city" /></SelectTrigger>
+            <SelectTrigger data-testid="co-place"><SelectValue placeholder="Select a city" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_all">Any city</SelectItem>
               {COLLEGE_PLACES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Preferred College">
+        <Field label="Preferred College" required={collegesAvailable}>
           {collegesAvailable ? (
             <CollegeSelect
               value={f.preferred_college}
@@ -340,9 +341,10 @@ function StepCourse({ app, setField, courses, colleges }) {
                 }
               }}
               testid="co-college"
-              placeholder={place ? `Pick a college in ${place}` : "Pick a college"}
+              placeholder={collegeLocked ? "Select a city first" : `Pick a college in ${place}`}
               colleges={colleges}
               placeFilter={place}
+              disabled={collegeLocked}
             />
           ) : (
             <Select value={f.preferred_college} onValueChange={(v) => setField("course", "preferred_college", v)}>

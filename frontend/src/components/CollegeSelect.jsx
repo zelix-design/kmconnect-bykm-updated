@@ -23,6 +23,7 @@ export default function CollegeSelect({
   testid = "college-select",
   colleges: presetList,
   placeFilter,
+  disabled = false,
 }) {
   const [list, setList] = useState(presetList || []);
   const [loading, setLoading] = useState(!presetList);
@@ -82,12 +83,13 @@ export default function CollegeSelect({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open && !disabled} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
         <button
           type="button"
           data-testid={testid}
-          className="w-full h-10 px-3 rounded-md border border-input bg-card text-sm flex items-center justify-between gap-2 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+          disabled={disabled}
+          className="w-full h-10 px-3 rounded-md border border-input bg-card text-sm flex items-center justify-between gap-2 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span className="flex items-center gap-2 min-w-0 flex-1">
             <Buildings size={14} className="text-muted-foreground/70 shrink-0" />
