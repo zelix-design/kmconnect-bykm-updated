@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast, Toaster } from "sonner";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
+import { API as ROOT_API } from "@/lib/api";
 import {
   User, GraduationCap, Phone, Books, Receipt, UserCircle,
   ArrowRight, ArrowLeft, CheckCircle, Sparkle, Copy, LockSimple,
@@ -20,7 +21,9 @@ import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 
 const ICONS = { User, GraduationCap, Phone, Books, Receipt, UserCircle };
-const API = `${process.env.REACT_APP_BACKEND_URL}/api/public`;
+// Reuse the normalised base URL from lib/api so any missing `https://` scheme
+// in REACT_APP_BACKEND_URL is recovered consistently across the app.
+const API = `${ROOT_API}/public`;
 
 export default function PublicApplication() {
   const [searchParams] = useSearchParams();

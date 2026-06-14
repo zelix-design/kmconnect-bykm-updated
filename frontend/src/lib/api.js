@@ -1,6 +1,20 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// Defensive URL normalization: in some Vercel/Netlify dashboards, operators
+// configure REACT_APP_BACKEND_URL without the scheme (e.g. just the bare
+// "myapp.up.railway.app" instead of "https://myapp.up.railway.app"). Without
+// a scheme, axios treats the value as a relative path and prepends the
+// current origin — so requests silently land on the SPA host, return the
+// index.html, and look like a successful 200 with empty payload. Catch that
+// here so a misconfigured env var still produces a working app.
+function normalizeBackend(raw) {
+  const v = (raw || "").trim().replace(/\/+$/, "");
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return v;
+  return `https://${v}`;
+}
+
+const BACKEND_URL = normalizeBackend(process.env.REACT_APP_BACKEND_URL);
 export const API = `${BACKEND_URL}/api`;
 
 // Token storage helpers — used as a FALLBACK when cross-origin cookies are
