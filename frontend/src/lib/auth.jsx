@@ -12,7 +12,26 @@ export function AuthProvider({ children }) {
       const { data } = await api.get("/auth/me");
       setUser(data);
     } catch {
+      // Boot-time auth check failed → mark unauthenticated AND clear any
+      // stale stored token so the interceptor doesn't keep sending it.
+      setStoredToken(null);
       setUser(false);
+    }
+  }, []);
+
+  // Silent refresh used by the focus/visibility listener. Unlike fetchMe this
+  // NEVER logs the user out on failure — mobile browsers fire visibility
+  // events on every keyboard popup, app switch, biometric prompt, etc. A
+  // transient /auth/me hiccup (iOS Safari ITP cookie blip, brief Wi-Fi/4G
+  // handover) must not blast an authenticated user back to /login.
+  const silentRefresh = useCallback(async () => {
+    try {
+      const { data } = await api.get("/auth/me");
+      setUser(data);
+    } catch {
+      // Keep the current session as-is. The next request that ACTUALLY
+      // matters (user-initiated navigation / mutation) will surface a real
+      // error if the session is genuinely dead.
     }
   }, []);
 
@@ -24,7 +43,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!user || user === false) return;
     const onVisible = () => {
-      if (document.visibilityState === "visible") fetchMe();
+      if (document.visibilityState === "visible") silentRefresh();
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
@@ -32,7 +51,7 @@ export function AuthProvider({ children }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [user, fetchMe]);
+  }, [user, silentRefresh]);
 
   const login = useCallback(async (email, password) => {
     setError("");

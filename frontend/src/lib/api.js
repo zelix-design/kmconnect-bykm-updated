@@ -87,16 +87,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// If the server tells us the token is invalid/expired, wipe local storage so
-// the auth context can pick up the change on the next /auth/me poll.
+// If the server tells us the token is invalid/expired we leave the stored
+// token alone. Previously we wiped it on every 401, but that caused mobile
+// users to be silently logged out whenever a transient /auth/me request
+// failed (e.g., iOS Safari ITP cookie blips, brief Wi-Fi/4G handovers).
+// The token is only cleared explicitly by `logout()` or by `fetchMe()` on
+// the *first* authentication check after page load — see auth.jsx.
 api.interceptors.response.use(
   (resp) => resp,
-  (err) => {
-    if (err?.response?.status === 401) {
-      setStoredToken(null);
-    }
-    return Promise.reject(err);
-  },
+  (err) => Promise.reject(err),
 );
 
 export function formatApiError(detail) {
