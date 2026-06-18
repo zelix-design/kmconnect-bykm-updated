@@ -10,7 +10,7 @@ import {
 import { StatCard } from "@/components/dashboard/StatCard";
 import StaffBreakdownList from "@/components/office-dashboard/StaffBreakdownList";
 import {
-  AccountsMiniCard, UpcomingBirthdaysCard, IncentiveRuleCard,
+  UpcomingBirthdaysCard, IncentiveRuleCard,
 } from "@/components/office-dashboard/AsideCards";
 import StaffPickerDialog from "@/components/office-dashboard/StaffPickerDialog";
 
@@ -32,7 +32,6 @@ export default function OfficeDashboard() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const [allStaff, setAllStaff] = useState([]);
-  const [accounts, setAccounts] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,12 +46,6 @@ export default function OfficeDashboard() {
   }, [windowKey]);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    api.get("/accounts")
-      .then((r) => setAccounts(r.data || []))
-      .catch((err) => console.error("[office-dashboard] accounts fetch failed:", err?.message || err));
-  }, []);
 
   const markPaid = async (studentId) => {
     try {
@@ -160,7 +153,6 @@ export default function OfficeDashboard() {
         />
 
         <div className="space-y-4">
-          <AccountsMiniCard accounts={accounts} currency={currency} />
           <UpcomingBirthdaysCard birthdays={birthdays} />
           <IncentiveRuleCard onAddAdmission={openAdmissionPicker} />
         </div>
