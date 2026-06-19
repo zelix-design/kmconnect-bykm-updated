@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SortAscending } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SquaresFour, Rows } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
 import StudentCard from "@/components/students/StudentCard";
+import StudentsTable from "@/components/students/StudentsTable";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
@@ -48,33 +49,10 @@ function recentRank(s) {
 // Helpers for the sortable Home district / Hometown column. We use the
 // communication.city captured during the public application step — this is
 // the student's hometown, distinct from their college's city.
-function hometownOf(s) {
+export function hometownOf(s) {
   const comm = s?.application?.communication;
   if (!comm) return "";
   return String(comm.city || comm.state || "").trim();
-}
-
-// Status sort priority: enrolled > inquiry > cancelled (active leads first).
-const STATUS_RANK = { enrolled: 0, inquiry: 1, cancelled: 2 };
-
-const SORT_OPTIONS = [
-  { value: "recent_desc",    label: "Most recent first" },
-  { value: "recent_asc",     label: "Oldest first" },
-  { value: "month_desc",     label: "By month (newest)" },
-  { value: "month_asc",      label: "By month (oldest)" },
-  { value: "name_asc",       label: "Name · A → Z" },
-  { value: "name_desc",      label: "Name · Z → A" },
-  { value: "college_asc",    label: "College · A → Z" },
-  { value: "city_asc",       label: "College city · A → Z" },
-  { value: "district_asc",   label: "Hometown / district · A → Z" },
-  { value: "reference_asc",  label: "Reference · A → Z" },
-  { value: "status_asc",     label: "Status (enrolled first)" },
-];
-
-// Pull the YYYY-MM bucket for the month-grouped sort.
-function monthKey(s) {
-  const d = s.enrollment_date || s.created_at || "";
-  return String(d).slice(0, 7); // "YYYY-MM" or "" when empty
 }
 
 export default function Students() {
@@ -93,7 +71,14 @@ export default function Students() {
   const [qCollege, setQCollege] = useState("");
   const [qRef, setQRef] = useState("");
   const [qCity, setQCity] = useState("_all"); // "_all" | one of COLLEGE_PLACES | "_other"
-  const [sort, setSort] = useState("recent_desc");
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem("students-view") || "card"; }
+    catch { return "card"; }
+  });
+  const switchView = (next) => {
+    setView(next);
+    try { localStorage.setItem("students-view", next); } catch (e) { void e; }
+  };
 
   // Super admin: client picker dialog before opening the student form
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -191,46 +176,16 @@ export default function Students() {
 
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
-    const arr = [...list]
+    return [...list]
       .filter((s) => m(s.name, qName) && m(s.college, qCollege) && m(s.reference, qRef))
       .filter((s) => {
         if (qCity === "_all") return true;
         const c = cityOfStudent(s);
         if (qCity === "_other") return c && !COLLEGE_PLACES.includes(c);
         return c === qCity;
-      });
-
-    // ---- Sort ----
-    const cmp = (a, b) => {
-      switch (sort) {
-        case "recent_asc":
-          return String(recentRank(a)).localeCompare(String(recentRank(b)));
-        case "month_desc":
-          return String(monthKey(b)).localeCompare(String(monthKey(a)));
-        case "month_asc":
-          return String(monthKey(a)).localeCompare(String(monthKey(b)));
-        case "name_asc":
-          return String(a.name || "").localeCompare(String(b.name || ""));
-        case "name_desc":
-          return String(b.name || "").localeCompare(String(a.name || ""));
-        case "college_asc":
-          return String(a.college || "").localeCompare(String(b.college || ""));
-        case "city_asc":
-          return String(cityOfStudent(a) || "").localeCompare(String(cityOfStudent(b) || ""));
-        case "district_asc":
-          return String(hometownOf(a) || "").localeCompare(String(hometownOf(b) || ""));
-        case "reference_asc":
-          return String(a.reference || "").localeCompare(String(b.reference || ""));
-        case "status_asc":
-          return (STATUS_RANK[a.status] ?? 99) - (STATUS_RANK[b.status] ?? 99);
-        case "recent_desc":
-        default:
-          return String(recentRank(b)).localeCompare(String(recentRank(a)));
-      }
-    };
-    arr.sort(cmp);
-    return arr;
-  }, [list, qName, qCollege, qRef, qCity, sort, cityOfStudent]);
+      })
+      .sort((a, b) => String(recentRank(b)).localeCompare(String(recentRank(a))));
+  }, [list, qName, qCollege, qRef, qCity, cityOfStudent]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -256,7 +211,11 @@ export default function Students() {
         <div>
           <p className="label-eyebrow">Pipeline</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Students</h1>
-          <p className="text-sm text-muted-foreground mt-1">Recent enrollments — search by name, college, or reference.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {view === "list"
+              ? "Spreadsheet view — click any column header to sort, type under the title to filter that column."
+              : "Recent enrollments — search by name, college, or reference."}
+          </p>
           {action === "log_payment" && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-gradient-soft border border-amber-500/30 text-sm text-foreground" data-testid="log-payment-banner">
               <ArrowRight size={14} className="text-amber-700 dark:text-amber-400" />
@@ -266,6 +225,44 @@ export default function Students() {
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Card / List view toggle */}
+            <div
+              className="inline-flex items-center rounded-md border border-border bg-card p-0.5 h-10"
+              data-testid="students-view-toggle"
+              role="tablist"
+              aria-label="Students view"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "card"}
+                onClick={() => switchView("card")}
+                data-testid="students-view-card"
+                className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                  view === "card"
+                    ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <SquaresFour size={15} weight={view === "card" ? "fill" : "regular"} />
+                <span className="hidden sm:inline">Card</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "list"}
+                onClick={() => switchView("list")}
+                data-testid="students-view-list"
+                className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                  view === "list"
+                    ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Rows size={15} weight={view === "list" ? "fill" : "regular"} />
+                <span className="hidden sm:inline">List</span>
+              </button>
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -498,7 +495,7 @@ export default function Students() {
       </header>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" data-testid="students-filters">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="students-filters">
         <div className="relative">
           <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
@@ -552,21 +549,6 @@ export default function Students() {
             </SelectContent>
           </Select>
         </div>
-        <div className="relative">
-          <SortAscending size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger className="pl-9 bg-card" data-testid="filter-sort">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value} data-testid={`filter-sort-${o.value}`}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -574,6 +556,22 @@ export default function Students() {
           <StudentIcon size={32} className="mx-auto text-muted-foreground/50 mb-3" />
           {list.length === 0 ? "No students yet. Add one to start tracking fees." : "No students match these filters."}
         </Card>
+      ) : view === "list" ? (
+        <>
+          <p className="label-eyebrow" data-testid="recent-eyebrow">
+            {qCity === "_all"
+              ? `Recent enrollments — ${filtered.length}`
+              : qCity === "_other"
+              ? `Other cities — ${filtered.length} enrollments`
+              : `${qCity} — ${filtered.length} enrollments`}
+          </p>
+          <StudentsTable
+            students={filtered}
+            currency={currency}
+            cityOfStudent={cityOfStudent}
+            hometownOf={hometownOf}
+          />
+        </>
       ) : (
         <>
           <p className="label-eyebrow" data-testid="recent-eyebrow">
