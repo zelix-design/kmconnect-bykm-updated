@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SortAscending } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
@@ -45,6 +45,38 @@ function recentRank(s) {
   return s.enrollment_date || s.created_at || "";
 }
 
+// Helpers for the sortable Home district / Hometown column. We use the
+// communication.city captured during the public application step — this is
+// the student's hometown, distinct from their college's city.
+function hometownOf(s) {
+  const comm = s?.application?.communication;
+  if (!comm) return "";
+  return String(comm.city || comm.state || "").trim();
+}
+
+// Status sort priority: enrolled > inquiry > cancelled (active leads first).
+const STATUS_RANK = { enrolled: 0, inquiry: 1, cancelled: 2 };
+
+const SORT_OPTIONS = [
+  { value: "recent_desc",    label: "Most recent first" },
+  { value: "recent_asc",     label: "Oldest first" },
+  { value: "month_desc",     label: "By month (newest)" },
+  { value: "month_asc",      label: "By month (oldest)" },
+  { value: "name_asc",       label: "Name · A → Z" },
+  { value: "name_desc",      label: "Name · Z → A" },
+  { value: "college_asc",    label: "College · A → Z" },
+  { value: "city_asc",       label: "College city · A → Z" },
+  { value: "district_asc",   label: "Hometown / district · A → Z" },
+  { value: "reference_asc",  label: "Reference · A → Z" },
+  { value: "status_asc",     label: "Status (enrolled first)" },
+];
+
+// Pull the YYYY-MM bucket for the month-grouped sort.
+function monthKey(s) {
+  const d = s.enrollment_date || s.created_at || "";
+  return String(d).slice(0, 7); // "YYYY-MM" or "" when empty
+}
+
 export default function Students() {
   const { user } = useAuth();
   const allowEdit = canEdit(user, "students");
@@ -61,6 +93,7 @@ export default function Students() {
   const [qCollege, setQCollege] = useState("");
   const [qRef, setQRef] = useState("");
   const [qCity, setQCity] = useState("_all"); // "_all" | one of COLLEGE_PLACES | "_other"
+  const [sort, setSort] = useState("recent_desc");
 
   // Super admin: client picker dialog before opening the student form
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -158,16 +191,46 @@ export default function Students() {
 
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
-    return [...list]
+    const arr = [...list]
       .filter((s) => m(s.name, qName) && m(s.college, qCollege) && m(s.reference, qRef))
       .filter((s) => {
         if (qCity === "_all") return true;
         const c = cityOfStudent(s);
         if (qCity === "_other") return c && !COLLEGE_PLACES.includes(c);
         return c === qCity;
-      })
-      .sort((a, b) => String(recentRank(b)).localeCompare(String(recentRank(a))));
-  }, [list, qName, qCollege, qRef, qCity, cityOfStudent]);
+      });
+
+    // ---- Sort ----
+    const cmp = (a, b) => {
+      switch (sort) {
+        case "recent_asc":
+          return String(recentRank(a)).localeCompare(String(recentRank(b)));
+        case "month_desc":
+          return String(monthKey(b)).localeCompare(String(monthKey(a)));
+        case "month_asc":
+          return String(monthKey(a)).localeCompare(String(monthKey(b)));
+        case "name_asc":
+          return String(a.name || "").localeCompare(String(b.name || ""));
+        case "name_desc":
+          return String(b.name || "").localeCompare(String(a.name || ""));
+        case "college_asc":
+          return String(a.college || "").localeCompare(String(b.college || ""));
+        case "city_asc":
+          return String(cityOfStudent(a) || "").localeCompare(String(cityOfStudent(b) || ""));
+        case "district_asc":
+          return String(hometownOf(a) || "").localeCompare(String(hometownOf(b) || ""));
+        case "reference_asc":
+          return String(a.reference || "").localeCompare(String(b.reference || ""));
+        case "status_asc":
+          return (STATUS_RANK[a.status] ?? 99) - (STATUS_RANK[b.status] ?? 99);
+        case "recent_desc":
+        default:
+          return String(recentRank(b)).localeCompare(String(recentRank(a)));
+      }
+    };
+    arr.sort(cmp);
+    return arr;
+  }, [list, qName, qCollege, qRef, qCity, sort, cityOfStudent]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -435,7 +498,7 @@ export default function Students() {
       </header>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="students-filters">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" data-testid="students-filters">
         <div className="relative">
           <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
@@ -486,6 +549,21 @@ export default function Students() {
                   Other · {cityCounts._other}
                 </SelectItem>
               )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative">
+          <SortAscending size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
+          <Select value={sort} onValueChange={setSort}>
+            <SelectTrigger className="pl-9 bg-card" data-testid="filter-sort">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} data-testid={`filter-sort-${o.value}`}>
+                  {o.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
