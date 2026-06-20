@@ -8,7 +8,7 @@ import BottomNav from "@/components/BottomNav";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
-  ShieldCheck, ReceiptX, Buildings,
+  ShieldCheck, ReceiptX, Buildings, Coins,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -21,6 +21,7 @@ const ALL_NAV = [
   { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry", userRoleAllowed: true },
   { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions", perm: "transactions", userRoleAllowed: true },
   { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", perm: "accounts", userRoleAllowed: true },
+  { to: "/my-ledger", label: "My ledger", icon: Coins, tid: "nav-my-ledger", roles: ["user"], userRoleAllowed: true },
   { to: "/invoices", label: "Invoices", icon: FileText, tid: "nav-invoices", roles: ["super_admin"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "nav-clients", perm: "clients" },
   { to: "/students", label: "Students", icon: Student, tid: "nav-students", perm: "students" },
@@ -39,6 +40,7 @@ const PAGE_TITLES = {
   "/quick-entry": "Quick entry",
   "/transactions": "Transactions",
   "/accounts": "Accounts",
+  "/my-ledger": "My ledger",
   "/invoices": "Invoices",
   "/clients": "Clients",
   "/students": "Students",

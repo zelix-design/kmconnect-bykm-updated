@@ -14,6 +14,7 @@ import {
   ClipboardText,
   CurrencyCircleDollar,
   ReceiptX,
+  Coins,
 } from "@phosphor-icons/react";
 
 // Bottom nav side items, ranked. We render up to 4 visible items + the center FAB.
@@ -21,6 +22,7 @@ import {
 //   roles → if provided, item is only visible to listed roles
 const ALL_SIDE_NAV = [
   { to: "/", label: "Home", icon: House, end: true, tid: "bottom-nav-home", perm: "overview" },
+  { to: "/my-ledger", label: "My ledger", icon: Coins, tid: "bottom-nav-my-ledger", roles: ["user"] },
   { to: "/students", label: "Students", icon: Student, tid: "bottom-nav-students", perm: "students" },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "bottom-nav-clients", perm: "clients" },
   { to: "/invoices", label: "Invoices", icon: Receipt, tid: "bottom-nav-invoices", roles: ["super_admin"] },

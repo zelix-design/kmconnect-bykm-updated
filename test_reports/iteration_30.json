@@ -1,0 +1,55 @@
+{
+  "summary": "Iteration 30 — My Ledger linked-user flow. Full E2E coverage of backend GET /api/users/me/ledger, invoice/transaction → linked_user notifications, double-count exclusion (linked_invoice_id & linked_sc_payment_invoice_id), role gating, sidebar+bottom-nav entries, filter strip, and notification click-through routing. 6/6 backend pytest tests pass; all critical frontend flows pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_user_ledger.py",
+    "/app/backend/tests/test_user_ledger_extra.py",
+    "/app/test_reports/pytest/iteration_30_ledger.xml",
+    "/app/test_reports/pytest/iteration_30_extra.xml"
+  ],
+  "tests_executed": {
+    "backend": [
+      "test_unlinked_account_gets_empty_ledger — PASS",
+      "test_sc_invoice_shows_in_ledger_and_notifies — PASS (linked_invoice notification fired, invoice row appears in ledger)",
+      "test_credit_and_debit_transactions_show_in_ledger — PASS (linked_transaction notifications x2, kinds=[credit,debit], net=800)",
+      "test_auto_invoice_expense_mirror_not_double_counted — PASS (only invoice row, 0 debits)",
+      "test_sc_payment_mirror_income_excluded_from_ledger — PASS (previous_sc_payment auto-income tx filtered out)",
+      "test_manual_credit_alongside_invoice_both_visible — PASS (manual income with no linked_* id appears)"
+    ],
+    "frontend": [
+      "Linked user login → desktop sidebar shows nav-my-ledger — PASS",
+      "LinkedUserDashboard SC Received tile (linked-kpi-sc-received) clickable Link → /my-ledger — PASS",
+      "/my-ledger renders my-ledger-page with all 4 stat tiles (invoices/credits/debits/net) — PASS",
+      "Filter strip renders all 4 filter buttons (all/invoices/credits/debits) — PASS",
+      "3 timeline rows (1 invoice + 1 credit + 1 debit, NO double-count of auto-mirror expense) — PASS",
+      "Invoice row shows 'Service Charge · #SC-E2E-001' label with SC type — PASS",
+      "Filter buttons correctly narrow timeline (Invoices→1, Credits→1, Debits→1) — PASS",
+      "Notifications bell shows 3 unread (SC invoice + credit + debit) for linked user — PASS",
+      "Clicking a notification routes to /my-ledger AND marks as read (badge 3→2) — PASS",
+      "super_admin: no nav-my-ledger sidebar, /my-ledger PermGate-redirects to / — PASS",
+      "office_admin: no nav-my-ledger sidebar, /my-ledger PermGate-redirects to / — PASS",
+      "Mobile (390x844) linked user: bottom-nav-my-ledger testid exists — PASS"
+    ]
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LinkedUserLedger.jsx — `border-amber-200/60` accent classes are applied to StatTile but the Card component may not surface the border colour without `border` utility (cosmetic only, tiles still render correctly).",
+    "routers/invoices.py _notify_linked_user_of_invoice gates on actor.role=='super_admin' — correct per spec; office_admin invoices to a linked client will NOT notify the user (matches PRD).",
+    "routers/users.py my_ledger uses `to_list(2000)` for transactions — fine for current scale, consider pagination once a sub-agent crosses ~1k entries.",
+    "Filter for excluded auto-mirror transactions runs in Python after fetch (in-memory) — acceptable; could be moved to the Mongo query with `$and: [{linked_invoice_id: {$in:[null]}}]` for slight efficiency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_user_ledger_extra.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (12/12 flows)"},
+  "test_credentials": "Super admin: admin@kmfoundation.online / Admin@786; Office admin: blr1@finflow.com / Office@123; Linked user seeded transiently as e2e_ledger_user@example.com (cleaned up).",
+  "seed_data_creation": "Created 'E2E Ledger Agent' sub_agent_associate client + 'e2e_ledger_user@example.com' linked user + 1 SC invoice (SC-E2E-001 ₹2500) + 1 income tx (₹1000) + 1 expense tx (₹400) for UI E2E. All deleted at end of run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 30 feature is fully validated. Notification testids use pattern `notification-{uuid}` (NOT `notification-item-{uuid}` as the review request stated). The bell parent testid is `notifications-bell`. Linked user can see 'My ledger' in both desktop sidebar (nav-my-ledger) and mobile bottom-nav (bottom-nav-my-ledger). Backend filters both `linked_invoice_id` and `linked_sc_payment_invoice_id` to prevent double-count — verified both with new test_user_ledger_extra.py."
+}

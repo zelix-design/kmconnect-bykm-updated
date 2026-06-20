@@ -24,6 +24,7 @@ import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
 import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
+import LinkedUserLedger from "@/pages/LinkedUserLedger";
 import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {
@@ -49,6 +50,7 @@ function PublicOnly({ children }) {
 // Module-level constants so the `roles` prop on PermGate doesn't allocate a
 // fresh array each render — keeps PermGate / its children stable.
 const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
+const USER_ONLY = Object.freeze(["user"]);
 
 export default function App() {
   return (
@@ -75,6 +77,7 @@ export default function App() {
             <Route path="/categories" element={<Categories />} />
             <Route path="/settings" element={<PermGate page="settings"><Settings /></PermGate>} />
             <Route path="/users" element={<PermGate roles={SUPER_ADMIN_ONLY}><Users /></PermGate>} />
+            <Route path="/my-ledger" element={<PermGate roles={USER_ONLY}><LinkedUserLedger /></PermGate>} />
             <Route path="/expense-requests" element={<PermGate page="expense_requests"><ExpenseRequests /></PermGate>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

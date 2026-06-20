@@ -8,6 +8,7 @@ from pymongo.errors import OperationFailure
 from db import client, db
 from auth_lib import get_current_user, gen_id, now_iso
 from models import InvoiceIn
+from routers.notifications import notify_users
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 log = logging.getLogger(__name__)
@@ -176,6 +177,35 @@ async def _sync_invoice_expense_transactions(user_id: str, invoice: dict) -> Non
             await db.transactions.insert_many(new_docs)
 
 
+async def _notify_linked_user_of_invoice(invoice: dict, actor: dict) -> None:
+    """If the invoice's ``client_id`` matches a "user" role account's
+    ``linked_client_id`` AND the actor is a super_admin, fire an in-app
+    notification + push so the sub-agent sees the new invoice on their
+    dashboard. No-op when client_id is missing or no linked user exists."""
+    cid = invoice.get("client_id")
+    if not cid or actor.get("role") != "super_admin":
+        return
+    linked = await db.users.find_one(
+        {"role": "user", "linked_client_id": cid, "approval_status": "approved"},
+        {"_id": 0, "id": 1},
+    )
+    if not linked:
+        return
+    inv_type = invoice.get("invoice_type") or "invoice"
+    type_label = "Service Charge" if inv_type == "service_charge" else "Invoice"
+    total = float(invoice.get("total") or 0)
+    inv_no = invoice.get("invoice_number") or invoice.get("id")
+    await notify_users(
+        [linked["id"]],
+        type="linked_invoice",
+        title=f"💼 New {type_label} invoice · #{inv_no}",
+        message=f"Office has issued you a {type_label.lower()} invoice of ₹{total:,.0f}. Tap to view ledger.",
+        link="/my-ledger",
+        metadata={"invoice_id": invoice.get("id"), "amount": total, "invoice_type": inv_type},
+        actor_user_id=actor.get("id"),
+    )
+
+
 @router.get("/open-credits")
 async def open_credits(
     user: dict = Depends(get_current_user),
@@ -251,6 +281,7 @@ async def create_invoice(payload: InvoiceIn, user: dict = Depends(get_current_us
     doc.pop("_id", None)
     await _sync_invoice_expense_transactions(user["id"], doc)
     await _sync_invoice_sc_payment_transaction(user["id"], doc)
+    await _notify_linked_user_of_invoice(doc, user)
     return doc
 
 

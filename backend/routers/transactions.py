@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import TransactionIn
-from routers.notifications import notify_super_admins
+from routers.notifications import notify_super_admins, notify_users
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 
@@ -56,6 +56,34 @@ async def create_transaction(payload: TransactionIn, user: dict = Depends(requir
             actor_user_id=user["id"],
             metadata={"transaction_id": doc["id"], "amount": payload.amount, "type": payload.type},
         )
+    # Notify the linked "user" sub-agent when a super-admin posts a transaction
+    # to their client (credit OR debit). Powers the My Ledger page.
+    if user.get("role") == "super_admin":
+        cid = doc.get("client_id")
+        if cid:
+            linked = await db.users.find_one(
+                {"role": "user", "linked_client_id": cid, "approval_status": "approved"},
+                {"_id": 0, "id": 1},
+            )
+            if linked:
+                is_income = payload.type == "income"
+                title = (
+                    f"💰 Credit posted · ₹{payload.amount:,.0f}" if is_income
+                    else f"📤 Debit posted · ₹{payload.amount:,.0f}"
+                )
+                await notify_users(
+                    [linked["id"]],
+                    type="linked_transaction",
+                    title=title,
+                    message=(payload.description or "Open ledger for details"),
+                    link="/my-ledger",
+                    metadata={
+                        "transaction_id": doc["id"],
+                        "amount": payload.amount,
+                        "type": payload.type,
+                    },
+                    actor_user_id=user["id"],
+                )
     return doc
 
 
