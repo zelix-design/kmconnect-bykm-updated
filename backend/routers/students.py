@@ -499,12 +499,27 @@ async def my_sc_earned(user: dict = Depends(get_current_user)):
             grand_count += s_count
 
     by_student.sort(key=lambda r: r["total"], reverse=True)
+
+    # ---- SC RECEIVED via invoices ----
+    # Super-admin generates service_charge invoices to pay out the SC owed
+    # to this sub-agent. Sum the totals of all such invoices so the linked
+    # user can see how much has actually been invoiced/received vs earned.
+    invoice_rows = await db.invoices.find(
+        {"client_id": linked_id, "invoice_type": "service_charge"},
+        {"_id": 0, "id": 1, "invoice_number": 1, "issue_date": 1, "total": 1, "status": 1},
+    ).to_list(500)
+    sc_received = round(sum(float(inv.get("total") or 0) for inv in invoice_rows), 2)
+
     return {
         "client_id": linked_id,
         "client_name": linked_name,
         "total": round(grand_total, 2),
         "count": grand_count,
         "by_student": by_student,
+        # SC actually invoiced/received from the office to this sub-agent
+        "sc_received": sc_received,
+        "invoices_count": len(invoice_rows),
+        "invoices": invoice_rows,
     }
 
 
