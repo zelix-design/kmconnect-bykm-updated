@@ -4,11 +4,7 @@ import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Plus, PencilSimple, Trash, CaretDown, CaretUp } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentPdf } from "@/lib/studentExports";
@@ -19,9 +15,9 @@ import HeaderCard from "@/components/student-detail/HeaderCard";
 import EditApplicationDialog from "@/components/student-detail/EditApplicationDialog";
 import SummaryTiles from "@/components/student-detail/SummaryTiles";
 import PaymentDialog from "@/components/student-detail/PaymentDialog";
+import ScheduleDialog from "@/components/student-detail/ScheduleDialog";
 import {
   RECEIVED_IN, FEE_TYPE_LABELS, PAYMENT_MODES, SUB_AGENT_TYPES,
-  PRESET_SCHEDULE_LABELS,
   nextScheduleLabel, emptyPayment,
 } from "@/components/student-detail/constants";
 
@@ -302,36 +298,6 @@ export default function StudentDetail() {
             <p className="label-eyebrow">Payment schedule</p>
             <h3 className="font-display text-lg mt-0.5">Planned installments</h3>
           </div>
-          <Dialog open={schDlg.open} onOpenChange={(v) => setSchDlg({ ...schDlg, open: v })}>
-            <DialogContent className="bg-card">
-              <DialogHeader>
-                <DialogTitle className="font-display">{schDlg.editing ? "Edit" : "Add"} schedule</DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">Define a planned payment installment.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={submitSch} className="space-y-3">
-                <div>
-                  <Label>Schedule</Label>
-                  <Select value={schDlg.form.label} onValueChange={(v) => setSchDlg({ ...schDlg, form: { ...schDlg.form, label: v } })}>
-                    <SelectTrigger data-testid="sch-label"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PRESET_SCHEDULE_LABELS.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                      {!PRESET_SCHEDULE_LABELS.includes(schDlg.form.label) && schDlg.form.label && (
-                        <SelectItem value={schDlg.form.label}>{schDlg.form.label}</SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <Input className="mt-2" placeholder="Or type a custom label" value={schDlg.form.label} onChange={(e) => setSchDlg({ ...schDlg, form: { ...schDlg.form, label: e.target.value } })} />
-                </div>
-                <div><Label>Amount</Label><Input type="number" step="0.01" required value={schDlg.form.amount} onChange={(e) => setSchDlg({ ...schDlg, form: { ...schDlg.form, amount: e.target.value } })} data-testid="sch-amount" /></div>
-                <div><Label>Remarks</Label><Input value={schDlg.form.remarks} onChange={(e) => setSchDlg({ ...schDlg, form: { ...schDlg.form, remarks: e.target.value } })} placeholder="e.g. Booking Amount" data-testid="sch-remarks" /></div>
-                <div><Label>Due date</Label><Input type="date" value={schDlg.form.due_date} onChange={(e) => setSchDlg({ ...schDlg, form: { ...schDlg.form, due_date: e.target.value } })} /></div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setSchDlg({ ...schDlg, open: false })}>Cancel</Button>
-                  <Button type="submit" className="btn-amber border-0" data-testid="sch-save">Save</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
         </div>
         {(!s.schedules || s.schedules.length === 0) ? (
           <div className="p-10 text-center text-sm text-muted-foreground" data-testid="empty-schedules">No schedules yet.</div>
@@ -478,6 +444,12 @@ export default function StudentDetail() {
         accounts={accounts}
         clients={clients}
         onSubmit={submitPay}
+      />
+
+      <ScheduleDialog
+        state={schDlg}
+        setState={setSchDlg}
+        onSubmit={submitSch}
       />
 
       <ConvertToEnrolledDialog
