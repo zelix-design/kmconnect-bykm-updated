@@ -235,9 +235,12 @@ export default function NotificationsBell() {
   );
 }
 
-/** Tiny toggle that flips the device's Web Push subscription on/off. */
+/** Tiny toggle that flips the device's Web Push subscription on/off.
+ * Always renders so the user can discover the feature; when the runtime
+ * doesn't support Web Push (e.g. iOS Safari not yet installed as a PWA,
+ * or an in-app webview), clicking explains how to enable it. */
 function PushToggle() {
-  const [supported] = useState(() => isPushSupported());
+  const supported = isPushSupported();
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -251,10 +254,36 @@ function PushToggle() {
     return () => { cancelled = true; };
   }, [supported]);
 
-  if (!supported) return null;
+  const isIOS = typeof navigator !== "undefined" && /iPad|iPhone|iPod/.test(navigator.userAgent || "");
+  const isStandalone = typeof window !== "undefined" && (
+    window.matchMedia?.("(display-mode: standalone)")?.matches ||
+    window.navigator?.standalone === true
+  );
 
   const onClick = async () => {
     if (busy) return;
+    if (!supported) {
+      // Guide the user to enable push on platforms that need an extra step.
+      if (isIOS && !isStandalone) {
+        toast.message("Add to Home Screen to enable push", {
+          description: "Tap the Share icon in Safari, then 'Add to Home Screen'. Open the app from the home-screen icon and tap Enable again.",
+          duration: 8000,
+        });
+      } else {
+        toast.message("Push notifications unavailable", {
+          description: "This browser doesn't support push. Try Chrome, Edge, or open this site as an installed app.",
+          duration: 6000,
+        });
+      }
+      return;
+    }
+    if (permissionState() === "denied") {
+      toast.message("Notifications are blocked", {
+        description: "Open this site's settings in your browser and allow Notifications, then tap Enable again.",
+        duration: 7000,
+      });
+      return;
+    }
     setBusy(true);
     try {
       if (enabled) {
@@ -273,12 +302,19 @@ function PushToggle() {
     }
   };
 
+  const label = enabled ? "On" : "Enable";
+  const title = !supported
+    ? (isIOS && !isStandalone ? "Tap to learn how to enable push on iPhone" : "Push not supported in this browser")
+    : enabled
+      ? "Push notifications: ON (tap to disable)"
+      : "Enable push notifications on this device";
+
   return (
     <button
       type="button"
       onClick={onClick}
       data-testid="push-toggle"
-      title={enabled ? "Push notifications: ON (click to disable)" : "Enable push notifications on this device"}
+      title={title}
       className={`inline-flex items-center gap-1 text-xs rounded-full px-2.5 py-1 transition-colors ${
         enabled
           ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/25"
@@ -286,7 +322,7 @@ function PushToggle() {
       }`}
     >
       <BellRinging size={12} weight={enabled ? "fill" : "regular"} />
-      {enabled ? "On" : "Enable"}
+      {label}
     </button>
   );
 }

@@ -132,6 +132,21 @@ export default function BottomNav() {
   const sideItems = ALL_SIDE_NAV.filter((i) => isVisible(i, user)).slice(0, 4);
   const quickActions = ALL_QUICK_ACTIONS.filter((a) => isVisible(a, user));
 
+  // For linked sub-agent/associate-consultant "user" accounts the FAB
+  // bypasses the quick-add sheet and jumps straight to the public application
+  // form pre-filled with their referral code — they only need to onboard
+  // students and the sheet's other actions don't apply.
+  const linkedRef = user?.role === "user" ? user?.linked_client_id : null;
+  const isLinkedUser = !!linkedRef;
+  const onFabClick = () => {
+    if (isLinkedUser) {
+      nav(`/apply?ref=${encodeURIComponent(linkedRef)}`);
+    } else {
+      setOpen(true);
+    }
+  };
+  const fabVisible = isLinkedUser || quickActions.length > 0;
+
   return (
     <>
       {/* Action sheet */}
@@ -202,12 +217,12 @@ export default function BottomNav() {
           {sideItems[1] ? <NavItem item={sideItems[1]} active={isActive(sideItems[1])} /> : <EmptyNavSlot />}
           {/* Center FAB */}
           <div className="flex items-center justify-center">
-            {quickActions.length > 0 && (
+            {fabVisible && (
               <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={onFabClick}
                 data-testid="bottom-nav-add"
-                aria-label="Quick add"
+                aria-label={isLinkedUser ? "Add new student" : "Quick add"}
                 className="absolute -top-5 left-1/2 -translate-x-1/2 w-14 h-14 rounded-full bg-amber-gradient text-white shadow-lg shadow-orange-500/40 flex items-center justify-center active:scale-95 transition-transform ring-4 ring-background"
               >
                 <Plus size={26} weight="bold" />
