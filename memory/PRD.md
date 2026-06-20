@@ -708,3 +708,30 @@ See `/app/memory/test_credentials.md`.
 - [x] **Dashboard SC Received tile** (`linked-kpi-sc-received` on `LinkedUserDashboard`) is now a clickable `<Link to="/my-ledger">` with hover lift + ArrowUpRight glyph.
 - [x] **Nav entries**: AppShell sidebar `nav-my-ledger` + BottomNav `bottom-nav-my-ledger`, both gated `roles=['user']`.
 - [x] **Tests**: 6 new pytest cases (`test_user_ledger.py` 4 + `test_user_ledger_extra.py` 2). Curated suite 67/67 pass. Testing-agent E2E: 12/12 frontend flows pass (iteration_30.json).
+
+
+## Implementation status — 2026-02-26 (iteration 31: P3 refactor — break up oversized React components)
+Pure structural refactor — no behavioural changes. All `data-testid` props preserved verbatim.
+
+### Phase 1 — `pages/Users.jsx` (698 → 254 lines, **−63%**)
+- Extracted `components/users/CreateUserDialog.jsx` (282) — Create-user form, role picker, linked-client search, password toggle, lazy-load sub-agent / associate-consultant clients.
+- Extracted `components/users/PermissionsDialog.jsx` (105) — granular per-page permission editor with edit / view / none toggles.
+- Extracted `components/users/ResetPasswordDialog.jsx` (114) — super_admin password reset.
+
+### Phase 2 — `pages/Colleges.jsx` (627 → 245 lines, **−61%**)
+- Extracted `components/colleges/CollegeCard.jsx` (105) — card with header, place + deal-with row, capped course chips (6) with show-more toggle.
+- Extracted `components/colleges/CollegeFormDialog.jsx` (162) — Add / Edit dialog with place picker + Other fallback.
+- Extracted `components/colleges/BulkUploadDialog.jsx` (171) — CSV bulk upload + template download + result summary.
+
+### Phase 3 — `components/students/PasteApplicationDialog.jsx` (442 → 210 lines, **−52%**)
+- Extracted `components/students/PasteReviewStep.jsx` (265) — 4-section review form (Candidate / Course / Parents & Address / Academic) with all 13 `pa-*` field testids preserved.
+- Parent now owns paste state + parse trigger + save; child is the pure review view.
+
+### Phase 4 — `pages/StudentDetail.jsx` (506 → 478 lines, **−6%**)
+- Extracted `components/student-detail/ScheduleDialog.jsx` (92) — payment-schedule add/edit dialog.
+- Removed unused inline `Dialog`/`Input`/`Label`/`Select` imports from the parent.
+
+### Testing
+- Iteration 31 frontend regression sweep: **22/22 PASS** + **0 action items**. Verified Users, Colleges, StudentDetail, PasteApplicationDialog flows + regression on Dashboard, Transactions, Accounts, Invoices, Clients, Categories, Settings — zero console errors.
+- Backend untouched; curated pytest suite still 67/67.
+
