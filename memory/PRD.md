@@ -690,3 +690,21 @@ See `/app/memory/test_credentials.md`.
   - `super_admin`: bottom nav = Home / Students / Clients / Invoices + FAB; quick-sheet = all 4 super actions (no Expense request — explicit role whitelist).
 - [x] **Post-grant flip** verified: super admin grants `students=edit` to a user role → user re-login → `bottom-nav-students` + `qa-add-student` + `qa-paste-application` all appear.
 - [x] **Tests**: 4 new pytest cases in `test_iteration29_user_permissions.py`; curated suite 77/77 pass. Frontend matrix 100% pass.
+
+
+
+## Implementation status — 2026-02-26 (iteration 30: Linked-user "My ledger" + invoice/tx notifications)
+- [x] **New page `/my-ledger`** (`/app/frontend/src/pages/LinkedUserLedger.jsx`) — combined credit/debit/invoice timeline for a sub-agent / associate-consultant `user` account linked to a client.
+  - Header tile group: Invoices generated / Credits received / Debits posted / Net.
+  - Filter strip: All / Invoices / Credits / Debits with per-bucket counts.
+  - Timeline rows show kind badge (Invoice/Credit/Debit), label, formatted date, +/− amount, and SC marker for service-charge invoices.
+  - PermGate `roles={['user']}` — super_admin / office_admin redirect to /.
+- [x] **Backend `GET /api/users/me/ledger`** (`/app/backend/routers/users.py`) aggregates all `invoices` + `transactions` where `client_id == self.linked_client_id`. Returns `{client_id, client_name, totals:{credits,debits,invoices_total,net}, entries:[]}`. Empty payload returned for non-linked accounts.
+- [x] **Double-count guard**: transactions with `linked_invoice_id` (invoice line-item expense mirror) or `linked_sc_payment_invoice_id` (SC payment income mirror) are filtered out so the invoice itself isn't duplicated. Both missing-field and explicit-null docs handled.
+- [x] **Notifications fire to linked user**:
+  - `POST /api/invoices` → if `client_id` matches a `user` role account's `linked_client_id` AND actor is `super_admin`, fires `notify_users()` with type `linked_invoice`, title "💼 New Service Charge invoice · #<num>", link `/my-ledger`.
+  - `POST /api/transactions` → same trigger fires `linked_transaction` with title "💰 Credit posted" or "📤 Debit posted" + amount, link `/my-ledger`.
+  - Notification click navigates to `/my-ledger` and marks-as-read in one step (existing NotificationsBell handler).
+- [x] **Dashboard SC Received tile** (`linked-kpi-sc-received` on `LinkedUserDashboard`) is now a clickable `<Link to="/my-ledger">` with hover lift + ArrowUpRight glyph.
+- [x] **Nav entries**: AppShell sidebar `nav-my-ledger` + BottomNav `bottom-nav-my-ledger`, both gated `roles=['user']`.
+- [x] **Tests**: 6 new pytest cases (`test_user_ledger.py` 4 + `test_user_ledger_extra.py` 2). Curated suite 67/67 pass. Testing-agent E2E: 12/12 frontend flows pass (iteration_30.json).
