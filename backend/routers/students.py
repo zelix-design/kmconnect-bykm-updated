@@ -443,10 +443,89 @@ async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
 
 
 # ---------- Student CRUD ----------
+@router.get("/me/sc-earned")
+async def my_sc_earned(user: dict = Depends(get_current_user)):
+    """Total Service-Charge (SC) earned by the logged-in user when they are
+    linked to a Client (sub-agent / associate consultant). Aggregates every
+    `sc_adjusted` adjustment line across all student payments where
+    `adjustment.client_id` matches the linked client.
+
+    Returns:
+        {
+          "client_id":   <str | null>,
+          "client_name": <str>,
+          "total":       <float>,             // sum of all SC adjustments
+          "count":       <int>,               // # of adjustment lines
+          "by_student":  [                    // grouped breakdown
+            {"student_id": str, "student_name": str, "course": str,
+             "college": str, "total": float, "count": int}
+          ]
+        }
+
+    Office/super admins also get a 200 with `total=0` so the same UI tile
+    can render gracefully; only linked `user` accounts get real numbers.
+    """
+    linked_id = user.get("linked_client_id")
+    linked_name = user.get("linked_client_name") or ""
+    if not linked_id:
+        return {"client_id": None, "client_name": "", "total": 0.0, "count": 0, "by_student": []}
+
+    students = await db.students.find(
+        {"payments.adjustments.client_id": linked_id},
+        {"_id": 0, "id": 1, "name": 1, "course": 1, "college": 1, "payments": 1},
+    ).to_list(2000)
+
+    by_student: list[dict] = []
+    grand_total = 0.0
+    grand_count = 0
+    for s in students:
+        s_total = 0.0
+        s_count = 0
+        for p in s.get("payments") or []:
+            for adj in p.get("adjustments") or []:
+                if adj.get("client_id") == linked_id and adj.get("kind") == "sc_adjusted":
+                    s_total += float(adj.get("amount") or 0)
+                    s_count += 1
+        if s_count > 0:
+            by_student.append({
+                "student_id": s.get("id"),
+                "student_name": s.get("name"),
+                "course": s.get("course"),
+                "college": s.get("college"),
+                "total": round(s_total, 2),
+                "count": s_count,
+            })
+            grand_total += s_total
+            grand_count += s_count
+
+    by_student.sort(key=lambda r: r["total"], reverse=True)
+    return {
+        "client_id": linked_id,
+        "client_name": linked_name,
+        "total": round(grand_total, 2),
+        "count": grand_count,
+        "by_student": by_student,
+    }
+
+
 @router.get("")
 async def list_students(user: dict = Depends(get_current_user)):
     """Office admin sees own students. Super admin sees students from ALL users
-    so admissions enrolled by office admins surface on the central Students page."""
+    so admissions enrolled by office admins surface on the central Students page.
+    Linked `user` accounts only see students that reference their client."""
+    # Linked user (sub-agent / associate consultant logging in) — show only
+    # students whose `reference` matches the linked client's name (case-insensitive
+    # exact match, since the reference field is free-text).
+    if user.get("role") == "user" and user.get("linked_client_id"):
+        client_name = (user.get("linked_client_name") or "").strip()
+        if not client_name:
+            return []
+        items = await db.students.find(
+            {"$expr": {"$eq": [{"$toLower": "$reference"}, client_name.lower()]}},
+            {"_id": 0},
+        ).sort("created_at", -1).to_list(2000)
+        return [_summarize(s) for s in items]
+
     if user.get("role") == "super_admin":
         items = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
         if items:

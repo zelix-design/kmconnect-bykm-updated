@@ -37,6 +37,10 @@ class CreateUserIn(BaseModel):
     office: Optional[OfficeCode] = None  # required when role=office_admin
     business_name: Optional[str] = None
     currency: Literal["USD", "INR"] = "INR"
+    # Optional — only used when role="user". Links the login account to a
+    # Client row (sub_agent / associate_consultant) so the user can view
+    # only their own students and SC earned.
+    linked_client_id: Optional[str] = None
 
 
 @router.post("", status_code=201)
@@ -51,6 +55,29 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         raise HTTPException(409, "A user with this email already exists")
+
+    # Validate the linked client (only meaningful for role="user").
+    linked_client_id: Optional[str] = None
+    linked_client_name: Optional[str] = None
+    if payload.linked_client_id and payload.role == "user":
+        client = await db.clients.find_one(
+            {"id": payload.linked_client_id},
+            {"_id": 0, "id": 1, "name": 1, "client_type": 1},
+        )
+        if not client:
+            raise HTTPException(400, "Linked client not found")
+        if client.get("client_type") not in ("sub_agent_associate", "associate_consultant"):
+            raise HTTPException(400, "Linked client must be a sub-agent or associate consultant")
+        # One-to-one: a client can only back one login account at a time.
+        already = await db.users.find_one({"linked_client_id": payload.linked_client_id})
+        if already:
+            raise HTTPException(
+                409,
+                f"This client is already linked to another user account ({already.get('email')}).",
+            )
+        linked_client_id = client["id"]
+        linked_client_name = client["name"]
+
     doc = {
         "id": gen_id(),
         "email": str(payload.email).lower(),
@@ -64,10 +91,18 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         "created_at": now_iso(),
         "created_by_admin": user["id"],
     }
+    if linked_client_id:
+        doc["linked_client_id"] = linked_client_id
+        doc["linked_client_name"] = linked_client_name
     if payload.role == "office_admin":
         doc["permissions"] = dict(DEFAULT_PERMISSIONS)
     elif payload.role == "user":
-        doc["permissions"] = dict(USER_DEFAULT_PERMISSIONS)
+        # Linked clients get students set to "view" so they can browse, but
+        # all SC adjustment edits are blocked at the API level regardless.
+        perms = dict(USER_DEFAULT_PERMISSIONS)
+        if linked_client_id:
+            perms["students"] = "view"
+        doc["permissions"] = perms
     await db.users.insert_one(doc)
     return await db.users.find_one({"id": doc["id"]}, {"_id": 0, "password_hash": 0})
 

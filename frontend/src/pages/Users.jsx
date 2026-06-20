@@ -25,6 +25,7 @@ const OFFICE_OPTIONS = [
 const emptyNewUser = () => ({
   email: "", password: "", name: "",
   role: "office_admin", office: "KM_BLR", currency: "INR",
+  linked_client_id: "", // only used when role === "user"
 });
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
@@ -51,6 +52,12 @@ export default function Users() {
   const [createForm, setCreateForm] = useState(emptyNewUser);
   const [createSaving, setCreateSaving] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
+  // External clients available to back a "user" login. Loaded lazily when the
+  // Create-user dialog opens with role=user. We expose only sub-agents and
+  // associate consultants — KM-office and staff rows are internal-only.
+  const [externalClients, setExternalClients] = useState([]);
+  const [externalLoaded, setExternalLoaded] = useState(false);
+  const [linkedClientSearch, setLinkedClientSearch] = useState("");
   const [resetTarget, setResetTarget] = useState(null); // user obj when reset-password dialog is open
   const [resetForm, setResetForm] = useState({ new_password: "", confirm: "" });
   const [resetShow, setResetShow] = useState(false);
@@ -69,6 +76,27 @@ export default function Users() {
   };
 
   useEffect(() => { load(tab); }, [tab]);
+
+  // Lazy-load external clients (sub-agent / associate consultant) the FIRST
+  // time the Create-user dialog flips its role to "user". Cached after that.
+  useEffect(() => {
+    if (createForm.role !== "user" || externalLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/clients");
+        if (cancelled) return;
+        const external = (data || []).filter((c) =>
+          c.client_type === "sub_agent_associate" || c.client_type === "associate_consultant"
+        );
+        setExternalClients(external);
+        setExternalLoaded(true);
+      } catch (err) {
+        console.error("[users] failed to load external clients:", err?.message || err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [createForm.role, externalLoaded]);
 
   const approve = async (u) => {
     try {
@@ -166,6 +194,9 @@ export default function Users() {
     if (f.role === "office_admin" && !f.office) {
       toast.error("Pick the office for the office admin"); return;
     }
+    if (f.role === "user" && !f.linked_client_id) {
+      toast.error("Pick the client this user account is linked to"); return;
+    }
     setCreateSaving(true);
     try {
       const payload = {
@@ -175,6 +206,7 @@ export default function Users() {
         role: f.role,
         currency: f.currency || "INR",
         ...(f.role === "office_admin" ? { office: f.office } : {}),
+        ...(f.role === "user" && f.linked_client_id ? { linked_client_id: f.linked_client_id } : {}),
       };
       const { data } = await api.post("/users", payload);
       toast.success(`${data.name} created · can sign in immediately`);
@@ -415,13 +447,70 @@ export default function Users() {
           <form onSubmit={submitCreate} className="space-y-4">
             <div>
               <Label>Full name <span className="text-rose-600">*</span></Label>
-              <Input
-                value={createForm.name}
-                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                placeholder="Jane Doe"
-                data-testid="cu-name"
-                required
-              />
+              {createForm.role === "user" ? (
+                // Linked-user flow: pick from existing external clients
+                // (sub-agent / associate consultant). Auto-fills email too.
+                <>
+                  <Select
+                    value={createForm.linked_client_id || ""}
+                    onValueChange={(id) => {
+                      const c = externalClients.find((x) => x.id === id);
+                      setCreateForm((f) => ({
+                        ...f,
+                        linked_client_id: id,
+                        name: c?.name || f.name,
+                        // Only overwrite email if it's empty or matches the previous client's email
+                        email: c?.email || f.email,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger data-testid="cu-linked-client" className="w-full">
+                      <SelectValue placeholder={externalLoaded ? "Select a sub-agent / consultant…" : "Loading clients…"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="px-2 pt-1 pb-2">
+                        <Input
+                          value={linkedClientSearch}
+                          onChange={(e) => setLinkedClientSearch(e.target.value)}
+                          placeholder="Search by name"
+                          className="h-8 text-sm"
+                          data-testid="cu-linked-client-search"
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      {(externalClients
+                        .filter((c) => !linkedClientSearch || c.name.toLowerCase().includes(linkedClientSearch.toLowerCase()))
+                      ).map((c) => (
+                        <SelectItem key={c.id} value={c.id} data-testid={`cu-linked-client-opt-${c.id}`}>
+                          <div className="flex flex-col">
+                            <span>{c.name}</span>
+                            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              {c.client_type === "sub_agent_associate" ? "Sub-agent" : "Associate consultant"}
+                              {c.email ? ` · ${c.email}` : ""}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      {externalLoaded && externalClients.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">
+                          No sub-agents or associate consultants yet. Add one from the Clients page first.
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Pick the client whose dashboard this login should be tied to. They will see only students that reference them and their SC earned (read-only).
+                  </p>
+                </>
+              ) : (
+                <Input
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  placeholder="Jane Doe"
+                  data-testid="cu-name"
+                  required
+                />
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

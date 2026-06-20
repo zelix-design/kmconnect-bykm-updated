@@ -58,6 +58,11 @@ class UserOut(BaseModel):
     office: Optional[OfficeCode] = None
     approval_status: ApprovalStatus = "approved"
     permissions: Optional[dict] = None
+    # When role="user" this links the login account to a specific Client row
+    # (sub_agent or associate_consultant). The linked client's name is used
+    # to filter the user's Students view and their SC-earned totals.
+    linked_client_id: Optional[str] = None
+    linked_client_name: Optional[str] = None
     created_at: str
 
 
