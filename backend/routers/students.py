@@ -776,6 +776,9 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
     )
     if not existing:
         raise HTTPException(404, "Student not found")
+    # Cache fields we need AFTER the update so the later branch that
+    # overwrites `existing` to fetch home_office can't shadow them.
+    prev_status = (existing.get("status") or "").lower()
 
     data = payload.model_dump()
     # Office admin can never re-scope a record outside their office.
@@ -806,6 +809,33 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
         {"$set": data},
     )
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
+
+    # Notify the linked sub-agent/consultant when a super-admin flips the
+    # status to "enrolled". The linked user is the one whose `linked_client_name`
+    # matches the student's `reference` (case-insensitive).
+    new_status = (s.get("status") or "").lower()
+    if new_status == "enrolled" and prev_status != "enrolled":
+        ref = (s.get("reference") or "").strip()
+        if ref:
+            linked = await db.users.find_one(
+                {
+                    "role": "user",
+                    "$expr": {"$eq": [{"$toLower": "$linked_client_name"}, ref.lower()]},
+                },
+                {"_id": 0, "id": 1},
+            )
+            if linked:
+                from routers.notifications import notify_users  # local import: avoid circular
+                await notify_users(
+                    [linked["id"]],
+                    type="student_enrolled",
+                    title="🎓 Your referral got enrolled",
+                    message=f"{s.get('name')} has been confirmed as ENROLLED. Your SC will reflect once the super admin logs the adjustment.",
+                    link=f"/students/{s.get('id')}",
+                    metadata={"student_id": s.get("id"), "student_name": s.get("name"), "reference": ref},
+                    actor_user_id=user["id"],
+                )
+
     return _summarize(s)
 
 

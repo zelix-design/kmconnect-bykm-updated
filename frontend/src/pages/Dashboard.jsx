@@ -9,10 +9,11 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, BarChart, Bar,
 } from "recharts";
+import { toast } from "sonner";
 import {
   ShoppingBag, ChartPie, UsersThree, Receipt, FileText, CalendarBlank,
   Student, Notebook, ArrowUpRight, ArrowDownRight,
-  IdentificationBadge, Briefcase, Buildings, GraduationCap,
+  IdentificationBadge, Briefcase, Buildings, GraduationCap, Copy,
 } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import OfficeDashboard from "./OfficeDashboard";
@@ -52,6 +53,11 @@ export default function Dashboard() {
   // Office admins get their bespoke dashboard
   if (user?.role === "office_admin") {
     return <OfficeDashboard />;
+  }
+  // Linked sub-agent / associate consultant accounts get a focused
+  // dashboard: total students, total SC earned, and their referral link.
+  if (user?.role === "user" && user?.linked_client_id) {
+    return <LinkedUserDashboard />;
   }
   return <SuperAdminDashboard />;
 }
@@ -765,5 +771,214 @@ function LedgerOverview({ ledger, students, currency }) {
         </Card>
       </section>
     </>
+  );
+}
+
+// ============================================================================
+// Linked-user dashboard — focused, low-density view for sub-agents and
+// associate consultants who log in via a Client-linked account. Shows:
+//   • Greeting + their referral landing page
+//   • Total students that reference them
+//   • Total Service-Charge (SC) earned to date (read-only)
+//   • Per-student SC breakdown
+// ============================================================================
+function LinkedUserDashboard() {
+  const { user } = useAuth();
+  const currency = user?.currency || "INR";
+  const greeting = useMemo(() => greetingForNow(), []);
+  const [students, setStudents] = useState([]);
+  const [scSummary, setScSummary] = useState({ total: 0, count: 0, by_student: [] });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [st, sc] = await Promise.all([
+          api.get("/students"),
+          api.get("/students/me/sc-earned"),
+        ]);
+        setStudents(st.data || []);
+        setScSummary(sc.data || { total: 0, count: 0, by_student: [] });
+      } catch (e) {
+        console.error("[linked-user-dashboard] load failed:", e?.message || e);
+      }
+    })();
+  }, []);
+
+  // Referral URL = <origin>/apply?ref=<client_id>
+  const referralUrl = useMemo(() => {
+    if (!user?.linked_client_id) return "";
+    return `${window.location.origin}/apply?ref=${user.linked_client_id}`;
+  }, [user]);
+
+  const copyReferral = () => {
+    if (!referralUrl) return;
+    navigator.clipboard.writeText(referralUrl).then(
+      () => toast.success("Referral link copied"),
+      () => { window.prompt("Copy your referral link:", referralUrl); }
+    );
+  };
+
+  // Bucket counts so the user can see their pipeline at a glance.
+  const counts = useMemo(() => {
+    const byStatus = { enrolled: 0, inquiry: 0, cancelled: 0, other: 0 };
+    for (const s of students) {
+      const k = String(s.status || "").toLowerCase();
+      if (k in byStatus) byStatus[k] += 1;
+      else byStatus.other += 1;
+    }
+    return byStatus;
+  }, [students]);
+
+  return (
+    <div className="space-y-7 animate-fade-in" data-testid="linked-user-dashboard">
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <p className="label-eyebrow">Your overview</p>
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="dashboard-greeting">
+            {greeting}, {user?.name?.split(" ")[0] || "there"}.
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Linked to <span className="font-medium text-foreground">{user?.linked_client_name || "—"}</span>
+          </p>
+        </div>
+      </header>
+
+      {/* KPI tiles */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="card-premium p-5" data-testid="linked-kpi-students">
+          <p className="label-eyebrow">My students</p>
+          <p className="font-display text-4xl mt-2 tabular-nums">{students.length}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            <span className="text-emerald-700 dark:text-emerald-400">{counts.enrolled} enrolled</span>
+            {" · "}
+            <span>{counts.inquiry} inquiry</span>
+            {counts.cancelled > 0 && (
+              <>{" · "}<span>{counts.cancelled} cancelled</span></>
+            )}
+          </p>
+        </Card>
+        <Card className="card-premium p-5" data-testid="linked-kpi-sc">
+          <p className="label-eyebrow">SC earned</p>
+          <p className="font-display text-4xl mt-2 tabular-nums text-emerald-700 dark:text-emerald-400">
+            {formatMoney(scSummary.total || 0, currency)}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Across {scSummary.count || 0} adjustment{(scSummary.count || 0) === 1 ? "" : "s"}
+            {" · read-only"}
+          </p>
+        </Card>
+        <Card className="card-premium p-5 bg-amber-gradient-soft border-amber-500/30" data-testid="linked-kpi-share">
+          <p className="label-eyebrow">Referral link</p>
+          <div className="mt-3 flex items-center gap-2">
+            <code className="flex-1 truncate text-xs text-foreground bg-card/70 px-2 py-1.5 rounded border border-border" data-testid="linked-referral-url">
+              {referralUrl ? referralUrl.replace(/^https?:\/\//, "") : "—"}
+            </code>
+            <button
+              type="button"
+              onClick={copyReferral}
+              className="inline-flex items-center gap-1.5 px-3 h-8 rounded-md btn-amber text-xs font-medium"
+              data-testid="linked-copy-referral"
+              aria-label="Copy referral link"
+            >
+              <Copy size={13} weight="bold" /> Copy
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Share this with students. Every form they open through it auto-fills you as the reference.
+          </p>
+        </Card>
+      </section>
+
+      {/* SC earned breakdown — per student */}
+      <section>
+        <div className="flex items-end justify-between mb-3">
+          <h2 className="font-display text-xl">SC earned · breakdown</h2>
+          <span className="label-eyebrow">{scSummary.by_student?.length || 0} students</span>
+        </div>
+        <Card className="card-premium overflow-hidden" data-testid="linked-sc-breakdown">
+          {(scSummary.by_student || []).length === 0 ? (
+            <div className="p-12 text-center text-sm text-muted-foreground">
+              No SC earned yet. Once super admin logs an adjustment for one of your students it will appear here.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-muted/40 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Student</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Course</th>
+                    <th className="text-left px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">College</th>
+                    <th className="text-right px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Adjustments</th>
+                    <th className="text-right px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">SC total</th>
+                    <th className="w-12" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {scSummary.by_student.map((row) => (
+                    <tr key={row.student_id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-2.5 font-medium text-foreground">{row.student_name}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{row.course || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{row.college || "—"}</td>
+                      <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">{row.count}</td>
+                      <td className="px-4 py-2.5 text-right text-emerald-700 dark:text-emerald-400 tabular-nums font-medium">
+                        {formatMoney(row.total, currency)}
+                      </td>
+                      <td className="px-2">
+                        <Link
+                          to={`/students/${row.student_id}`}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                          data-testid={`linked-sc-open-${row.student_id}`}
+                          aria-label="Open student"
+                        >
+                          <ArrowUpRight size={14} />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </section>
+
+      {/* Pipeline mini-list */}
+      {students.length > 0 && (
+        <section>
+          <div className="flex items-end justify-between mb-3">
+            <h2 className="font-display text-xl">My students</h2>
+            <Link to="/students" className="text-xs text-primary hover:underline">View all →</Link>
+          </div>
+          <Card className="card-premium overflow-hidden">
+            <div className="divide-y divide-border">
+              {students.slice(0, 6).map((s) => (
+                <Link
+                  key={s.id}
+                  to={`/students/${s.id}`}
+                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
+                  data-testid={`linked-student-row-${s.id}`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-foreground truncate">{s.name}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {s.course || "—"} · {s.college || "—"}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider border ${
+                    s.status === "enrolled"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30"
+                      : s.status === "inquiry"
+                      ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30"
+                      : "bg-muted text-muted-foreground border-border"
+                  }`}>
+                    {s.status || "—"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </section>
+      )}
+    </div>
   );
 }

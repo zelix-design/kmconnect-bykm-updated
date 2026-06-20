@@ -59,6 +59,7 @@ export default function Students() {
   const { user } = useAuth();
   const allowEdit = canEdit(user, "students");
   const isSuper = user?.role === "super_admin";
+  const role = user?.role;
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
@@ -75,6 +76,10 @@ export default function Students() {
     try { return localStorage.getItem("students-view") || "card"; }
     catch { return "card"; }
   });
+  // Linked users only ever see the card grid — their list-view toggle is
+  // hidden, so make sure a stale localStorage value doesn't force them onto
+  // an empty list view.
+  const effectiveView = role === "user" ? "card" : view;
   const switchView = (next) => {
     setView(next);
     try { localStorage.setItem("students-view", next); } catch (e) { void e; }
@@ -212,7 +217,7 @@ export default function Students() {
           <p className="label-eyebrow">Pipeline</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Students</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {view === "list"
+            {effectiveView === "list"
               ? "Spreadsheet view — click any column header to sort, type under the title to filter that column."
               : "Recent enrollments — search by name, college, or reference."}
           </p>
@@ -225,60 +230,67 @@ export default function Students() {
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setForm(emptyForm()); }}>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Card / List view toggle */}
-            <div
-              className="inline-flex items-center rounded-md border border-border bg-card p-0.5 h-10"
-              data-testid="students-view-toggle"
-              role="tablist"
-              aria-label="Students view"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={view === "card"}
-                onClick={() => switchView("card")}
-                data-testid="students-view-card"
-                className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                  view === "card"
-                    ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+            {/* Card / List view toggle — hidden for linked users (their dashboard
+                already shows totals and they only need the card grid here). */}
+            {role !== "user" && (
+              <div
+                className="inline-flex items-center rounded-md border border-border bg-card p-0.5 h-10"
+                data-testid="students-view-toggle"
+                role="tablist"
+                aria-label="Students view"
               >
-                <SquaresFour size={15} weight={view === "card" ? "fill" : "regular"} />
-                <span className="hidden sm:inline">Card</span>
-              </button>
-              <button
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === "card"}
+                  onClick={() => switchView("card")}
+                  data-testid="students-view-card"
+                  className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                    view === "card"
+                      ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <SquaresFour size={15} weight={view === "card" ? "fill" : "regular"} />
+                  <span className="hidden sm:inline">Card</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={view === "list"}
+                  onClick={() => switchView("list")}
+                  data-testid="students-view-list"
+                  className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
+                    view === "list"
+                      ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Rows size={15} weight={view === "list" ? "fill" : "regular"} />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+              </div>
+            )}
+            {/* Share-application-link is moved to the User dashboard for linked
+                users (where the URL includes their referral code). */}
+            {role !== "user" && (
+              <Button
                 type="button"
-                role="tab"
-                aria-selected={view === "list"}
-                onClick={() => switchView("list")}
-                data-testid="students-view-list"
-                className={`px-3 h-9 rounded-[6px] inline-flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                  view === "list"
-                    ? "bg-amber-gradient text-white shadow-sm shadow-orange-500/25"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                variant="outline"
+                onClick={() => {
+                  const url = `${window.location.origin}/apply`;
+                  navigator.clipboard.writeText(url).then(
+                    () => toast.success(`Public form link copied · ${url}`),
+                    () => { window.prompt("Copy the application link:", url); }
+                  );
+                }}
+                className="h-10"
+                data-testid="share-apply-link-btn"
+                title="Copy the public admission form link"
               >
-                <Rows size={15} weight={view === "list" ? "fill" : "regular"} />
-                <span className="hidden sm:inline">List</span>
-              </button>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                const url = `${window.location.origin}/apply`;
-                navigator.clipboard.writeText(url).then(
-                  () => toast.success(`Public form link copied · ${url}`),
-                  () => { window.prompt("Copy the application link:", url); }
-                );
-              }}
-              className="h-10"
-              data-testid="share-apply-link-btn"
-              title="Copy the public admission form link"
-            >
-              <ShareNetwork size={16} className="mr-1.5" /> Share application link
-            </Button>
+                <ShareNetwork size={16} className="mr-1.5" /> Share application link
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -556,7 +568,7 @@ export default function Students() {
           <StudentIcon size={32} className="mx-auto text-muted-foreground/50 mb-3" />
           {list.length === 0 ? "No students yet. Add one to start tracking fees." : "No students match these filters."}
         </Card>
-      ) : view === "list" ? (
+      ) : effectiveView === "list" ? (
         <>
           <p className="label-eyebrow" data-testid="recent-eyebrow">
             {qCity === "_all"
