@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
@@ -57,6 +57,7 @@ export function hometownOf(s) {
 
 export default function Students() {
   const { user } = useAuth();
+  const nav = useNavigate();
   const allowEdit = canEdit(user, "students");
   const isSuper = user?.role === "super_admin";
   const role = user?.role;
@@ -91,6 +92,14 @@ export default function Students() {
   // Paste-application dialog (super admin only)
   const [pasteOpen, setPasteOpen] = useState(false);
   const openAddStudent = () => {
+    // Linked user (sub-agent / consultant): they don't have direct write access
+    // to /api/students. Route them through their referral on the public form,
+    // which creates an inquiry that super-admin can later approve. Same UX as
+    // their Quick Entry button — consistent across the app.
+    if (role === "user" && user?.linked_client_id) {
+      nav(`/apply?ref=${user.linked_client_id}`);
+      return;
+    }
     // Reset form to blank
     setForm({ ...emptyForm(), reference: "" });
     // Both super_admin (full client picker) AND office_admin (staff-only picker)
@@ -134,6 +143,13 @@ export default function Students() {
       return;
     }
     if (newFlag === "1") {
+      if (role === "user" && user?.linked_client_id) {
+        // Linked user: there is no inline add-student flow for them. Redirect
+        // to the public application form with their referral so the inquiry is
+        // attributed correctly.
+        nav(`/apply?ref=${user.linked_client_id}`, { replace: true });
+        return;
+      }
       if (staffParam) {
         // Came from "Add an admission" with a pre-selected staff → open form direct
         setForm((f) => ({ ...f, reference: decodeURIComponent(staffParam) }));
@@ -149,7 +165,7 @@ export default function Students() {
       next.delete("staff");
       setSearchParams(next, { replace: true });
     }
-  }, [newFlag, staffParam, pasteFlag, isSuper, searchParams, setSearchParams]);
+  }, [newFlag, staffParam, pasteFlag, isSuper, role, user, nav, searchParams, setSearchParams]);
 
   // Map college name → canonical place (lowercased keys for tolerant lookup).
   const collegePlaceByName = useMemo(() => {
@@ -321,7 +337,7 @@ export default function Students() {
                 <ClipboardText size={16} className="mr-1.5" /> Paste application
               </Button>
             )}
-            {allowEdit && (
+            {(allowEdit || role === "user") && (
               <Button onClick={openAddStudent} data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
               </Button>

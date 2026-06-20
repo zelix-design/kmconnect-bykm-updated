@@ -513,15 +513,20 @@ async def list_students(user: dict = Depends(get_current_user)):
     """Office admin sees own students. Super admin sees students from ALL users
     so admissions enrolled by office admins surface on the central Students page.
     Linked `user` accounts only see students that reference their client."""
-    # Linked user (sub-agent / associate consultant logging in) — show only
-    # students whose `reference` matches the linked client's name (case-insensitive
-    # exact match, since the reference field is free-text).
+    # Linked user (sub-agent / associate consultant logging in) — show students
+    # whose `reference` matches the linked client's name (case-insensitive) OR
+    # students this user themselves entered (created via the Add-student flow).
     if user.get("role") == "user" and user.get("linked_client_id"):
         client_name = (user.get("linked_client_name") or "").strip()
         if not client_name:
             return []
         items = await db.students.find(
-            {"$expr": {"$eq": [{"$toLower": "$reference"}, client_name.lower()]}},
+            {
+                "$or": [
+                    {"$expr": {"$eq": [{"$toLower": "$reference"}, client_name.lower()]}},
+                    {"user_id": user["id"]},
+                ]
+            },
             {"_id": 0},
         ).sort("created_at", -1).to_list(2000)
         return [_summarize(s) for s in items]

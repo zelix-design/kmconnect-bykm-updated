@@ -841,6 +841,16 @@ function LinkedUserDashboard() {
             Linked to <span className="font-medium text-foreground">{user?.linked_client_name || "—"}</span>
           </p>
         </div>
+        <button
+          type="button"
+          onClick={copyReferral}
+          data-testid="overview-copy-referral"
+          className="inline-flex items-center gap-2 px-4 h-10 rounded-md btn-amber text-sm font-medium self-start sm:self-auto"
+          aria-label="Copy your referral link"
+        >
+          <Copy size={14} weight="bold" />
+          <span>Copy referral link</span>
+        </button>
       </header>
 
       {/* KPI tiles */}

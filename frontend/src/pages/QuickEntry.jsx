@@ -53,6 +53,19 @@ export default function QuickEntry() {
   const isOfficeAdmin = user?.role === "office_admin";
   const isSuper = user?.role === "super_admin";
   const isLightUser = user?.role === "user";
+  const linkedClientId = user?.linked_client_id;
+
+  // Linked sub-agents / consultants: "Quick Entry" is their primary call-to-
+  // action for onboarding a new student. Redirect straight to the public
+  // application form with their referral code so every prospect they push
+  // through it is auto-attributed to them. Use replace() so the browser back
+  // button returns to the dashboard, not into a loop.
+  useEffect(() => {
+    if (isLightUser && linkedClientId) {
+      nav(`/apply?ref=${linkedClientId}`, { replace: true });
+    }
+  }, [isLightUser, linkedClientId, nav]);
+
   // The lightweight "user" role only needs the debit/credit form — skip the
   // hub entirely and land them right on the Add Transaction view.
   const [view, setView] = useState(isLightUser ? "transaction" : "hub"); // "hub" | "transaction"
