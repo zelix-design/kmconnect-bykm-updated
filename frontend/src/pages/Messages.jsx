@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
@@ -15,6 +14,7 @@ import {
 import { formatDate } from "@/lib/format";
 
 import ComposeMessageDialog from "@/components/messages/ComposeMessageDialog";
+import MentionTextarea, { MentionBody } from "@/components/messages/MentionTextarea";
 
 const KIND_BADGE = {
   announcement: { label: "Announcement", icon: Megaphone, cls: "bg-amber-100/60 text-amber-700 border-amber-300 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30" },
@@ -102,6 +102,7 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
+  const [replyMentions, setReplyMentions] = useState([]);
   const [sending, setSending] = useState(false);
 
   const load = async () => {
@@ -128,8 +129,12 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
     if (!reply.trim()) return;
     setSending(true);
     try {
-      await api.post(`/messages/${id}/replies`, { body: reply.trim() });
+      await api.post(`/messages/${id}/replies`, {
+        body: reply.trim(),
+        mentions: replyMentions,
+      });
       setReply("");
+      setReplyMentions([]);
       load();
       onChange?.();
     } catch (e) {
@@ -161,6 +166,19 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
   const Icon = meta.icon;
   const replies = data.replies || [];
   const canDelete = root.sender_id === currentUser?.id;
+
+  // Build a lookup of {id → {id, name, role}} for every participant so the
+  // mention renderer can pull display names without an extra fetch.
+  const participants = [
+    { id: root.sender_id, name: root.sender_name, role: root.sender_role },
+    ...(root.recipient_summary || []),
+  ];
+  const optionsById = participants.reduce((acc, p) => {
+    if (p?.id) acc[p.id] = p;
+    return acc;
+  }, {});
+  // Reply mention options exclude the current user.
+  const replyMentionOptions = participants.filter((p) => p.id !== currentUser?.id);
 
   return (
     <Card className="card-premium overflow-hidden" data-testid="thread-view">
@@ -220,7 +238,9 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
 
       <div className="p-5 space-y-4 max-h-[55vh] overflow-y-auto" data-testid="thread-body">
         <div className="rounded-lg border border-border bg-card p-3">
-          <p className="text-sm whitespace-pre-wrap text-foreground">{root.body}</p>
+          <p className="text-sm text-foreground">
+            <MentionBody body={root.body} mentionIds={root.mentions || []} optionsById={optionsById} />
+          </p>
         </div>
         {replies.map((r) => (
           <div key={r.id} className={`rounded-lg border p-3 ${
@@ -231,21 +251,33 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
               {r.sender_name} · {formatDate(r.created_at)}
             </p>
-            <p className="text-sm whitespace-pre-wrap text-foreground">{r.body}</p>
+            <p className="text-sm text-foreground">
+              <MentionBody body={r.body} mentionIds={r.mentions || []} optionsById={optionsById} />
+            </p>
           </div>
         ))}
       </div>
 
       <div className="border-t border-border p-3 bg-muted/20" data-testid="reply-composer">
-        <Textarea
-          rows={2}
+        <MentionTextarea
           value={reply}
-          onChange={(e) => setReply(e.target.value)}
-          placeholder="Write a reply…"
-          data-testid="reply-textarea"
+          onChange={setReply}
+          rows={2}
+          placeholder="Write a reply… (type @ to mention)"
+          testid="reply-textarea"
+          options={replyMentionOptions}
+          mentions={replyMentions}
+          onMentionsChange={setReplyMentions}
           className="bg-card"
         />
-        <div className="flex justify-end mt-2">
+        <div className="flex justify-between items-center mt-2">
+          <p className="text-[10px] text-muted-foreground">
+            {replyMentions.length > 0 && (
+              <span data-testid="reply-mentions-count">
+                Highlighting {replyMentions.length} {replyMentions.length === 1 ? "person" : "people"}
+              </span>
+            )}
+          </p>
           <Button
             type="button"
             onClick={submit}

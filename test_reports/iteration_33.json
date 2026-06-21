@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 33 — End-to-end testing of the new @-mention feature on top of the Messages module. Backend: 15/15 pytest pass (4 new test_message_mentions.py + 11 prior). Frontend: full cross-role E2E validated — super_admin sends URGENT announcement to KM_BLR with mentions=[blr1] → mentioned user receives type='mention' notif with title '🔔 MUNEER MUHAMMED mentioned you · MENTION_URGENT_E2E' and link='/messages/<id>'; dashboard shows the banner-mentioned-<msgId> '@ YOU' chip + orange ring on the banner; mention-pill-<userId> renders as amber-bordered pill in thread root body. Reply composer (data-testid=reply-textarea) also triggers reply-textarea-mention-dropdown, options are thread-participants-minus-self, click inserts '@Name ' and adds id; submitted reply renders mention-pill-<userId> in the reply body. Mention auto-removal verified: deleting the '@Name' substring before send results in mentions=[] persisted server-side. Keyboard nav (ArrowDown+Enter selects, Escape closes dropdown) all work. Compose 'Highlighting 1 person — they'll get a stronger notification' label appears as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "backend_pytest": [
+      "test_message_mentions.py::test_mention_creates_separate_notification — PASS",
+      "test_message_mentions.py::test_mentions_outside_recipient_set_are_dropped — PASS (admin sender id + bogus id silently dropped, only valid recipient survives)",
+      "test_message_mentions.py::test_mention_in_reply_fans_out_correctly — PASS (mentioned recipient gets type='mention', non-mentioned thread participants get 'message_reply', no double-notify)",
+      "test_message_mentions.py::test_mention_self_is_dropped — PASS (sender id filtered out of mentions)",
+      "Curated messages regression (test_messages.py + test_messages_extra.py) — 11/11 PASS"
+    ],
+    "frontend_playwright": [
+      "Compose dialog: typing '@' shows compose-body-mention-dropdown with 4 mention-opt-<userId> rows; clicking inserts '@Name ' into body — PASS",
+      "compose-mentions-count label 'Highlighting 1 person — they'll get a stronger notification' renders after selection — PASS",
+      "Keyboard nav: ArrowDown + Enter selects active option in dropdown — PASS",
+      "Escape closes the dropdown — PASS",
+      "URGENT mention announcement sent from super_admin via API; banners endpoint returns it with mentions=[blr1_id] — PASS",
+      "Logged in as mentioned blr1: GET /api/notifications shows ONE notif for this msg with type='mention', title contains 'mentioned you', link='/messages/<id>' — PASS",
+      "Dashboard banner shows banner-mentioned-<msgId> chip with text '@ You' AND banner has 'border-orange-500/60 ring-2 ring-orange-500/20' classes — PASS (confirmed by screenshot final_mention_banner.png)",
+      "Thread view (/messages/<id>) renders mention-pill-<userId> as amber-styled pill on root body — PASS (pill text='BLR Office Admin')",
+      "Reply composer reply-textarea triggers reply-textarea-mention-dropdown with 3 thread participants — PASS",
+      "Reply mention pill mention-pill-<userId> renders after submit — PASS",
+      "Mention auto-removal via deletion of '@Name' substring → server-persisted reply.mentions === [] — PASS",
+      "Backend reply notification fan-out: mentioned-in-reply user gets type='mention' with 'mentioned you in a reply'; non-mentioned thread participants get 'message_reply' — PASS (pytest)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_message_mentions.py",
+    "/app/test_reports/pytest/iteration33_mentions.xml",
+    "/app/test_reports/pytest/iteration33_messages_full.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "messages.py router stays clean — _filter_mentions + _fanout_with_mentions are pure helpers that split fan-out cleanly (mention set excluded from standard batch, no double-notify). Both batches preserve link='/messages/<id>'.",
+    "_filter_mentions correctly de-dupes via dict.fromkeys and intersects with the resolved recipient set — sender id is automatically excluded because _resolve_recipients drops the actor before _filter_mentions runs.",
+    "MentionTextarea + MentionBody (frontend) cleanly separate rendering vs editing. The data-testid='mention-pill-<userId>' contract is honored. Useful enhancement (future): consider also matching mention pills by name fallback when ids drift, but current strict-id matching avoids false positives.",
+    "Note: AnnouncementBanners uses the MESSAGE id in banner-mentioned-<id> (not the user id). The problem statement was ambiguous on this; the code's choice is sensible (one chip per banner). Action item only if main agent intended otherwise.",
+    "Banner 5-cap interacts with mentions: an urgent banner-with-mention can still be hidden if 5 other urgent banners precede it. Current sort is urgent-first, newest-first — a mention-aware sort (mentioned-me first) would surface @-you banners reliably. NON-BLOCKING enhancement, but worth flagging since the original spec said 'Tagged users would get a stronger highlight … even if they've already read the parent thread.'",
+    "Regression intact: compose/list/sent/kind filters/dismiss/mark-read/reply/delete-thread all still work (verified earlier iter_32, no changes to those paths)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15 pytest)", "frontend": "100% (all 11 mention flows + regression verified)"},
+  "test_credentials": "Super admin: admin@kmfoundation.online / Admin@786. Office admin (mentioned): blr1@finflow.com / Office@123. Second KM_BLR admin pre-existed (pytest_msg_office@example.com — used as non-mentioned recipient).",
+  "seed_data_creation": "Sent 2 live mention announcements via API: MENTION_E2E_FRONTEND_TEST (normal priority, msg_id=9a59c417…) and MENTION_URGENT_E2E (urgent, msg_id=8bf8c5cb…). Also added 1 reply (with reply mention) + 1 reply (with deleted mention) from blr1. These persist in the messages collection — clean up via super_admin DELETE /api/messages/<id> if desired.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Mention feature is production-ready across backend + frontend. The only nuance to remember: AnnouncementBanners testid is 'banner-mentioned-<MESSAGE_ID>' (not the user id) — applies the orange ring + '@ You' chip when current user appears in banner.mentions[]. To reliably see the chip in a UI test, either dismiss other urgent banners first OR send the mention as priority='urgent' to a freshly seeded user with no other banners. Optional enhancement worth flagging to main agent: re-sort banners so 'I'm-mentioned-here' rows surface above non-mention urgents (current sort can hide a mention banner behind the 5-cap).",
+  "rca of the issue": "N/A — no issues found."
+}

@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import MentionTextarea from "@/components/messages/MentionTextarea";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -57,6 +57,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
   const [kind, setKind] = useState(allowedKinds[0] || "announcement");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [mentions, setMentions] = useState([]);   // @-mention user ids
   const [priority, setPriority] = useState("normal");
   const [dueDate, setDueDate] = useState("");
   const [sending, setSending] = useState(false);
@@ -73,30 +74,28 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
   useEffect(() => {
     if (open) {
       setKind(allowedKinds[0] || "announcement");
-      setSubject(""); setBody("");
+      setSubject(""); setBody(""); setMentions([]);
       setPriority("normal"); setDueDate("");
       setAudRole("user"); setAudOfficeFilter("");
       setSelectedUserIds([]); setPickerSearch("");
     }
   }, [open, allowedKinds]);
 
-  // Load picker options when audience needs user-list
+  // Load picker options whenever the dialog opens — used for both the
+  // reminder recipient picker AND the @-mention autocomplete in the body.
   useEffect(() => {
     if (!open) return;
-    const needsUsers =
-      kind === "reminder"
-      || (role === "super_admin" && kind === "announcement"); // not needed but harmless to skip
-    if (kind !== "reminder") return;
     let cancel = false;
     (async () => {
       setPickerLoading(true);
       try {
-        // For office_admin & user: only need super_admins
-        // For super_admin: load all approved users
         const r = await api.get("/users?status=approved");
         if (cancel) return;
         let opts = r.data || [];
-        if (role !== "super_admin") {
+        // Reminders sent by office_admin / user can only target super_admins.
+        // For everyone else, we keep the full set so mention autocomplete +
+        // super-admin reminder pickers can both filter from the same pool.
+        if (kind === "reminder" && role !== "super_admin") {
           opts = opts.filter((u) => u.role === "super_admin");
         }
         setPickerOptions(opts);
@@ -145,6 +144,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
         priority,
         due_date: dueDate || null,
         audience: buildAudience(),
+        mentions,
       };
       const { data } = await api.post("/messages", payload);
       toast.success(`Sent to ${data.recipient_ids?.length || 0} recipient(s)`);
@@ -170,6 +170,31 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
       (u) => u.name?.toLowerCase().includes(s) || u.email?.toLowerCase().includes(s)
     );
   }, [pickerOptions, pickerSearch]);
+
+  // Eligible mention targets for @-autocomplete in the body. Mirrors the
+  // resolved audience so a sender can only highlight people they're actually
+  // sending to:
+  //   - reminder: the explicitly-picked recipients
+  //   - announcement to role: everyone in that role (optionally scoped by office)
+  //   - office_admin announcement: peers at their own office
+  const mentionOptions = useMemo(() => {
+    if (kind === "reminder") {
+      return pickerOptions.filter((u) => selectedUserIds.includes(u.id));
+    }
+    if (role === "super_admin") {
+      let pool = pickerOptions.filter((u) => u.role === audRole);
+      if (audRole === "office_admin" && audOfficeFilter) {
+        pool = pool.filter((u) => u.office === audOfficeFilter);
+      }
+      return pool;
+    }
+    if (role === "office_admin") {
+      return pickerOptions.filter(
+        (u) => u.role === "office_admin" && u.office === myOffice && u.id !== user?.id
+      );
+    }
+    return [];
+  }, [kind, role, pickerOptions, selectedUserIds, audRole, audOfficeFilter, myOffice, user?.id]);
 
   if (allowedKinds.length === 0) return null;
 
@@ -318,15 +343,27 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
 
           <div>
             <Label>Message</Label>
-            <Textarea
-              rows={4}
+            <MentionTextarea
               value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Type the message…"
-              data-testid="compose-body"
+              onChange={setBody}
+              rows={4}
+              placeholder="Type the message… (type @ to mention someone)"
+              testid="compose-body"
               maxLength={4000}
+              options={mentionOptions}
+              mentions={mentions}
+              onMentionsChange={setMentions}
             />
-            <p className="text-[10px] text-muted-foreground mt-1 text-right">{body.length}/4000</p>
+            <div className="flex justify-between items-center mt-1">
+              <p className="text-[10px] text-muted-foreground">
+                {mentions.length > 0 && (
+                  <span data-testid="compose-mentions-count">
+                    Highlighting {mentions.length} {mentions.length === 1 ? "person" : "people"} — they'll get a stronger notification
+                  </span>
+                )}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{body.length}/4000</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

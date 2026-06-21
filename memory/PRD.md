@@ -735,3 +735,37 @@ Pure structural refactor — no behavioural changes. All `data-testid` props pre
 - Iteration 31 frontend regression sweep: **22/22 PASS** + **0 action items**. Verified Users, Colleges, StudentDetail, PasteApplicationDialog flows + regression on Dashboard, Transactions, Accounts, Invoices, Clients, Categories, Settings — zero console errors.
 - Backend untouched; curated pytest suite still 67/67.
 
+
+
+## Implementation status — 2026-02-26 (iteration 32: Messages feature — announcements + reminders)
+User asked for: Super Admin → Announcement to Users / Office Admins; Office Admin → Announcement to peer Office Admins (same office) + Reminder to Super Admin; User → Reminder to Super Admin. Mobile-first. User-confirmed scope: announcement = broadcast + pinned dashboard banner; reminder = focused with due date; both have priority (Low/Normal/Urgent) + optional due-date; recipient gets both notification badge AND a Messages page; threaded replies allowed.
+
+### Backend
+- New `routers/messages.py` (363 lines). Endpoints:
+  - `POST /api/messages` — create. Role-based RBAC via `_validate_send` + `_enforce_recipient_role`. Resolves audience (`role` | `role_office` | `users`) into recipient docs.
+  - `GET /api/messages?folder=inbox|sent[&kind=announcement|reminder]` — list thread roots, newest first, with `my_read`/`my_dismissed` flags.
+  - `GET /api/messages/banners` — active un-dismissed announcements addressed to me, urgent-first, ≤5.
+  - `GET /api/messages/unread-count` — total unread for sidebar badge.
+  - `GET /api/messages/{id}` — root + replies (403 if not in thread).
+  - `POST /api/messages/{id}/read` / `/dismiss` (announcement only).
+  - `POST /api/messages/{id}/replies` — adds reply, increments `reply_count`, fans out a `message_reply` notification.
+  - `DELETE /api/messages/{id}` — sender only, cascades to replies.
+- Fan-out: every send creates a `type='message'` notification (link `/messages/<id>`) for each recipient. Replies fan out `type='message_reply'` to everyone in the thread minus the replier.
+- Mongo indices: `(recipient_ids, created_at)`, `(sender_id, created_at)`, `thread_id`.
+
+### Frontend
+- New `pages/Messages.jsx` — list + thread layout with Inbox/Sent + All/Announcements/Reminders tabs, search, ThreadList + ThreadView. Mobile: list collapses when thread opens.
+- New `components/messages/ComposeMessageDialog.jsx` — role-aware composer:
+  - Super Admin: kind picker + role picker (User / Office Admin) + optional office scope. Reminder picker = any approved user.
+  - Office Admin: kind picker + auto-scoped to own office for announcements; reminder picker = super admins only.
+  - User: reminder only; picker = super admins only.
+- New `components/messages/AnnouncementBanners.jsx` — pinned banner stack on Dashboard / OfficeDashboard / LinkedUserDashboard. Urgent banners get rose tint; X to dismiss per-user; Open link to thread.
+- Nav: `nav-messages` in AppShell sidebar + `bottom-nav-messages` in BottomNav, both for ALL three roles.
+- Routes: `/messages` (list) and `/messages/:id` (thread view, side-by-side on desktop).
+
+### Tests
+- 6 pytest cases in `test_messages.py` (role × kind × audience permutations, threading, dismiss, notification fan-out).
+- 5 additional pytest cases in `test_messages_extra.py` (added by testing agent — reminder-cannot-be-dismissed, get_thread 403, replies fan-out + cascade delete, banners urgent-first + 5-cap, sent-folder + sender excluded).
+- Iteration 32 testing-agent sweep: **11/11 backend pytest** + **100% frontend flows** verified across super_admin & office_admin, mobile + desktop. **0 action items, 0 critical issues.**
+- Curated pytest suite total: **74/74 pass.**
+

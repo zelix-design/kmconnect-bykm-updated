@@ -60,10 +60,15 @@ class MessageIn(BaseModel):
     priority: Priority = "normal"
     due_date: Optional[str] = None   # ISO date (YYYY-MM-DD) — optional
     audience: AudienceIn
+    # Subset of recipient_ids that the sender explicitly @-mentioned. Those
+    # users get a stronger `mention` notification instead of the default one.
+    mentions: Optional[list[str]] = None
 
 
 class ReplyIn(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
+    # Subset of thread participants to highlight on this reply.
+    mentions: Optional[list[str]] = None
 
 
 # ---------- Sender / audience validation ----------
@@ -139,6 +144,53 @@ async def _enforce_recipient_role(actor: dict, recipients: list[dict]) -> None:
 
 
 # ---------- CRUD ----------
+def _filter_mentions(mentions: Optional[list[str]], allowed: set[str]) -> list[str]:
+    """Drop any @-mention id that isn't in the recipient/participant set so
+    a sender can't notify users they don't have access to."""
+    if not mentions:
+        return []
+    return [m for m in dict.fromkeys(mentions) if m in allowed]
+
+
+async def _fanout_with_mentions(
+    *,
+    sender: dict,
+    standard_recipient_ids: list[str],
+    mention_ids: list[str],
+    standard_type: str,
+    standard_title: str,
+    mention_title: str,
+    message: str,
+    link: str,
+    metadata: dict,
+) -> None:
+    """Split fan-out into two batches: mentioned users get a `mention`
+    notification with a stronger title; everyone else gets the standard one.
+    A user is never double-notified."""
+    mention_set = set(mention_ids)
+    standard_only = [uid for uid in standard_recipient_ids if uid not in mention_set]
+    if standard_only:
+        await _bulk_persist_and_push(
+            recipient_ids=standard_only,
+            type=standard_type,
+            title=standard_title,
+            message=message,
+            link=link,
+            metadata=metadata,
+            actor_user_id=sender["id"],
+        )
+    if mention_ids:
+        await _bulk_persist_and_push(
+            recipient_ids=mention_ids,
+            type="mention",
+            title=mention_title,
+            message=message,
+            link=link,
+            metadata={**metadata, "mentioned": True},
+            actor_user_id=sender["id"],
+        )
+
+
 @router.post("")
 async def create_message(payload: MessageIn, user: dict = Depends(get_current_user)) -> dict:
     _validate_send(user, payload)
@@ -147,6 +199,9 @@ async def create_message(payload: MessageIn, user: dict = Depends(get_current_us
         await _enforce_recipient_role(user, recipients)
     if not recipients:
         raise HTTPException(400, "No matching recipients")
+
+    recipient_ids = [r["id"] for r in recipients]
+    mentions = _filter_mentions(payload.mentions, set(recipient_ids))
 
     now = now_iso()
     doc = {
@@ -163,11 +218,12 @@ async def create_message(payload: MessageIn, user: dict = Depends(get_current_us
         "sender_role": user.get("role"),
         "sender_office": user.get("office"),
         "audience": payload.audience.model_dump(),
-        "recipient_ids": [r["id"] for r in recipients],
+        "recipient_ids": recipient_ids,
         "recipient_summary": [
             {"id": r["id"], "name": r.get("name") or r.get("email"), "role": r.get("role")}
             for r in recipients
         ],
+        "mentions": mentions,
         # Per-user state map
         "acks": {r["id"]: {"read_at": None, "dismissed_at": None} for r in recipients},
         "reply_count": 0,
@@ -180,14 +236,17 @@ async def create_message(payload: MessageIn, user: dict = Depends(get_current_us
 
     title_prefix = "📣" if payload.kind == "announcement" else "⏰"
     badge = "URGENT · " if payload.priority == "urgent" else ""
-    await _bulk_persist_and_push(
-        recipient_ids=doc["recipient_ids"],
-        type="message",
-        title=f"{title_prefix} {badge}{payload.kind.title()}: {doc['subject'][:80]}",
-        message=f"{user.get('name', 'Someone')}: {doc['body'][:140]}",
+    actor_label = user.get("name", "Someone")
+    await _fanout_with_mentions(
+        sender=user,
+        standard_recipient_ids=recipient_ids,
+        mention_ids=mentions,
+        standard_type="message",
+        standard_title=f"{title_prefix} {badge}{payload.kind.title()}: {doc['subject'][:80]}",
+        mention_title=f"🔔 {actor_label} mentioned you · {doc['subject'][:80]}",
+        message=f"{actor_label}: {doc['body'][:140]}",
         link=f"/messages/{doc['id']}",
         metadata={"message_id": doc["id"], "kind": payload.kind, "priority": payload.priority},
-        actor_user_id=user["id"],
     )
     return doc
 
@@ -310,6 +369,12 @@ async def add_reply(
     if root["sender_id"] != user["id"] and user["id"] not in (root.get("recipient_ids") or []):
         raise HTTPException(403, "Not in this thread")
 
+    # Thread participants = original sender + all recipients (minus replier)
+    participants = set(root.get("recipient_ids") or [])
+    participants.add(root["sender_id"])
+    participants.discard(user["id"])
+    mentions = _filter_mentions(payload.mentions, participants)
+
     now = now_iso()
     reply = {
         "id": gen_id(),
@@ -322,6 +387,7 @@ async def add_reply(
         "sender_id": user["id"],
         "sender_name": user.get("name") or user.get("email"),
         "sender_role": user.get("role"),
+        "mentions": mentions,
         "created_at": now,
     }
     await db.messages.insert_one(reply)
@@ -333,19 +399,18 @@ async def add_reply(
         {"$inc": {"reply_count": 1}, "$set": {"updated_at": now}},
     )
 
-    # Notify everyone in the thread minus the replier
-    audience = set(root.get("recipient_ids") or [])
-    audience.add(root["sender_id"])
-    audience.discard(user["id"])
-    if audience:
-        await _bulk_persist_and_push(
-            recipient_ids=list(audience),
-            type="message_reply",
-            title=f"💬 Reply · {root['subject'][:80]}",
-            message=f"{user.get('name', 'Someone')}: {payload.body[:140]}",
+    if participants:
+        actor_label = user.get("name", "Someone")
+        await _fanout_with_mentions(
+            sender=user,
+            standard_recipient_ids=list(participants),
+            mention_ids=mentions,
+            standard_type="message_reply",
+            standard_title=f"💬 Reply · {root['subject'][:80]}",
+            mention_title=f"🔔 {actor_label} mentioned you in a reply · {root['subject'][:80]}",
+            message=f"{actor_label}: {payload.body[:140]}",
             link=f"/messages/{message_id}",
             metadata={"message_id": message_id, "reply_id": reply["id"]},
-            actor_user_id=user["id"],
         )
     return reply
 

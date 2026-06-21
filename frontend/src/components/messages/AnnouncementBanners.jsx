@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
-import { Megaphone, X, ArrowRight, CalendarBlank } from "@phosphor-icons/react";
+import { useAuth } from "@/lib/auth";
+import { Megaphone, X, ArrowRight, CalendarBlank, At } from "@phosphor-icons/react";
 
 const PRIO_CLS = {
   urgent: "border-rose-500/40 bg-rose-50/60 dark:bg-rose-500/10",
@@ -19,6 +20,8 @@ const PRIO_ICON_CLS = {
  * dismiss button that hides it forever for THIS user only.
  */
 export default function AnnouncementBanners({ bumper = 0 }) {
+  const { user } = useAuth();
+  const myId = user?.id;
   const [banners, setBanners] = useState([]);
 
   const load = async () => {
@@ -43,11 +46,12 @@ export default function AnnouncementBanners({ bumper = 0 }) {
     <section className="space-y-2" data-testid="announcement-banners">
       {banners.map((b) => {
         const prio = b.priority || "normal";
+        const mentionedMe = myId && (b.mentions || []).includes(myId);
         return (
           <div
             key={b.id}
             data-testid={`banner-${b.id}`}
-            className={`rounded-lg border ${PRIO_CLS[prio]} px-4 py-3 flex items-start gap-3`}
+            className={`rounded-lg border ${mentionedMe ? "border-orange-500/60 ring-2 ring-orange-500/20 " : ""}${PRIO_CLS[prio]} px-4 py-3 flex items-start gap-3`}
           >
             <Megaphone size={18} weight="duotone" className={`${PRIO_ICON_CLS[prio]} mt-0.5 shrink-0`} />
             <div className="flex-1 min-w-0">
@@ -55,6 +59,14 @@ export default function AnnouncementBanners({ bumper = 0 }) {
                 {prio === "urgent" && (
                   <span className="text-[9px] uppercase tracking-wider font-semibold text-rose-700 dark:text-rose-400">
                     URGENT
+                  </span>
+                )}
+                {mentionedMe && (
+                  <span
+                    data-testid={`banner-mentioned-${b.id}`}
+                    className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider font-semibold text-orange-700 dark:text-orange-400 bg-amber-gradient-soft border border-orange-500/40 px-1.5 py-0.5 rounded-full"
+                  >
+                    <At size={9} weight="bold" /> You
                   </span>
                 )}
                 <p className="text-sm font-semibold text-foreground" data-testid={`banner-subject-${b.id}`}>
