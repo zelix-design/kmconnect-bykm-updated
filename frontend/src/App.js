@@ -25,6 +25,7 @@ import ExpenseRequests from "@/pages/ExpenseRequests";
 import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
+import Messages from "@/pages/Messages";
 import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {
@@ -78,6 +79,8 @@ export default function App() {
             <Route path="/settings" element={<PermGate page="settings"><Settings /></PermGate>} />
             <Route path="/users" element={<PermGate roles={SUPER_ADMIN_ONLY}><Users /></PermGate>} />
             <Route path="/my-ledger" element={<PermGate roles={USER_ONLY}><LinkedUserLedger /></PermGate>} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/messages/:id" element={<Messages />} />
             <Route path="/expense-requests" element={<PermGate page="expense_requests"><ExpenseRequests /></PermGate>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

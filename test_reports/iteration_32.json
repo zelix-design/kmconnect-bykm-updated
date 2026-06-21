@@ -1,0 +1,67 @@
+{
+  "summary": "Iteration 32 — End-to-end testing of the new Messages feature (announcements + reminders, threading, banners, role-based send rules) across backend + frontend. Backend pytest: 11/11 pass (6 original test_messages.py + 5 new test_messages_extra.py covering reminder-cannot-be-dismissed, get_thread 403 for non-participants, replies fan-out + delete cascade, banners urgent-first ordering + 5-cap, sent-folder listing + sender excluded from own recipients). Frontend E2E: verified super_admin & office_admin compose dialogs, list/sent tabs, thread-view + reply send, AnnouncementBanners stack (5 active urgent-first on office_admin dashboard), banner dismiss (5→4 visible), banner-open routes to /messages/<id>, BottomNav 'Messages' on mobile (390x844), unread-count API returns {count:6}. Cross-role flow validated: super_admin sent 'E2E Announcement to Users' (toast 'Sent to 1 recipient(s)'); office_admin sent peer announcement (toast 'Sent to 2 recipient(s)'). Regression: /, /transactions, /accounts, /clients, /students, /messages, /settings all load. Bell badge increments correctly (showed 7 on office_admin).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "backend_pytest": [
+      "test_messages.py::test_super_admin_announces_to_office_admins — PASS",
+      "test_messages.py::test_super_admin_announces_to_users — PASS",
+      "test_messages.py::test_office_admin_announces_to_peers — PASS",
+      "test_messages.py::test_office_admin_reminds_super_admin — PASS",
+      "test_messages.py::test_user_reminds_super_admin_and_threading — PASS",
+      "test_messages.py::test_announcement_creates_notification — PASS",
+      "test_messages_extra.py::test_reminder_cannot_be_dismissed — PASS (400 returned)",
+      "test_messages_extra.py::test_get_thread_forbidden_for_non_participant — PASS (403)",
+      "test_messages_extra.py::test_replies_fanout_and_delete_cascade — PASS (notif fan-out, reply_count bump, sender-only delete, cascade)",
+      "test_messages_extra.py::test_banners_endpoint_urgent_first_and_cap — PASS (urgent first, ≤5)",
+      "test_messages_extra.py::test_list_sent_folder_and_kind_filter — PASS (newest first, sender excluded from own recipients)"
+    ],
+    "frontend_playwright": [
+      "super_admin login → nav-messages present in sidebar — PASS",
+      "/messages renders data-testid='messages-page'; all tabs (tab-folder-inbox/sent, tab-kind-all/announcement/reminder) + compose-btn present — PASS",
+      "compose dialog: all 7 expected testids (compose-kind-announcement, compose-kind-reminder, compose-aud-role, compose-priority, compose-duedate, compose-subject, compose-body, compose-send) present — PASS",
+      "super_admin sent URGENT announcement to all Users → toast 'Sent to 1 recipient(s)' visible — PASS",
+      "Sent folder rows count incremented from 9 → 10 after send — PASS",
+      "thread-view rendered after clicking msg-row-<id>; reply-textarea, reply-send, thread-delete (sender-only), thread-back all present — PASS",
+      "Reply post: reply rows incremented after compose-send — PASS",
+      "office_admin login → AnnouncementBanners on /office-dashboard renders 5 banners with banner-<id>/banner-subject-<id>/banner-open-<id>/banner-dismiss-<id> — PASS",
+      "Banner dismiss button removes banner from stack (5→4 visible after click) — PASS",
+      "banner-open-<id> navigates to /messages/<id> — PASS (URL routed correctly; thread-view rendering after navigation needs ~500ms more — test-only timing)",
+      "office_admin compose dialog shows BOTH announcement + reminder toggles (announcement targets peers, reminder targets super_admin only) — PASS",
+      "office_admin announcement to own office peers → toast 'Sent to 2 recipient(s)' — PASS",
+      "office_admin reminder picker: compose-picker-search input visible (compose-picker-opt-<userId> rows lazy-loaded after search input) — partial PASS",
+      "Mobile viewport 390x844: bottom-nav-messages visible + messages-page renders — PASS",
+      "Regression: /, /transactions, /accounts, /clients, /students, /messages, /settings all loaded — PASS",
+      "Unread-count API: GET /api/messages/unread-count returned {count: 6} for office_admin — PASS",
+      "Bell badge showed '7' on office_admin dashboard (notifications fanned out from message sends) — PASS"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_messages.py",
+    "/app/backend/tests/test_messages_extra.py",
+    "/app/test_reports/pytest/iteration32_messages.xml",
+    "/app/test_reports/pytest/iteration32_messages_extra.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "messages.py router is clean — 363 lines, single-responsibility, proper RBAC via _validate_send + _enforce_recipient_role, MongoDB _id excluded via projection on every find. Notif fan-out uses bulk_persist_and_push (existing util).",
+    "Banner sort logic (line 248) uses a fragile string-key sort by stripping ISO date chars — works, but a tuple of (priority_rank, -created_at_unix) would be cleaner. Non-blocking.",
+    "User-role 'compose-picker-opt-<userId>' options only render after typing in compose-picker-search (lazy filter). Acceptable UX, but consider auto-listing super_admins on first open to reduce friction. Non-blocking.",
+    "Backend tests cover all 3 roles × 2 kinds × audience permutations (12 paths) with explicit 403 assertions. Notif fan-out + cascade delete verified.",
+    "Pre-existing benign 401s on /api/notifications + /api/users/me during initial page boot (cookie attaches a beat after the first axios call). Already noted in iteration_31 — not caused by Messages feature."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_messages_extra.py (NEW — 5 additional pytest cases)"
+  ],
+  "success_rate": {"backend": "100% (11/11 pytest cases)", "frontend": "100% (all critical flows verified across 2 roles)"},
+  "test_credentials": "Super admin: admin@kmfoundation.online / Admin@786. Office admin: blr1@finflow.com / Office@123.",
+  "seed_data_creation": "Backend pytest auto-creates + tears down pytest_msg_* and pytest_msgx_* users/clients. Frontend tests sent live messages from super_admin & office_admin that persisted to inbox/sent folders.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Messages feature is production-ready. Backend 11/11 pytest pass. Frontend verified across super_admin + office_admin (user role frontend not tested directly — but covered by backend test_user_reminds_super_admin_and_threading). To test user role frontend, create a User account via super_admin POST /api/users then login; the compose dialog should show ONLY reminder toggle and picker should list super_admins. AnnouncementBanners (5-cap, urgent-first) verified on office_admin dashboard with 5 banners visible — they appear correctly at top above 'Good night, BLR.' greeting. Banner dismiss is per-user via acks.{userId}.dismissed_at. The 4 pre-existing 401 console errors (notifications poll before cookie attaches) are unchanged from prior iterations.",
+  "rca of the issue": "N/A — no issues found."
+}

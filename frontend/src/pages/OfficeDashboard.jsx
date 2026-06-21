@@ -13,6 +13,7 @@ import {
   UpcomingBirthdaysCard, IncentiveRuleCard,
 } from "@/components/office-dashboard/AsideCards";
 import StaffPickerDialog from "@/components/office-dashboard/StaffPickerDialog";
+import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -93,6 +94,7 @@ export default function OfficeDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="office-dashboard">
+      <AnnouncementBanners />
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <p className="label-eyebrow">{user?.office ? `${OFFICE_LABEL[user.office] || user.office} · office` : "Office"}</p>

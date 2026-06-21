@@ -23,6 +23,7 @@ import {
 } from "@/lib/dashboardUtils";
 import { StatCard, ChartHeader, Empty } from "@/components/dashboard/StatCard";
 import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
+import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
 
 const TILES = [
   { key: "transactions", label: "Transactions", icon: Receipt, palette: "amber" },
@@ -133,6 +134,7 @@ function SuperAdminDashboard() {
 
   return (
     <div className="space-y-7 animate-fade-in" data-testid="dashboard-page">
+      <AnnouncementBanners />
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="label-eyebrow">Overview</p>
@@ -831,6 +833,7 @@ function LinkedUserDashboard() {
 
   return (
     <div className="space-y-7 animate-fade-in" data-testid="linked-user-dashboard">
+      <AnnouncementBanners />
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
           <p className="label-eyebrow">Your overview</p>
