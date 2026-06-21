@@ -83,30 +83,30 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
 
   // Load picker options whenever the dialog opens — used for both the
   // reminder recipient picker AND the @-mention autocomplete in the body.
+  // Endpoint pick:
+  //   - super_admin → /users (full directory; needs the role list anyway)
+  //   - office_admin / user → /users/super-admins (lightweight, RBAC-safe)
   useEffect(() => {
     if (!open) return;
     let cancel = false;
     (async () => {
       setPickerLoading(true);
       try {
-        const r = await api.get("/users?status=approved");
+        const endpoint = role === "super_admin"
+          ? "/users?status=approved"
+          : "/users/super-admins";
+        const r = await api.get(endpoint);
         if (cancel) return;
-        let opts = r.data || [];
-        // Reminders sent by office_admin / user can only target super_admins.
-        // For everyone else, we keep the full set so mention autocomplete +
-        // super-admin reminder pickers can both filter from the same pool.
-        if (kind === "reminder" && role !== "super_admin") {
-          opts = opts.filter((u) => u.role === "super_admin");
-        }
-        setPickerOptions(opts);
+        setPickerOptions(r.data || []);
       } catch (e) {
         console.error("[compose] picker load failed:", e);
+        if (!cancel) setPickerOptions([]);
       } finally {
-        setPickerLoading(false);
+        if (!cancel) setPickerLoading(false);
       }
     })();
     return () => { cancel = true; };
-  }, [open, kind, role]);
+  }, [open, role]);
 
   // Build the audience object that goes to the API
   const buildAudience = () => {
@@ -358,7 +358,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
               <p className="text-[10px] text-muted-foreground">
                 {mentions.length > 0 && (
                   <span data-testid="compose-mentions-count">
-                    Highlighting {mentions.length} {mentions.length === 1 ? "person" : "people"} — they'll get a stronger notification
+                    Highlighting {mentions.length} {mentions.length === 1 ? "person" : "people"} — they&apos;ll get a stronger notification
                   </span>
                 )}
               </p>

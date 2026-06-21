@@ -291,20 +291,30 @@ async def unread_count(user: dict = Depends(get_current_user)) -> dict:
 
 @router.get("/banners")
 async def banners(user: dict = Depends(get_current_user)) -> list[dict]:
-    """Active (un-dismissed) announcements addressed to me. Sorted urgent
-    first, then newest, capped to 5 so we never bury the dashboard."""
+    """Active (un-dismissed) announcements addressed to me. Sort order:
+    mentioned-me first → urgent next → newest. Capped at 5 so we never bury
+    the dashboard. Mentioning-me bubbles to the top so the
+    'You were mentioned' announcement is always visible even when other
+    urgent banners stack up."""
     docs = await db.messages.find(
         {"recipient_ids": user["id"], "parent_id": None, "kind": "announcement"},
         {"_id": 0},
     ).sort("created_at", -1).to_list(50)
     out: list[dict] = []
+    me_id = user["id"]
     for d in docs:
-        ack = (d.get("acks") or {}).get(user["id"]) or {}
+        ack = (d.get("acks") or {}).get(me_id) or {}
         if ack.get("dismissed_at"):
             continue
         d["my_read"] = bool(ack.get("read_at"))
+        d["mentioned_me"] = me_id in (d.get("mentions") or [])
         out.append(d)
-    out.sort(key=lambda r: (0 if r.get("priority") == "urgent" else 1, -1 * int(r["created_at"].replace("-", "").replace(":", "").replace("T", "").replace("Z", "").split(".")[0] or "0")))
+    out.sort(key=lambda r: (
+        0 if r.get("mentioned_me") else 1,
+        0 if r.get("priority") == "urgent" else 1,
+        # Newer first — sort by created_at descending via negative tuple
+        -1 * int(str(r.get("created_at") or "").replace("-", "").replace(":", "").replace("T", "").replace("Z", "").split(".")[0] or "0"),
+    ))
     return out[:5]
 
 

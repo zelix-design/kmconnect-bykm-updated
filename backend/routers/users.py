@@ -29,6 +29,20 @@ async def list_users(user: dict = Depends(get_current_user), status: str | None 
     return docs
 
 
+@router.get("/super-admins")
+async def list_super_admins_for_picker(user: dict = Depends(get_current_user)):
+    """Lightweight picker endpoint for the Messages reminder composer.
+    Returns the minimum public info (id, name, email, role) for every
+    approved super_admin so any authenticated office_admin / user / super_admin
+    can address a reminder upward. Sender themselves is excluded — sending a
+    reminder to yourself doesn't make sense."""
+    docs = await db.users.find(
+        {"role": "super_admin", "approval_status": "approved"},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+    ).sort("created_at", -1).to_list(50)
+    return [d for d in docs if d.get("id") != user.get("id")]
+
+
 @router.get("/me/ledger")
 async def my_ledger(user: dict = Depends(get_current_user)):
     """Combined credit/debit ledger for a linked sub-agent / associate

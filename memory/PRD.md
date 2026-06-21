@@ -769,3 +769,45 @@ User asked for: Super Admin → Announcement to Users / Office Admins; Office Ad
 - Iteration 32 testing-agent sweep: **11/11 backend pytest** + **100% frontend flows** verified across super_admin & office_admin, mobile + desktop. **0 action items, 0 critical issues.**
 - Curated pytest suite total: **74/74 pass.**
 
+
+
+## Implementation status — 2026-02-26 (iteration 33: @-Mention feature on Messages)
+Adds @-mentions to the Messages module. Mentioned users get a stronger `mention` notification (single notif per recipient — never doubled with the standard `message` / `message_reply`).
+
+### Backend (`/app/backend/routers/messages.py`)
+- `MessageIn` and `ReplyIn` accept optional `mentions: list[str]`.
+- `_filter_mentions(payload, allowed_set)` — drops mentions outside the resolved recipient set / thread participants (sender id auto-excluded since `_resolve_recipients` already removes it).
+- `_fanout_with_mentions(...)` — splits the notification fan-out into two batches: mentioned users get `type='mention'` with title "🔔 <Sender> mentioned you · <Subject>"; everyone else gets the normal `type='message'` (or `message_reply`). No user appears in both batches.
+- `GET /api/messages/banners` now sorts **mentioned-me first → urgent next → newest** and returns a `mentioned_me` boolean so the dashboard banner can apply a stronger UI treatment. Cap remains 5.
+
+### Frontend
+- New `components/messages/MentionTextarea.jsx` (190 lines) — a Textarea wrapper that:
+  - Detects `@` followed by no whitespace and opens a dropdown anchored below the field.
+  - Filters by what's typed after `@`. ArrowUp / Down navigates. Enter / Tab selects. Escape dismisses.
+  - On selection inserts `@<Name> ` into the body and adds the id to a controlled `mentions` array.
+  - Auto-cleanup: deleting the literal `@<Name>` substring removes the id from `mentions`.
+  - Also exports `MentionBody` — a renderer that turns `@<Name>` substrings into amber-styled pills (data-testid `mention-pill-<userId>`) when the corresponding id is in the mentions list. Plain `@name` text without a tracked id stays plain.
+- `ComposeMessageDialog` body now uses `MentionTextarea`. Picker options always load on dialog open so the mention dropdown works for ANY audience choice. Computed `mentionOptions` adapts to the current audience:
+  - super_admin announce-to-user → all user-role accounts
+  - super_admin announce-to-office_admin → office admins (optionally scoped by office)
+  - office_admin announce-to-peers → peers at own office minus self
+  - any reminder → the explicitly selected recipients
+- Subtle "Highlighting N people — they'll get a stronger notification" label appears once any mention is added (`compose-mentions-count` testid).
+- `Messages.jsx` `ThreadView`:
+  - Both root body + each reply body render through `MentionBody` so the pills show.
+  - Reply composer uses `MentionTextarea` with options = thread participants minus self.
+  - Reply mentions sent on POST.
+- `AnnouncementBanners.jsx`:
+  - When current user is in `banner.mentions`, render a small `@ You` chip (`banner-mentioned-<msgId>`) AND apply an orange ring around the banner card so it stands out from regular urgent ones.
+  - Combined with the backend's new "mentioned-me first" sort, an @-you banner is now reliably visible even when 5+ other urgent announcements stack up.
+
+### Tests
+- `test_message_mentions.py` — 5 pytest cases:
+  1. Mention creates a separate `type='mention'` notif; non-mentioned recipients get the standard one; no double-fan-out.
+  2. Mentions outside the recipient set (incl. bogus / sender ids) are silently dropped.
+  3. Reply mentions fan out correctly (mention → mentioned user; message_reply → rest).
+  4. Self-mention dropped.
+  5. **NEW:** Banner sort — banner that mentions me appears ABOVE other urgent banners that didn't, even when older / lower priority.
+- Iteration 33 testing-agent sweep: **15/15 backend pytest + 11/11 frontend flows** verified across compose, keyboard nav, dropdown filter, pill rendering, banner ring, dismiss, reply mention, and mention auto-removal. **0 action items.**
+- Curated pytest suite total: **80/80 pass.**
+

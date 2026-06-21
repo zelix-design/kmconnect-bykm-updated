@@ -193,3 +193,42 @@ def test_mention_self_is_dropped(admin_session: requests.Session) -> None:
     )
     assert r.status_code == 200
     assert r.json()["mentions"] == []
+
+
+def test_mentioned_banner_sorts_first(admin_session: requests.Session) -> None:
+    """Banners list should put a banner where I'm mentioned ABOVE other
+    urgent banners that didn't mention me — even if the mentioning banner
+    is older and lower priority."""
+    users = _make_two_office_admins(admin_session)
+    # 1. URGENT announcement to KM_TCR, no mention
+    admin_session.post(
+        f"{API}/messages",
+        json={
+            "kind": "announcement", "subject": "Urgent broadcast no mention",
+            "body": "x", "priority": "urgent",
+            "audience": {"type": "role_office", "role": "office_admin", "office": "KM_TCR"},
+        },
+        timeout=15,
+    ).raise_for_status()
+    # 2. NORMAL announcement (older sort by created_at would put it second
+    # without mentions sort) — mentions A.
+    admin_session.post(
+        f"{API}/messages",
+        json={
+            "kind": "announcement", "subject": "Normal but mentions A",
+            "body": "Heads up", "priority": "normal",
+            "audience": {"type": "role_office", "role": "office_admin", "office": "KM_TCR"},
+            "mentions": [users["a"]["id"]],
+        },
+        timeout=15,
+    ).raise_for_status()
+    a = _login(users["a"]["email"], users["a_pwd"])
+    bn = a.get(f"{API}/messages/banners", timeout=15).json()
+    a.close()
+    # A's first banner should be the one that mentioned them, even though it
+    # is NORMAL priority and the other is URGENT.
+    assert len(bn) >= 2
+    assert bn[0]["subject"] == "Normal but mentions A"
+    assert bn[0]["mentioned_me"] is True
+    assert bn[1]["subject"] == "Urgent broadcast no mention"
+    assert bn[1].get("mentioned_me") is False
