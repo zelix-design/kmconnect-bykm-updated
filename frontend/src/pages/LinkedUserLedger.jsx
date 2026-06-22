@@ -70,7 +70,7 @@ export default function LinkedUserLedger() {
   }, []);
 
   const totals = ledger?.totals || { credits: 0, debits: 0, invoices_total: 0, net: 0 };
-  const entries = ledger?.entries || [];
+  const entries = useMemo(() => ledger?.entries || [], [ledger]);
 
   const visible = useMemo(() => {
     if (filter === "all") return entries;

@@ -123,7 +123,10 @@ function ThreadView({ id, currentUser, onClose, onChange }) {
     }
   };
 
-  useEffect(() => { if (id) load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    if (id) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const submit = async () => {
     if (!reply.trim()) return;
@@ -318,7 +321,10 @@ export default function Messages() {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [folder, kindFilter, bumper]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, kindFilter, bumper]);
 
   const filtered = useMemo(() => {
     if (!search) return items;
