@@ -53,7 +53,39 @@ function PublicOnly({ children }) {
 const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
 const USER_ONLY = Object.freeze(["user"]);
 
+// Hostnames whose entire surface is just the public admission form. Comma-
+// separated env var, e.g. "apply.kmfoundation.online,admissions.example.com".
+// When window.location.hostname matches one of these we bypass auth + the
+// main router and mount only <PublicApplication /> — regardless of path.
+const PUBLIC_APPLY_HOSTS = (process.env.REACT_APP_PUBLIC_APPLY_HOSTS || "")
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
+
+function isPublicApplyHost() {
+  if (typeof window === "undefined") return false;
+  const host = (window.location.hostname || "").toLowerCase();
+  return PUBLIC_APPLY_HOSTS.includes(host);
+}
+
+/** Standalone shell used when the app is being served from a public-apply
+ * domain. No auth provider, no sidebar, no other routes — just the form,
+ * regardless of pathname. Query strings (e.g. ?ref=…) still pass through.
+ * (PublicApplication mounts its own <Toaster> so we don't add one here.) */
+function PublicApplyOnly() {
+  return (
+    <ThemeProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="*" element={<PublicApplication />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
+  );
+}
+
 export default function App() {
+  if (isPublicApplyHost()) return <PublicApplyOnly />;
   return (
     <ThemeProvider>
       <AuthProvider>
