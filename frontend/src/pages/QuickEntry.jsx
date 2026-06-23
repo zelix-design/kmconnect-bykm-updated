@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, todayISO } from "@/lib/format";
+import { navigateToApply } from "@/lib/applyUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,7 +63,7 @@ export default function QuickEntry() {
   // button returns to the dashboard, not into a loop.
   useEffect(() => {
     if (isLightUser && linkedClientId) {
-      nav(`/apply?ref=${linkedClientId}`, { replace: true });
+      navigateToApply(nav, linkedClientId, { replace: true });
     }
   }, [isLightUser, linkedClientId, nav]);
 

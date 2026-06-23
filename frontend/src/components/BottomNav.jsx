@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { canView } from "@/lib/perm";
+import { navigateToApply } from "@/lib/applyUrl";
 import {
   House,
   Student,
@@ -142,7 +143,7 @@ export default function BottomNav() {
   const isLinkedUser = !!linkedRef;
   const onFabClick = () => {
     if (isLinkedUser) {
-      nav(`/apply?ref=${encodeURIComponent(linkedRef)}`);
+      navigateToApply(nav, linkedRef);
     } else {
       setOpen(true);
     }

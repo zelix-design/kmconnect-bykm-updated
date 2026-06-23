@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate, greetingForNow } from "@/lib/format";
+import { buildApplyUrl } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -806,10 +807,11 @@ function LinkedUserDashboard() {
     })();
   }, []);
 
-  // Referral URL = <origin>/apply?ref=<client_id>
+  // Referral URL = <apply-domain>/?ref=<client_id> (or same-origin /apply when
+  // REACT_APP_APPLY_PUBLIC_URL is unset — see lib/applyUrl.js).
   const referralUrl = useMemo(() => {
     if (!user?.linked_client_id) return "";
-    return `${window.location.origin}/apply?ref=${user.linked_client_id}`;
+    return buildApplyUrl(user.linked_client_id);
   }, [user]);
 
   const copyReferral = () => {

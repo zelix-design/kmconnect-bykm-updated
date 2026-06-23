@@ -18,6 +18,7 @@ import StudentsTable from "@/components/students/StudentsTable";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
+import { navigateToApply } from "@/lib/applyUrl";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 
 const STATUS_OPTIONS = [
@@ -97,7 +98,7 @@ export default function Students() {
     // which creates an inquiry that super-admin can later approve. Same UX as
     // their Quick Entry button — consistent across the app.
     if (role === "user" && user?.linked_client_id) {
-      nav(`/apply?ref=${user.linked_client_id}`);
+      navigateToApply(nav, user.linked_client_id);
       return;
     }
     // Reset form to blank
@@ -147,7 +148,7 @@ export default function Students() {
         // Linked user: there is no inline add-student flow for them. Redirect
         // to the public application form with their referral so the inquiry is
         // attributed correctly.
-        nav(`/apply?ref=${user.linked_client_id}`, { replace: true });
+        navigateToApply(nav, user.linked_client_id, { replace: true });
         return;
       }
       if (staffParam) {

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
+import { buildApplyUrl } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon } from "@phosphor-icons/react";
@@ -112,7 +113,7 @@ export default function ClientDetail() {
                   .replace(/[^a-z0-9]+/g, "-")
                   .replace(/^-+|-+$/g, "");
                 const ref = slug || c.id;
-                const url = `${window.location.origin}/apply?ref=${ref}`;
+                const url = buildApplyUrl(ref);
                 navigator.clipboard.writeText(url).then(
                   () => toast.success("Referral link copied", { description: url }),
                   () => window.prompt("Copy this referral link:", url),
