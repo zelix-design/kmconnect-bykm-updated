@@ -20,8 +20,8 @@ environments (Production, Preview, Development):
 
 | Name | Value | What it does |
 | --- | --- | --- |
-| `REACT_APP_PUBLIC_APPLY_HOSTS` | `apply.kmfoundation.online` | Comma-separate to add more, e.g. `apply.kmfoundation.online,admissions.example.com`. Lower-case. No protocol, no path. **Tells the React app: when served from this hostname, render ONLY the apply form (skip auth + admin pages).** |
-| `REACT_APP_APPLY_PUBLIC_URL` | `https://apply.kmfoundation.online` | Optional but recommended. The full canonical URL the admin app should use whenever it builds an apply link (Copy Referral, FAB redirect for Sub-agent role, Quick Entry redirect, etc.). When this is unset, the admin app falls back to its own origin's `/apply` path — useful for local dev. |
+| `REACT_APP_PUBLIC_APPLY_HOSTS` | `apply.kmfoundation.co.in` | Comma-separate to add more, e.g. `apply.kmfoundation.co.in,apply.kmfoundation.online`. Lower-case. No protocol, no path. **Tells the React app: when served from this hostname, render ONLY the apply form (skip auth + admin pages).** |
+| `REACT_APP_APPLY_PUBLIC_URL` | `https://apply.kmfoundation.co.in` | Required for outgoing links to land on the new domain. The full canonical URL the admin app uses whenever it builds an apply link (Copy Referral, FAB redirect for Sub-agent role, Quick Entry redirect, etc.). When this is unset, the admin app falls back to its own origin's `/apply` path. |
 
 Trigger a redeploy (any push to the deployed branch, or click *Redeploy*
 on the latest deployment).
@@ -33,9 +33,9 @@ same backend you already use.
 
 ## What users see on the new domain
 
-* `https://apply.kmfoundation.online/` → admission form
-* `https://apply.kmfoundation.online/<anything>` → admission form (404 routes are absorbed)
-* `https://apply.kmfoundation.online/?ref=<client_id>` → admission form pre-tagged with the referring sub-agent (existing behavior)
+* `https://apply.kmfoundation.co.in/` → admission form
+* `https://apply.kmfoundation.co.in/<anything>` → admission form (404 routes are absorbed)
+* `https://apply.kmfoundation.co.in/?ref=<client_id>` → admission form pre-tagged with the referring sub-agent (existing behavior)
 
 The login, dashboard, and admin pages are **not reachable** on that
 hostname — anyone who tries gets the form instead. The full admin app
@@ -44,9 +44,9 @@ remains available only on your original domain.
 ## How to verify it works
 
 ```
-curl -s https://<new-domain>/ | grep "Student Application"
+curl -s https://apply.kmfoundation.co.in/ | grep "Student Application"
 # → should match
-curl -s https://<original-domain>/login | grep "Sign in"
+curl -s https://<your-admin-domain>/login | grep "Sign in"
 # → should still match (admin app unaffected)
 ```
 
@@ -75,3 +75,12 @@ in-app references to `/apply` go through it:
 origin) and a full `window.location.assign` (cross origin) so transitions
 to the public domain do a real page load — required because the admin
 session isn't valid on the public host.
+
+## Quick paste-ready values for `apply.kmfoundation.co.in`
+
+Copy these directly into Vercel:
+
+```
+REACT_APP_PUBLIC_APPLY_HOSTS=apply.kmfoundation.co.in
+REACT_APP_APPLY_PUBLIC_URL=https://apply.kmfoundation.co.in
+```
