@@ -18,7 +18,7 @@ import StudentsTable from "@/components/students/StudentsTable";
 import ClientPickerDialog from "@/components/students/ClientPickerDialog";
 import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
-import { navigateToApply } from "@/lib/applyUrl";
+import { navigateToApply, buildApplyUrl } from "@/lib/applyUrl";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 
 const STATUS_OPTIONS = [
@@ -295,7 +295,7 @@ export default function Students() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  const url = `${window.location.origin}/apply`;
+                  const url = buildApplyUrl();
                   navigator.clipboard.writeText(url).then(
                     () => toast.success(`Public form link copied · ${url}`),
                     () => { window.prompt("Copy the application link:", url); }
