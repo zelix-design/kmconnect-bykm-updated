@@ -3,12 +3,13 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
+import { buildApplyUrl } from "@/lib/applyUrl";
 import NotificationsBell from "@/components/NotificationsBell";
 import BottomNav from "@/components/BottomNav";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
-  ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots,
+  ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -229,6 +230,19 @@ export default function AppShell() {
                 data-testid="topbar-search"
               />
             </div>
+            {user?.role === "super_admin" && !!process.env.REACT_APP_APPLY_PUBLIC_URL && (
+              <a
+                href={buildApplyUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="topbar-open-public-form"
+                title="Open the public admission form in a new tab"
+                className="hidden md:inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-muted/60 hover:bg-amber-gradient-soft hover:text-amber-700 dark:hover:text-amber-300 text-xs font-medium text-muted-foreground hover:text-foreground border border-transparent hover:border-orange-500/30 transition-colors"
+              >
+                <span>Public form</span>
+                <ArrowUpRight size={12} weight="bold" />
+              </a>
+            )}
             <NotificationsBell />
             <ThemeToggle />
             <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
