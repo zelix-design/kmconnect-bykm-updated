@@ -1,5 +1,5 @@
 {
-  "summary": "Iteration 17 frontend testing — Clients page CATEGORY grouping + Staff OFFICE sub-grouping AND Students 'Add Student → Client Picker → Form' flow. All 13 review-request checks PASS. Tested via Playwright on https://admin-portal-558.preview.emergentagent.com.",
+  "summary": "Iteration 17 frontend testing — Clients page CATEGORY grouping + Staff OFFICE sub-grouping AND Students 'Add Student → Client Picker → Form' flow. All 13 review-request checks PASS. Tested via Playwright on https://finance-flow-1727.preview.emergentagent.com.",
   "backend_issues": { "critical": [], "minor": [] },
   "frontend_issues": {
     "ui_bugs": [],

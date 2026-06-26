@@ -50,6 +50,6 @@
   "seed_data_creation": "Temporary TEST_ScholarshipStudent_Iter19 created and DELETED during test_create_with_scholarship_reduces_year_1. No persistent data added.",
   "retest_needed": false,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "All 3 deliverables (clickable client cards → /clients/:id detail, balance_vs_sc formula = sc_earned_effective - sc_adjusted_total, office_admin scoped to own staff only) are fully verified on https://admin-portal-558.preview.emergentagent.com. Backend math endpoint /api/students/{id} exposes scholarship_amount, sc_adjusted_total, sc_earned_effective, balance_vs_sc. /api/clients/{id}/detail returns 404 for cross-user access and is_staff branches the totals dict. Frontend ClientDetail.jsx has all required data-testids. ANUPAMA V V and NAFATHULLA R K fixtures remain seeded.",
+  "context_for_next_testing_agent": "All 3 deliverables (clickable client cards → /clients/:id detail, balance_vs_sc formula = sc_earned_effective - sc_adjusted_total, office_admin scoped to own staff only) are fully verified on https://finance-flow-1727.preview.emergentagent.com. Backend math endpoint /api/students/{id} exposes scholarship_amount, sc_adjusted_total, sc_earned_effective, balance_vs_sc. /api/clients/{id}/detail returns 404 for cross-user access and is_staff branches the totals dict. Frontend ClientDetail.jsx has all required data-testids. ANUPAMA V V and NAFATHULLA R K fixtures remain seeded.",
   "rca of the issue": "N/A — no bugs found."
 }
