@@ -173,6 +173,14 @@ export default function AuthPage({ mode }) {
               <Input id="password" type="password" data-testid="auth-password-input" value={form.password} onChange={handle("password")} required placeholder="••••••••" autoComplete={isLogin ? "current-password" : "new-password"} className="h-11" />
             </div>
 
+            {isLogin && (
+              <div className="flex justify-end -mt-1">
+                <Link to="/forgot-password" data-testid="link-forgot-password" className="text-sm text-orange-600 dark:text-orange-400 font-medium hover:text-orange-700">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
             {error && (
               <div className="text-sm text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2.5" data-testid="auth-error">
                 {error}

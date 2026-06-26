@@ -146,6 +146,8 @@ async def startup() -> None:
     await db.messages.create_index([("sender_id", 1), ("created_at", -1)])
     await db.messages.create_index("thread_id")
     await db.colleges.create_index("name_lower", unique=True)
+    await db.password_reset_tokens.create_index("token_hash", unique=True)
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await _ensure_login_attempts_index()
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(

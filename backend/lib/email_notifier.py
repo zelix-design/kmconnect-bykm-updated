@@ -90,6 +90,45 @@ async def send_email(
         raise RuntimeError(f"Resend send failed: {exc}") from exc
 
 
+def password_reset_email_html(name: str, reset_link: str, expires_minutes: int = 30) -> str:
+    """Inline-CSS HTML body for the self-service password reset email."""
+    safe_name = (name or "there").strip() or "there"
+    return f"""
+<!doctype html>
+<html><body style="margin:0;padding:0;background:#fafaf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1c1917;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#fafaf9;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e7e5e4;">
+        <tr><td style="background:linear-gradient(135deg,#f97316 0%,#d97706 100%);padding:24px 28px;color:#ffffff;">
+          <div style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.9;font-weight:600;">FinFlow · KM Foundation</div>
+          <h1 style="margin:6px 0 0;font-size:22px;font-weight:700;">Reset your password</h1>
+        </td></tr>
+        <tr><td style="padding:28px 28px 8px;">
+          <p style="font-size:15px;margin:0 0 14px;">Hi {safe_name},</p>
+          <p style="font-size:14px;color:#57534e;line-height:1.6;margin:0 0 22px;">
+            We received a request to reset the password for your FinFlow account. Click the button below to choose a new password. This link expires in <strong>{expires_minutes} minutes</strong>.
+          </p>
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 22px;">
+            <tr><td style="border-radius:10px;background:linear-gradient(135deg,#fbbf24 0%,#f97316 100%);">
+              <a href="{reset_link}" style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">Reset password</a>
+            </td></tr>
+          </table>
+          <p style="font-size:12px;color:#a8a29e;line-height:1.6;margin:0 0 8px;">
+            If the button doesn't work, copy and paste this link into your browser:
+          </p>
+          <p style="font-size:12px;color:#f97316;word-break:break-all;margin:0 0 20px;">{reset_link}</p>
+        </td></tr>
+        <tr><td style="padding:6px 28px 24px;color:#78716c;font-size:12px;line-height:1.55;border-top:1px solid #f5f5f4;">
+          If you didn't request this, you can safely ignore this email — your password will stay the same.
+        </td></tr>
+      </table>
+      <div style="font-size:11px;color:#a8a29e;margin-top:14px;">This is an automated message from FinFlow by KM Foundation.</div>
+    </td></tr>
+  </table>
+</body></html>
+""".strip()
+
+
 def application_email_html(student: dict) -> str:
     """Inline-CSS HTML body for the new-application notification.
 

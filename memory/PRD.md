@@ -811,3 +811,9 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - Iteration 33 testing-agent sweep: **15/15 backend pytest + 11/11 frontend flows** verified across compose, keyboard nav, dropdown filter, pill rendering, banner ring, dismiss, reply mention, and mention auto-removal. **0 action items.**
 - Curated pytest suite total: **80/80 pass.**
 
+
+## Implementation status — 2026-06-26 (iteration 36: Self-service password reset)
+- [x] **Forgot password** link on login page → `/forgot-password` (ForgotPassword.jsx) + `/reset-password` (ResetPassword.jsx) pages, crimson theme, full data-testid coverage.
+- [x] Backend `POST /api/auth/forgot-password` (generic 200, sha256-hashed token, 30-min TTL, Resend email) + `POST /api/auth/reset-password` (single-use, expiry, bcrypt update, lockout clear). New `password_reset_tokens` collection with unique token_hash index + TTL on expires_at.
+- [x] Reset link base URL from request Origin/Referer (fallback APP_BASE_URL env). Resend API key updated in backend/.env.
+- [x] Verified end-to-end via curl (single-use, expiry, login with new pw, old pw rejected); emails send (Resend message IDs); frontend renders; `CI=true` build passes (Vercel-safe).

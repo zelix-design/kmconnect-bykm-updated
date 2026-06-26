@@ -1,7 +1,12 @@
 """Authentication endpoints: register / login / me / logout / update settings."""
+import hashlib
 import logging
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel, EmailStr, Field
 
 from db import db
 from auth_lib import (
@@ -12,9 +17,12 @@ from auth_lib import (
 from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISSIONS
 from seed import seed_user_defaults
 from routers.notifications import notify_super_admins
+from lib.email_notifier import send_email, password_reset_email_html
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 log = logging.getLogger("auth")
+
+RESET_TOKEN_TTL_MINUTES = 30
 
 
 @router.post("/register")
@@ -117,3 +125,118 @@ async def update_settings(payload: SettingsUpdate, user: dict = Depends(require_
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
     return fresh
+
+
+# ---------- Self-service password reset ----------
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=10)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+_GENERIC_FORGOT_MSG = (
+    "If an account exists for that email, a password reset link is on its way."
+)
+_INVALID_TOKEN_MSG = (
+    "This reset link is invalid or has expired. Please request a new one."
+)
+
+
+def _token_hash(raw: str) -> str:
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _reset_base_url(request: Request) -> str:
+    """Resolve the frontend base URL for the reset link. Prefer the request's
+    Origin header (the user is on the login page when they ask), then Referer,
+    then an explicit APP_BASE_URL env var as a last resort."""
+    origin = request.headers.get("origin")
+    if origin:
+        return origin.rstrip("/")
+    referer = request.headers.get("referer")
+    if referer:
+        # Strip path → scheme://host[:port]
+        from urllib.parse import urlparse
+        p = urlparse(referer)
+        if p.scheme and p.netloc:
+            return f"{p.scheme}://{p.netloc}"
+    env_base = os.environ.get("APP_BASE_URL")
+    if env_base:
+        return env_base.rstrip("/")
+    return ""
+
+
+@router.post("/forgot-password")
+async def forgot_password(payload: ForgotPasswordIn, request: Request):
+    """Generate a one-time, time-limited reset token and email a reset link.
+    Always returns a generic success message so attackers can't enumerate
+    which emails have accounts."""
+    email = payload.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return {"ok": True, "message": _GENERIC_FORGOT_MSG}
+
+    raw_token = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=RESET_TOKEN_TTL_MINUTES)
+    # Invalidate any earlier unused tokens for this user (one live link at a time)
+    await db.password_reset_tokens.delete_many({"user_id": user["id"], "used": False})
+    await db.password_reset_tokens.insert_one({
+        "token_hash": _token_hash(raw_token),
+        "user_id": user["id"],
+        "email": email,
+        "created_at": now.isoformat(),
+        "expires_at_iso": expires_at.isoformat(),
+        "expires_at": expires_at,  # BSON date — drives the TTL index cleanup
+        "used": False,
+    })
+
+    base = _reset_base_url(request)
+    reset_link = f"{base}/reset-password?token={raw_token}"
+    try:
+        resp = await send_email(
+            to=email,
+            subject="Reset your FinFlow password",
+            html=password_reset_email_html(
+                user.get("name"), reset_link, RESET_TOKEN_TTL_MINUTES
+            ),
+        )
+        if resp.get("skipped"):
+            log.warning("[auth/forgot-password] email skipped (no RESEND_API_KEY) for %s", email)
+    except Exception:  # best-effort — never leak send failures to the client
+        log.exception("[auth/forgot-password] failed to send reset email to %s", email)
+
+    return {"ok": True, "message": _GENERIC_FORGOT_MSG}
+
+
+@router.post("/reset-password")
+async def reset_password(payload: ResetPasswordIn):
+    """Validate a reset token (unexpired + unused), set the new password,
+    burn the token, and clear any active brute-force lockout."""
+    rec = await db.password_reset_tokens.find_one({"token_hash": _token_hash(payload.token)})
+    if not rec or rec.get("used"):
+        raise HTTPException(status_code=400, detail=_INVALID_TOKEN_MSG)
+    try:
+        exp = datetime.fromisoformat(rec.get("expires_at_iso", ""))
+    except (TypeError, ValueError):
+        exp = None
+    if not exp or exp < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail=_INVALID_TOKEN_MSG)
+
+    user = await db.users.find_one({"id": rec["user_id"]})
+    if not user:
+        raise HTTPException(status_code=400, detail=_INVALID_TOKEN_MSG)
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(payload.new_password), "password_reset_at": now_iso()}},
+    )
+    await db.password_reset_tokens.update_one(
+        {"_id": rec["_id"]}, {"$set": {"used": True, "used_at": now_iso()}}
+    )
+    # Clear lockout so the user can sign in immediately after resetting.
+    await db.login_attempts.delete_one({"email": user.get("email")})
+    return {"ok": True, "message": "Your password has been reset. You can now sign in."}

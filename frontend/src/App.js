@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 
 import AuthPage from "@/pages/AuthPage";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import AppShell from "@/pages/AppShell";
 import Dashboard from "@/pages/Dashboard";
 import QuickEntry from "@/pages/QuickEntry";
@@ -94,6 +96,8 @@ export default function App() {
           <Route path="/apply" element={<PublicApplication />} />
           <Route path="/login" element={<PublicOnly><AuthPage mode="login" /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route element={<Protected><AppShell /></Protected>}>
             <Route path="/" element={<PermGate page="overview"><Dashboard /></PermGate>} />
             <Route path="/quick-entry" element={<PermGate page="quick_entry"><QuickEntry /></PermGate>} />
