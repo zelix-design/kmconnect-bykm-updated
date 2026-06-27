@@ -29,10 +29,11 @@ const WINDOWS = [
   { value: "year", label: "This year" },
 ];
 
-export default function OfficeDashboard() {
+export default function OfficeDashboard({ superView = false }) {
   const { user } = useAuth();
   const nav = useNavigate();
-  const currency = user?.currency || "INR";
+  const [office, setOffice] = useState("KM_BLR");
+  const currency = superView ? "INR" : (user?.currency || "INR");
   const [windowKey, setWindowKey] = useState("month");
   const [tab, setTab] = useState("admissions");
   const [data, setData] = useState(null);
@@ -44,14 +45,17 @@ export default function OfficeDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get(`/dashboard/office-admin?window=${windowKey}`);
+      const url = superView
+        ? `/dashboard/office-admin?window=${windowKey}&office=${office}`
+        : `/dashboard/office-admin?window=${windowKey}`;
+      const { data } = await api.get(url);
       setData(data);
     } catch (e) {
       toast.error(formatApiError(e.response?.data?.detail) || "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [windowKey]);
+  }, [windowKey, superView, office]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -80,7 +84,7 @@ export default function OfficeDashboard() {
   const openAdmissionPicker = async () => {
     try {
       const { data } = await api.get("/clients");
-      setAllStaff((data || []).filter((c) => c.client_type === "staff"));
+      setAllStaff((data || []).filter((c) => c.client_type === "staff" && (!superView || c.office === office)));
       setPickerSearch("");
       setPickerOpen(true);
     } catch (err) {
@@ -100,15 +104,42 @@ export default function OfficeDashboard() {
   const windowLabel = WINDOWS.find((x) => x.value === windowKey)?.label?.toLowerCase();
 
   return (
-    <div className="space-y-6 animate-fade-in" data-testid="office-dashboard">
+    <div className="space-y-6 animate-fade-in" data-testid={superView ? "office-overview-page" : "office-dashboard"}>
       <AnnouncementBanners />
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <p className="label-eyebrow">{user?.office ? `${OFFICE_LABEL[user.office] || user.office} · office` : "Office"}</p>
-          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="office-greeting">
-            {greetingForNow()}, {user?.name?.split(" ")[0] || "there"}.
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">Track admissions, staff incentives & lead performance.</p>
+          {superView ? (
+            <>
+              <p className="label-eyebrow">Office overview</p>
+              <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="office-overview-title">
+                {OFFICE_LABEL[office] || office} office
+              </h1>
+              <div className="flex flex-wrap items-center gap-2 mt-3" data-testid="office-switcher">
+                {Object.keys(OFFICE_LABEL).map((o) => (
+                  <button
+                    key={o}
+                    onClick={() => setOffice(o)}
+                    data-testid={`office-switch-${o}`}
+                    className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      office === o
+                        ? "bg-foreground text-background"
+                        : "bg-card border border-border text-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    {OFFICE_LABEL[o]}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="label-eyebrow">{user?.office ? `${OFFICE_LABEL[user.office] || user.office} · office` : "Office"}</p>
+              <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="office-greeting">
+                {greetingForNow()}, {user?.name?.split(" ")[0] || "there"}.
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">Track admissions, staff incentives & lead performance.</p>
+            </>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2" data-testid="office-tabs">
@@ -130,7 +161,7 @@ export default function OfficeDashboard() {
       </header>
 
       {tab === "crm" ? (
-        <CrmAnalytics />
+        <CrmAnalytics office={superView ? office : null} />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2" data-testid="window-toggle">

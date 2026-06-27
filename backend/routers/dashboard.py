@@ -164,6 +164,7 @@ def _days_until_birthday(dob_iso: str, today: datetime) -> int:
 async def office_admin_dashboard(
     user: dict = Depends(get_current_user),
     window: str = "month",
+    office: Optional[str] = None,
 ) -> dict:
     """Aggregated view for office admins (or super admin in office_admin shoes).
 
@@ -181,14 +182,25 @@ async def office_admin_dashboard(
 
     if window not in ("week", "month", "year"):
         window = "month"
-    user_id = user["id"]
     now = datetime.now(timezone.utc)
     win_start, win_end = _window_bounds(window, now)
 
-    staffs = await db.clients.find(
-        {"user_id": user_id, "client_type": "staff"}, {"_id": 0}
-    ).to_list(500)
-    students = await db.students.find({"user_id": user_id}, {"_id": 0}).to_list(2000)
+    # Super admin can inspect a specific office's overview by passing ?office=
+    # — aggregates across every user (office admins + staff) in that office.
+    if user.get("role") == "super_admin" and office:
+        owner_users = await db.users.find({"office": office}, {"_id": 0, "id": 1}).to_list(1000)
+        owner_ids = [u["id"] for u in owner_users]
+        staff_query = {"user_id": {"$in": owner_ids}, "client_type": "staff"}
+        students_query = {"user_id": {"$in": owner_ids}}
+        office_label = office
+    else:
+        user_id = user["id"]
+        staff_query = {"user_id": user_id, "client_type": "staff"}
+        students_query = {"user_id": user_id}
+        office_label = user.get("office")
+
+    staffs = await db.clients.find(staff_query, {"_id": 0}).to_list(500)
+    students = await db.students.find(students_query, {"_id": 0}).to_list(2000)
 
     total_admissions_in_window = count_admissions_in_window(students, win_start, win_end)
     month_counts = compute_staff_month_counts(students)
@@ -203,7 +215,7 @@ async def office_admin_dashboard(
         "window": window,
         "window_start": win_start.isoformat(),
         "window_end": win_end.isoformat(),
-        "office": user.get("office"),
+        "office": office_label,
         "totals": {
             "admissions": total_admissions_in_window,
             "staff_attributed_admissions": sum(r["admissions_count"] for r in breakdown),

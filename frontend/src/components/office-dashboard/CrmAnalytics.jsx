@@ -52,16 +52,18 @@ function ChartCard({ eyebrow, title, children, testid, empty }) {
   );
 }
 
-export default function CrmAnalytics() {
+export default function CrmAnalytics({ office = null }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/leads/analytics")
+    setLoading(true);
+    const url = office ? `/leads/analytics?office=${office}` : "/leads/analytics";
+    api.get(url)
       .then(({ data }) => setData(data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [office]);
 
   if (loading) return <div className="py-20 text-center text-sm text-muted-foreground">Loading analytics…</div>;
   if (!data) return <Card className="p-10 text-center text-sm text-muted-foreground">Couldn't load CRM analytics.</Card>;

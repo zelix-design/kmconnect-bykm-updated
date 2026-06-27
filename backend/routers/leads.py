@@ -182,16 +182,31 @@ def _student_scope_for_analytics(user: dict) -> dict:
 
 
 @router.get("/analytics")
-async def lead_analytics(user: dict = Depends(get_current_user)):
+async def lead_analytics(user: dict = Depends(get_current_user), office: Optional[str] = None):
     """Aggregated CRM analytics for the Office Admin / Super Admin dashboard:
     KPIs, lead funnel, college- & course-wise admissions, monthly seat trend
-    and lost-reason breakdown — all scoped to the caller's office."""
+    and lost-reason breakdown — all scoped to the caller's office.
+
+    A super admin may pass ?office=KM_BLR to inspect a specific office."""
     if user.get("role") not in ("super_admin", "office_admin"):
         raise HTTPException(403, "Not allowed")
     now = datetime.now(timezone.utc)
 
+    if user.get("role") == "super_admin" and office:
+        owner_users = await db.users.find({"office": office}, {"_id": 0, "id": 1}).to_list(1000)
+        owner_ids = [u["id"] for u in owner_users]
+        lead_scope = {"office": office}
+        student_scope = {"$or": [
+            {"user_id": {"$in": owner_ids}},
+            {"home_office": office},
+            {"home_office": "ALL"},
+        ]}
+    else:
+        lead_scope = _scope_filter(user)
+        student_scope = _student_scope_for_analytics(user)
+
     leads = await db.leads.find(
-        _scope_filter(user), {"_id": 0, "status": 1, "next_follow_up": 1, "lost_reason": 1}
+        lead_scope, {"_id": 0, "status": 1, "next_follow_up": 1, "lost_reason": 1}
     ).to_list(20000)
     by_status = {s: 0 for s in LEAD_STATUSES}
     missed = 0
@@ -211,7 +226,7 @@ async def lead_analytics(user: dict = Depends(get_current_user)):
     positive = by_status["contacted"] + by_status["interested"] + by_status["follow_up"]
 
     students = await db.students.find(
-        _student_scope_for_analytics(user),
+        student_scope,
         {"_id": 0, "status": 1, "college": 1, "course": 1, "enrollment_date": 1, "created_at": 1},
     ).to_list(50000)
     admissions = [s for s in students if s.get("status") != "cancelled"]

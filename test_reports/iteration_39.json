@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 39 — Verified (1) Staff-created leads correctly inherit office=KM_BLR and propagate to Office Admin blr1's Lead CRM, and (2) the new Super Admin /office-overview page renders with the office switcher (KM_BLR/TCR/KMLY), title updates per switch, and data refreshes for both Admissions and Lead CRM tabs. Parity confirmed end-to-end: SA's KM_BLR view total_leads=2/total_admissions=9 EXACTLY matches OA blr1's own dashboard (2/9). Backend pytest 4/4 PASS. Frontend Playwright: all spec'd testids render & behave correctly across SA + OA personas.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "backend_pytest": [
+      "test_staff_lead_visible_to_office_admin — Staff creates lead → office=KM_BLR auto-inherited + assigned_to_user_id set → OA blr1 GET /api/leads sees it → Staff GET /api/leads also includes it (assigned only)",
+      "test_sa_office_param_parity_with_oa — SA /api/leads/analytics?office=KM_BLR.kpis == OA blr1 /api/leads/analytics.kpis (total_leads + total_admissions)",
+      "test_sa_dashboard_office_param — SA /api/dashboard/office-admin?office=KM_BLR / KM_TCR / KM_KMLY all 200 and return totals.staff_count",
+      "test_office_param_oa_forbidden_or_ignored — OA passing ?office=KM_TCR is ignored; analytics still scoped to OA's own office"
+    ],
+    "frontend_playwright": [
+      "SA login → sidebar nav-group-office collapsible expands → nav-office-overview clickable → routes to /office-overview",
+      "office-overview-page renders with office-switcher, office-overview-title, office-switch-KM_BLR / KM_TCR / KM_KMLY, office-tab-admissions / office-tab-crm, and stat-admissions / stat-incentive-earned / stat-staff-count cards",
+      "Default state: title='KM BLR office', Admissions tab. Switching to KM_TCR updates title to 'KM TCR office' + refetches data (total_leads 2→0). KM_KMLY → 'KM KMLY office'. Back to KM_BLR → 2 leads restored.",
+      "office-tab-crm shows crm-analytics with crm-kpi-total-leads + crm-kpi-total-admissions; values change per office switch (data refresh confirmed)",
+      "Staff UI on /leads: opened new-lead dialog, filled name+phone, created 'TEST_IT39 UI Lead' — visible to OA blr1 on /leads page (parity verified at UI level too)",
+      "OA blr1 home / renders office-dashboard, office-tab-crm shows total_leads=2 / total_admissions=9 — IDENTICAL to SA's KM_BLR scoped view (PARITY CONFIRMED)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration39_office_overview.py",
+    "/app/test_reports/pytest/iteration39.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/leads.py::create_lead correctly derives office from staff/office_admin profile (no client-supplied override). Good — prevents cross-office lead injection.",
+    "routers/leads.py::_scope_filter is the single source of truth for lead visibility (staff → assigned_to_user_id; office_admin → {office: self.office}; super_admin → all OR optional office param). _scope_filter also reused by lead_analytics — keeps list/CRUD/analytics consistent.",
+    "routers/dashboard.py::office_admin_dashboard with super_admin + office query aggregates owner_ids across all users in that office for student/staff totals — correct & symmetric with /leads/analytics scoping. Both endpoints' parity is what guarantees the OA blr1 ↔ SA KM_BLR match the user explicitly asked for.",
+    "Frontend OfficeOverview.jsx is a thin wrapper (<OfficeDashboard superView />) — clean reuse; route gated to super_admin in App.js.",
+    "CrmAnalytics.jsx useEffect dependency on [office] correctly re-fetches when office changes; loading state shown during refetch.",
+    "Minor UX nit (non-blocking): The sidebar 'Office' collapsible group sometimes starts pre-expanded but the click handler still toggles it, requiring a second click to expose nav-office-overview. Consider making the group default-open when current route is inside /office-* or aligning the initial chevron state. Direct navigation to /office-overview works fine, so this only affects discoverability from a cold sidebar state."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration39_office_overview.py"
+  ],
+  "success_rate": {"backend": "100% (4/4 pytest)", "frontend": "100% on all spec'd flows"},
+  "test_credentials": "SA admin@kmfoundation.online / Admin@786 · OA blr1@finflow.com / Office@123 · Staff staff.blr@kmfoundation.online / Staff@123",
+  "seed_data_creation": "Backend test created+deleted 1 lead ('TEST_IT39 Staff Lead'). UI test created 1 lead ('TEST_IT39 UI Lead', id 0a060239-cf53-47ea-ae49-43f9cb8f4576) which was cleaned up via SA DELETE /api/leads/{id} at the end (status 200). No residual test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration-39 testids confirmed: nav-group-office (sidebar collapsible toggle), nav-office-overview (super_admin only), /office-overview route, office-overview-page, office-switcher, office-overview-title, office-switch-{KM_BLR|KM_TCR|KM_KMLY}, office-tab-admissions, office-tab-crm, stat-admissions, stat-incentive-earned, stat-incentive-pending, stat-staff-count, crm-analytics, crm-kpi-total-leads, crm-kpi-total-admissions, crm-kpi-conversion-rate, crm-kpi-pending-follow-ups, crm-kpi-lost-leads. Backend office query param honored ONLY for super_admin — staff/OA enforce their own scope server-side (correctly ignored if supplied). To switch personas in Playwright tests, do POST /api/auth/logout + context.clear_cookies() + localStorage.clear() — single clear_cookies alone is insufficient.",
+  "rca of the issue": "No bug — the user-reported 'Lead CRM linkage' concern is actually working correctly. Staff-created leads carry office=KM_BLR from the creator's profile (routers/leads.py::create_lead) and Office Admin's _scope_filter ({office: self.office}) picks them up. The new Super Admin Office Overview page works as spec'd: switcher buttons re-fire both the dashboard and analytics fetches with ?office=<code>, and the values match the corresponding office admin's own dashboard. Verified at both API level (parity test) and UI level (visual KPI match)."
+}
