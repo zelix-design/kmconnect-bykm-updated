@@ -79,9 +79,12 @@ function SidebarContent({ onItemClick, user, onLogout }) {
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !canView(user, i.perm)) return false;
     return true;
-  }).map((i) =>
-    role === "staff" && i.to === "/settings" ? { ...i, label: "Profile", icon: UserCircle } : i
-  );
+  }).map((i) => {
+    if (role !== "staff") return i;
+    if (i.to === "/settings") return { ...i, label: "Profile", icon: UserCircle };
+    if (i.to === "/leads") return { ...i, label: "My Leads" };
+    return i;
+  });
   return (
     <>
       {/* Brand */}
@@ -167,7 +170,9 @@ export default function AppShell() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const pageTitle = (user?.role === "staff" && location.pathname === "/settings" ? "Profile" : PAGE_TITLES[location.pathname])
+  const pageTitle = (user?.role === "staff" && location.pathname === "/settings" ? "Profile" : null)
+    || (user?.role === "staff" && location.pathname === "/leads" ? "My Leads" : null)
+    || PAGE_TITLES[location.pathname]
     || (location.pathname.startsWith("/students/") ? "Student" : "")
     || (location.pathname.startsWith("/agents/") ? "Agent detail" : "")
     || "FinFlow by KM Foundation";

@@ -135,16 +135,18 @@ export default function Leads() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label-eyebrow">CRM</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">Leads</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{isStaff ? "My Leads" : "Leads"}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isStaff ? "Your assigned prospects and follow-ups." : "Track prospective students across the pipeline."}
           </p>
         </div>
         {editable && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="leads-upload-btn">
-              <UploadSimple size={16} className="mr-1.5" /> Upload CSV
-            </Button>
+            {!isStaff && (
+              <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="leads-upload-btn">
+                <UploadSimple size={16} className="mr-1.5" /> Upload CSV
+              </Button>
+            )}
             <Button onClick={() => { setEditLead(null); setFormOpen(true); }} data-testid="add-lead-btn" className="btn-amber border-0">
               <Plus size={16} className="mr-1.5" /> Add lead
             </Button>
