@@ -10,7 +10,7 @@ import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
-  Target, IdentificationBadge, CalendarCheck, Handshake,
+  Target, IdentificationBadge, CalendarCheck, Handshake, UserCircle,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -79,7 +79,9 @@ function SidebarContent({ onItemClick, user, onLogout }) {
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !canView(user, i.perm)) return false;
     return true;
-  });
+  }).map((i) =>
+    role === "staff" && i.to === "/settings" ? { ...i, label: "Profile", icon: UserCircle } : i
+  );
   return (
     <>
       {/* Brand */}
@@ -165,7 +167,7 @@ export default function AppShell() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const pageTitle = PAGE_TITLES[location.pathname]
+  const pageTitle = (user?.role === "staff" && location.pathname === "/settings" ? "Profile" : PAGE_TITLES[location.pathname])
     || (location.pathname.startsWith("/students/") ? "Student" : "")
     || (location.pathname.startsWith("/agents/") ? "Agent detail" : "")
     || "FinFlow by KM Foundation";

@@ -6,9 +6,15 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import StaffProfile from "@/pages/StaffProfile";
 
 export default function Settings() {
   const { user, updateProfile } = useAuth();
+  if (user?.role === "staff") return <StaffProfile />;
+  return <WorkspaceSettings user={user} updateProfile={updateProfile} />;
+}
+
+function WorkspaceSettings({ user, updateProfile }) {
   const [form, setForm] = useState({
     name: user?.name || "",
     business_name: user?.business_name || "",

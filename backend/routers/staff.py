@@ -297,3 +297,105 @@ async def add_login_to_profile(client_id: str, payload: AddLoginIn, user: dict =
     })
     await db.clients.update_one({"id": client_id}, {"$set": {"login_user_id": uid, "email": email}})
     return {"ok": True, "login_user_id": uid}
+
+
+# ---------- Staff self-service profile ----------
+async def _resolve_staff_client(user: dict) -> Optional[dict]:
+    """Find the staff's own profile (clients) record — by explicit link first,
+    then case-insensitive name within their office."""
+    client = await db.clients.find_one(
+        {"client_type": "staff", "login_user_id": user["id"]}, {"_id": 0}
+    )
+    if not client and (user.get("name") or "").strip():
+        import re
+        nm = re.escape(user["name"].strip())
+        q: dict = {"client_type": "staff", "name": {"$regex": f"^{nm}$", "$options": "i"}}
+        if user.get("office"):
+            q["office"] = user["office"]
+        client = await db.clients.find_one(q, {"_id": 0})
+    return client
+
+
+def _profile_view(user: dict, client: Optional[dict]) -> dict:
+    c = client or {}
+    return {
+        "name": user.get("name") or "",
+        "email": user.get("email") or "",            # read-only (login)
+        "phone": c.get("phone") or "",                # read-only
+        "employee_id": c.get("employee_id") or "",    # read-only
+        "date_of_birth": c.get("date_of_birth") or "",
+        "address": c.get("address") or "",
+        "place": c.get("place") or "",
+        "photo_url": c.get("photo_url") or "",
+        "client_id": c.get("id"),
+        "office": user.get("office"),
+    }
+
+
+@router.get("/me/profile")
+async def my_staff_profile(user: dict = Depends(get_current_user)):
+    if user.get("role") != "staff":
+        raise HTTPException(403, "Staff only")
+    return _profile_view(user, await _resolve_staff_client(user))
+
+
+class StaffProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    place: Optional[str] = None
+    photo_url: Optional[str] = None
+
+
+@router.patch("/me/profile")
+async def update_my_staff_profile(payload: StaffProfileUpdate, user: dict = Depends(get_current_user)):
+    """Staff edit their own profile. Editable: name, DOB, address, place, photo.
+    Email / phone / employee-ID are read-only here. Writes to the staff's
+    profile record (auto-created + linked if they don't have one yet) and
+    syncs the name to their login account."""
+    if user.get("role") != "staff":
+        raise HTTPException(403, "Staff only")
+    data = payload.model_dump(exclude_unset=True)
+    client = await _resolve_staff_client(user)
+
+    cpatch: dict = {}
+    for k in ("address", "place", "photo_url"):
+        if k in data:
+            cpatch[k] = (data[k] or "")
+    if "date_of_birth" in data:
+        cpatch["date_of_birth"] = data["date_of_birth"] or None
+    if "name" in data and data["name"]:
+        cpatch["name"] = data["name"].strip()
+
+    if client:
+        if cpatch:
+            await db.clients.update_one({"id": client["id"]}, {"$set": cpatch})
+        if not client.get("login_user_id"):
+            await db.clients.update_one({"id": client["id"]}, {"$set": {"login_user_id": user["id"]}})
+    else:
+        office = user.get("office")
+        await db.clients.insert_one({
+            "id": gen_id(),
+            "user_id": user["id"],
+            "created_at": now_iso(),
+            "name": (data.get("name") or user.get("name") or "").strip(),
+            "client_type": "staff",
+            "email": user.get("email") or "",
+            "phone": "",
+            "company": "",
+            "office": office,
+            "home_office": office,
+            "employee_id": await _next_employee_id(office),
+            "date_of_birth": data.get("date_of_birth") or None,
+            "address": data.get("address") or "",
+            "place": data.get("place") or "",
+            "photo_url": data.get("photo_url") or "",
+            "eligible_incentive": None,
+            "login_user_id": user["id"],
+        })
+
+    if "name" in data and data["name"]:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"name": data["name"].strip()}})
+        user["name"] = data["name"].strip()
+
+    return _profile_view(user, await _resolve_staff_client(user))
