@@ -10,7 +10,7 @@ import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
-  Target, IdentificationBadge, CalendarCheck, Handshake, UserCircle,
+  Target, IdentificationBadge, CalendarCheck, Handshake, UserCircle, CaretRight, FolderSimplePlus,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -73,28 +73,28 @@ function initialsOf(name) {
   return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
 }
 
-// Super Admin gets a grouped sidebar; every other role keeps the flat list.
-// Each section may carry an uppercase label; label-less sections are visually
-// separated by a thin divider.
+// Super Admin gets a grouped sidebar with collapsible sections (Accounts /
+// Office / Add details). Every other role keeps a single flat list.
 function buildSections(navItems, role) {
-  if (role !== "super_admin") {
-    return [{ label: "Workspace", items: navItems }];
-  }
   const byTo = {};
   navItems.forEach((i) => { byTo[i.to] = i; });
   const pick = (tos) => tos.map((t) => byTo[t]).filter(Boolean);
+  if (role !== "super_admin") {
+    return [{ type: "items", label: "Workspace", items: navItems }];
+  }
   return [
-    { label: "Workspace", items: pick(["/", "/quick-entry"]) },
-    { label: "Accounts", items: pick(["/accounts", "/transactions", "/agents", "/invoices"]) },
-    { items: pick(["/messages", "/clients", "/students"]) },
-    { label: "Office", items: pick(["/employees", "/leads", "/staff", "/leave"]) },
-    { label: "Add details", items: pick(["/colleges", "/categories"]) },
-    { items: pick(["/users", "/expense-requests", "/settings"]) },
+    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry"]) },
+    { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(["/accounts", "/transactions", "/agents", "/invoices"]) },
+    { type: "items", items: pick(["/messages", "/clients", "/students"]) },
+    { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(["/employees", "/leads", "/staff", "/leave"]) },
+    { type: "group", key: "details", label: "Add details", icon: FolderSimplePlus, items: pick(["/colleges", "/categories"]) },
+    { type: "items", items: pick(["/users", "/expense-requests", "/settings"]) },
   ].filter((s) => s.items.length > 0);
 }
 
 function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
+  const [collapsed, setCollapsed] = React.useState({});
   const navItems = ALL_NAV.filter((i) => {
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !canView(user, i.perm)) return false;
@@ -105,6 +105,21 @@ function SidebarContent({ onItemClick, user, onLogout }) {
     if (i.to === "/leads") return { ...i, label: "My Leads" };
     return i;
   });
+
+  const linkClass = (indent) => ({ isActive }) =>
+    `flex items-center gap-3 ${indent ? "pl-11 pr-4" : "px-4"} py-2.5 rounded-lg text-sm transition-all ${
+      isActive
+        ? "bg-amber-gradient text-white font-medium shadow-md shadow-orange-500/25"
+        : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
+    }`;
+
+  const renderLink = (item, indent) => (
+    <NavLink key={item.to} to={item.to} end={item.end} data-testid={item.tid} onClick={onItemClick} className={linkClass(indent)}>
+      <item.icon size={18} weight="regular" />
+      <span>{item.label}</span>
+    </NavLink>
+  );
+
   return (
     <>
       {/* Brand */}
@@ -120,36 +135,43 @@ function SidebarContent({ onItemClick, user, onLogout }) {
 
       {/* Nav */}
       <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
-        {buildSections(navItems, role).map((section, idx) => (
-          <div key={section.label || `sec-${idx}`} className={idx > 0 ? "pt-3" : ""}>
-            {section.label ? (
-              <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">{section.label}</p>
-            ) : (
-              <div className="mx-3 mb-2.5 border-t border-[hsl(var(--sidebar-border))]/60" aria-hidden />
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  data-testid={item.tid}
-                  onClick={onItemClick}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
-                      isActive
-                        ? "bg-amber-gradient text-white font-medium shadow-md shadow-orange-500/25"
-                        : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
-                    }`
-                  }
+        {buildSections(navItems, role).map((section, idx) => {
+          if (section.type === "group") {
+            const open = !collapsed[section.key];
+            return (
+              <div key={section.key} className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((c) => ({ ...c, [section.key]: !c[section.key] }))}
+                  data-testid={`nav-group-${section.key}`}
+                  aria-expanded={open}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 transition-all"
                 >
-                  <item.icon size={18} weight="regular" />
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
+                  <CaretRight size={13} weight="bold" className={`shrink-0 text-[hsl(var(--sidebar-muted))] transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
+                  <section.icon size={17} weight="regular" className="shrink-0" />
+                  <span className="flex-1 text-left">{section.label}</span>
+                </button>
+                {open && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {section.items.map((item) => renderLink(item, true))}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          return (
+            <div key={`sec-${idx}`} className={idx > 0 ? "pt-3" : ""}>
+              {section.label ? (
+                <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">{section.label}</p>
+              ) : (
+                <div className="mx-3 mb-2.5 border-t border-[hsl(var(--sidebar-border))]/60" aria-hidden />
+              )}
+              <div className="space-y-0.5">
+                {section.items.map((item) => renderLink(item, false))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer: user info + sign out (mobile drawer only — hidden on desktop where topbar handles it) */}
