@@ -73,6 +73,26 @@ function initialsOf(name) {
   return (parts[0]?.[0] || "") + (parts[1]?.[0] || "");
 }
 
+// Super Admin gets a grouped sidebar; every other role keeps the flat list.
+// Each section may carry an uppercase label; label-less sections are visually
+// separated by a thin divider.
+function buildSections(navItems, role) {
+  if (role !== "super_admin") {
+    return [{ label: "Workspace", items: navItems }];
+  }
+  const byTo = {};
+  navItems.forEach((i) => { byTo[i.to] = i; });
+  const pick = (tos) => tos.map((t) => byTo[t]).filter(Boolean);
+  return [
+    { label: "Workspace", items: pick(["/", "/quick-entry"]) },
+    { label: "Accounts", items: pick(["/accounts", "/transactions", "/agents", "/invoices"]) },
+    { items: pick(["/messages", "/clients", "/students"]) },
+    { label: "Office", items: pick(["/employees", "/leads", "/staff", "/leave"]) },
+    { label: "Add details", items: pick(["/colleges", "/categories"]) },
+    { items: pick(["/users", "/expense-requests", "/settings"]) },
+  ].filter((s) => s.items.length > 0);
+}
+
 function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
   const navItems = ALL_NAV.filter((i) => {
@@ -99,26 +119,36 @@ function SidebarContent({ onItemClick, user, onLogout }) {
       </div>
 
       {/* Nav */}
-      <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto">
-        <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">Workspace</p>
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            data-testid={item.tid}
-            onClick={onItemClick}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
-                isActive
-                  ? "bg-amber-gradient text-white font-medium shadow-md shadow-orange-500/25"
-                  : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
-              }`
-            }
-          >
-            <item.icon size={18} weight="regular" />
-            <span>{item.label}</span>
-          </NavLink>
+      <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
+        {buildSections(navItems, role).map((section, idx) => (
+          <div key={section.label || `sec-${idx}`} className={idx > 0 ? "pt-3" : ""}>
+            {section.label ? (
+              <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">{section.label}</p>
+            ) : (
+              <div className="mx-3 mb-2.5 border-t border-[hsl(var(--sidebar-border))]/60" aria-hidden />
+            )}
+            <div className="space-y-0.5">
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  data-testid={item.tid}
+                  onClick={onItemClick}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all ${
+                      isActive
+                        ? "bg-amber-gradient text-white font-medium shadow-md shadow-orange-500/25"
+                        : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
+                    }`
+                  }
+                >
+                  <item.icon size={18} weight="regular" />
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 
