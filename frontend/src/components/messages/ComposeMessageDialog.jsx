@@ -51,6 +51,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
     if (role === "super_admin") return ["announcement", "reminder"];
     if (role === "office_admin") return ["announcement", "reminder"];
     if (role === "user") return ["reminder"];
+    if (role === "staff") return ["reminder"];
     return [];
   }, [role]);
 
@@ -92,12 +93,15 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
     (async () => {
       setPickerLoading(true);
       try {
-        const endpoint = role === "super_admin"
-          ? "/users?status=approved"
-          : "/users/super-admins";
+        let endpoint = "/users/super-admins";
+        if (role === "super_admin") endpoint = "/users?status=approved";
+        else if (role === "staff") endpoint = "/users/assignable";
         const r = await api.get(endpoint);
         if (cancel) return;
-        setPickerOptions(r.data || []);
+        let opts = r.data || [];
+        // Staff send reminders to their office admins only.
+        if (role === "staff") opts = opts.filter((u) => u.role === "office_admin");
+        setPickerOptions(opts);
       } catch (e) {
         console.error("[compose] picker load failed:", e);
         if (!cancel) setPickerOptions([]);
@@ -210,6 +214,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
             {role === "super_admin" && "Send a broadcast announcement to users / office admins, or a focused reminder to a specific person."}
             {role === "office_admin" && "Announce to your office peers, or send a reminder upward to a super admin."}
             {role === "user" && "Send a reminder to a super admin (e.g. profile changes, follow-up, escalation)."}
+            {role === "staff" && "Send a reminder to your office admin (e.g. need leads, follow-up help, a question)."}
           </DialogDescription>
         </DialogHeader>
 
@@ -287,7 +292,7 @@ export default function ComposeMessageDialog({ open, onOpenChange, onSent }) {
 
           {kind === "reminder" && (
             <div data-testid="compose-picker-block">
-              <Label>{role === "super_admin" ? "Recipients" : "Send to (super admin)"}</Label>
+              <Label>{role === "super_admin" ? "Recipients" : role === "staff" ? "Send to (office admin)" : "Send to (super admin)"}</Label>
               <div className="mt-1 rounded-md border border-border bg-card">
                 <div className="border-b border-border p-2">
                   <Input

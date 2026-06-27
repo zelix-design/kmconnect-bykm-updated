@@ -141,6 +141,10 @@ class ApplicationIn(BaseModel):
     payment: Payment = Field(default_factory=Payment)
     reference: Reference = Field(default_factory=Reference)
     declaration: Declaration = Field(default_factory=Declaration)
+    # Optional referral attribution. When the form is opened via
+    # /apply?ref=<staff_user_id>, the frontend echoes that id here so the
+    # resulting student is credited to that staff login account.
+    referrer_id: Optional[str] = None
 
 
 # ---------- Helpers ----------
@@ -161,7 +165,7 @@ async def _resolve_owner_user_id() -> str:
     raise HTTPException(503, "Admin account not provisioned yet")
 
 
-def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_form") -> dict:
+def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_form", referrer_user_id: Optional[str] = None) -> dict:
     """Translate the application payload → a row that fits the existing
     ``students`` schema, with the full application preserved on the side.
 
@@ -198,6 +202,7 @@ def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_
         "course": app.course.interested_course,
         "college": app.course.preferred_college or "",
         "reference": app.reference.name or "",
+        "referrer_user_id": referrer_user_id,
         "sc_out_fixed": 0.0,
         "status": "inquiry",
         "enrollment_date": now_iso()[:10],
@@ -226,7 +231,18 @@ async def submit_application(payload: ApplicationIn) -> dict:
     if not payload.declaration.agreement_accepted:
         raise HTTPException(422, "Please accept the declaration to submit")
     owner_id = await _resolve_owner_user_id()
-    doc = _build_student_doc(payload, owner_id)
+    # Resolve a staff/admin login referrer so the student is credited to them.
+    referrer_user_id = None
+    if payload.referrer_id:
+        ru = await db.users.find_one(
+            {"id": payload.referrer_id, "role": {"$in": ["staff", "office_admin", "super_admin"]}},
+            {"_id": 0, "id": 1, "name": 1},
+        )
+        if ru:
+            referrer_user_id = ru["id"]
+            if not (payload.reference.name or "").strip():
+                payload.reference.name = ru.get("name")
+    doc = _build_student_doc(payload, owner_id, referrer_user_id=referrer_user_id)
     await db.students.insert_one(doc)
     # Fire-and-forget notification to all super admins.
     try:
@@ -335,6 +351,23 @@ async def get_referrer(ref: str) -> dict:
                 matches.sort(key=lambda d: d.get("created_at") or "")
                 c = await db.clients.find_one({"id": matches[0]["id"]}, {"_id": 0})
     if not c:
+        # Maybe the ref is a staff/admin LOGIN user id — CRM referral links
+        # use the staff user id (not a client id).
+        if is_uuid:
+            u = await db.users.find_one(
+                {"id": ref, "role": {"$in": ["staff", "office_admin", "super_admin"]}},
+                {"_id": 0, "id": 1, "name": 1, "office": 1},
+            )
+            if u:
+                return {
+                    "id": u["id"],
+                    "name": u.get("name") or "",
+                    "slug": slugify(u.get("name") or ""),
+                    "type": "staff",
+                    "contact_number": "",
+                    "place": (u.get("office") or "").replace("KM_", "KM ") if u.get("office") else "",
+                    "is_user": True,
+                }
         raise HTTPException(404, "Referrer not found")
     return {
         "id": c["id"],

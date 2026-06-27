@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
-from routers.notifications import notify_users
+from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
@@ -267,6 +267,67 @@ async def delete_lead(lead_id: str, user: dict = Depends(require_edit("leads")))
         raise HTTPException(404, "Lead not found")
     await db.leads.delete_one({"id": lead_id})
     return {"ok": True}
+
+
+@router.post("/{lead_id}/convert", status_code=201)
+async def convert_lead(lead_id: str, user: dict = Depends(require_edit("leads"))):
+    """Convert a lead into an inquiry Student, credited to the lead's assignee
+    (referrer_user_id). Marks the lead 'converted'. Idempotent — returns the
+    existing student if already converted."""
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if lead.get("converted_student_id"):
+        return {"ok": True, "student_id": lead["converted_student_id"], "already_converted": True}
+
+    admin = await db.users.find_one({"role": "super_admin"}, {"_id": 0, "id": 1})
+    owner_id = (admin or {}).get("id") or user["id"]
+    referrer_user_id = lead.get("assigned_to_user_id") or user["id"]
+    referrer = await db.users.find_one({"id": referrer_user_id}, {"_id": 0, "name": 1})
+    student_id = gen_id()
+    now = now_iso()
+    note_bits = []
+    if lead.get("phone"):
+        note_bits.append(f"Phone: {lead['phone']}")
+    if lead.get("email"):
+        note_bits.append(f"Email: {lead['email']}")
+    if lead.get("place"):
+        note_bits.append(f"Place: {lead['place']}")
+    student_doc = {
+        "id": student_id,
+        "user_id": owner_id,
+        "created_at": now,
+        "name": lead.get("name"),
+        "course": lead.get("course") or "",
+        "college": "",
+        "reference": (referrer or {}).get("name") or "",
+        "referrer_user_id": referrer_user_id,
+        "sc_out_fixed": 0.0,
+        "status": "inquiry",
+        "enrollment_date": now[:10],
+        "notes": " · ".join(["Converted from CRM lead"] + note_bits),
+        "fees_plan": None,
+        "schedules": [],
+        "payments": [],
+        "application_source": "lead_conversion",
+        "lead_id": lead_id,
+    }
+    await db.students.insert_one(student_doc)
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$set": {"status": "converted", "converted_student_id": student_id, "updated_at": now}},
+    )
+    try:
+        await notify_super_admins(
+            type="student_application",
+            title="Lead converted to student",
+            message=f"{lead.get('name')} · {lead.get('course') or ''}",
+            link=f"/students/{student_id}",
+            actor_user_id=user["id"],
+        )
+    except Exception:
+        pass
+    return {"ok": True, "student_id": student_id}
 
 
 # ---------- follow-ups ----------

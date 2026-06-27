@@ -1,0 +1,65 @@
+{
+  "summary": "Iteration 35 — Phase 2 Leave Management + Staff Dashboard (referral attribution, lead conversion, staff reminder). Backend pytest 14/14 PASS in /app/backend/tests/test_iteration35_leave_referral.py. Frontend E2E PASS across all 8 critical paths: staff lands on staff-dashboard (no redirect), all 4 stats + referral card + copy-link + share-link + 3 quick actions present; leave dialog opens from staff-action-leave; compose-message-dialog opens from staff-action-reminder with 3 office-admin picker options; /leave page with leave-page testid + request-leave-btn → fully working form (type/from/to/reason/submit) and 'My requests' shows new pending leave with leave-cancel-<id>; Office Admin /leave 'Approvals' tab (leave-tab-inbox) shows pending request with leave-approve-<id>/leave-reject-<id> and Approve click removes the request from pending list; nav-leave visible for staff + office_admin; OA dashboard regression intact (nav-leads, nav-staff, nav-leave all present); forgot-password link still on login.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "backend_pytest": [
+      "TestLeave::test_staff_create_leave — PASS (POST 201, OA inbox visible, staff cannot self-approve 403, OA approves 200, days=3 correct)",
+      "TestLeave::test_invalid_leave_type — PASS (400)",
+      "TestLeave::test_to_before_from_rejected — PASS (400)",
+      "TestLeave::test_office_admin_leave_appears_in_super_inbox — PASS (super admin sees OA leave, requester DELETE pending → 200)",
+      "TestLeave::test_stats_endpoint — PASS (pending_mine + pending_inbox + total_mine)",
+      "TestReferral::test_public_referrer_resolves_staff_user — PASS (GET /api/public/referrer/<staff_uid> → type=staff, is_user=true)",
+      "TestReferral::test_application_with_referrer_credits_staff — PASS (POST /api/public/applications referrer_id=<staff>; student appears in /api/students/me/referrals)",
+      "TestLeadConvert::test_office_create_assign_staff_then_staff_convert — PASS (POST /api/leads/{id}/convert creates student credited to staff, lead → converted, idempotent on repeat)",
+      "TestStaffReminder::test_staff_reminder_to_office_admin — PASS (kind=reminder, audience.users=[OA] → 200)",
+      "TestStaffReminder::test_staff_reminder_to_regular_user_rejected — PASS (400/403 when target.role='user')",
+      "TestRegression::test_super_admin_login_works — PASS",
+      "TestRegression::test_office_admin_login_works — PASS",
+      "TestRegression::test_staff_login_role_is_staff — PASS (seed.py fix from iter34 holding)",
+      "TestRegression::test_leads_listing_still_works — PASS"
+    ],
+    "frontend_playwright": [
+      "Staff login → URL stays at '/', staff-dashboard testid rendered (NOT redirected to /leads) — PASS",
+      "Staff sidebar shows ONLY Overview, Messages, Leads, Leave, Settings (no finance pages) — PASS",
+      "Staff dashboard has staff-stats (4 tiles), staff-referral-card with link, staff-copy-link & staff-share-link buttons, staff-referrals-card with 3 student rows — PASS",
+      "staff-action-add-student / staff-action-leave / staff-action-reminder all present — PASS",
+      "staff-action-leave opens leave-request-dialog — PASS",
+      "staff-action-reminder opens compose-message-dialog with 3 compose-picker-opt-* (office admins) — PASS",
+      "/leave page: leave-page + request-leave-btn → leave-request-dialog with leave-type-select/leave-from-input/leave-to-input/leave-reason-input/leave-submit-btn — PASS",
+      "Submitted leave appears under 'My requests' with leave-cancel-<id> button — PASS",
+      "OA /leave 'Approvals' tab (leave-tab-inbox) shows the pending request with leave-approve-<id> + leave-reject-<id> — PASS",
+      "OA clicks Approve → row removed (remaining approve buttons: 0) — PASS",
+      "nav-leave visible for staff + office_admin — PASS",
+      "OA dashboard regression: nav-leads + nav-staff + nav-leave all visible — PASS",
+      "Login page link-forgot-password still present — PASS"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration35_leave_referral.py",
+    "/app/test_reports/pytest/iteration35.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/leave.py is tight and idiomatic — clear hierarchy via _approver_ids / _can_approve, never-self-approve guard at line 64, _days() defensive parsing, requester DELETE only on own+pending. Inbox query for super_admin correctly $ne self so OA peer admins don't see their own request as inbox.",
+    "Lead conversion is idempotent (lines 280-281) and uses lead.assigned_to_user_id as referrer_user_id — correctly credits the staff who worked the lead. Owner defaults to super_admin so the new inquiry student joins the standard students view.",
+    "applications.get_referrer (lines 354-370) gracefully falls back to user lookup with type='staff' when no client matches — supports the new CRM /apply?ref=<staff_user_id> link without breaking the legacy slug/client referral flow.",
+    "students/me/referrals endpoint is straightforward; consider adding pagination if a popular staff ever crosses ~500 referrals (currently unbounded find).",
+    "Minor: leave_requests collection has no explicit indexes referenced in this router. server.py supposedly adds them — verify {requester_user_id:1, status:1} + {office:1, requester_role:1, status:1} indexes exist for inbox query performance at scale.",
+    "Frontend StaffDashboard cleanly composes the 4 stats + 3 quick action tiles + referral link box + leads + students-referred panels. data-testid coverage is complete and matches the request spec exactly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration35_leave_referral.py (NEW — 14 tests covering leave create/approve/cancel/stats/hierarchy, referral attribution, lead convert idempotency, staff reminder allow+deny)"
+  ],
+  "success_rate": {"backend": "100% (14/14 pytest)", "frontend": "100% on all targeted flows (staff dashboard, leave dialog, OA approval, nav, regression)"},
+  "test_credentials": "Super admin: admin@kmfoundation.online / Admin@786 · Office admin: blr1@finflow.com / Office@123 (KM_BLR) · Staff: staff.blr@kmfoundation.online / Staff@123 (KM_BLR). Iter34 seed fix (staff role) is holding across restarts.",
+  "seed_data_creation": "TEST_-prefixed leave requests, students, and leads created during the run. Approved/decided leaves remain in the DB (cannot be deleted by requester once approved) — acceptable behavior per the API contract. The 3 TEST_LeadConvert_35/TEST_RefStudent_35 students remain visible in the staff dashboard's 'Students referred' panel — main agent may want to clean these from Mongo once verified.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Extend /app/backend/tests/test_iteration35_leave_referral.py for any Phase 2 follow-up changes (e.g., leave balance tracking, multi-level approval, reminders to specific super admins). Frontend testids confirmed working: staff-dashboard, staff-stats, staff-referral-card, staff-copy-link, staff-share-link, staff-referrals-card, staff-action-{add-student|leave|reminder}, nav-leave, leave-page, request-leave-btn, leave-request-dialog, leave-{type-select|from-input|to-input|reason-input|submit-btn}, leave-tab-inbox, leave-approve-<id>, leave-reject-<id>, leave-cancel-<id>, compose-message-dialog, compose-picker-opt-*. Login uses auth-email-input/auth-password-input/auth-submit-btn (NOT login-*).",
+  "rca of the issue": "No bugs found in iteration 35. All Phase 2 features (Leave hierarchy single-level approvals, staff referral attribution via /apply?ref=<staff_user_id>, lead conversion crediting assigned staff, staff→reminder→office_admin messaging, full StaffDashboard layout) are functioning end-to-end as specified."
+}

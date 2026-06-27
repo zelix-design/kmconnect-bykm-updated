@@ -123,9 +123,10 @@ def _validate_send(actor: dict, payload: MessageIn) -> None:
     else:  # reminder
         if payload.audience.type != "users":
             raise HTTPException(403, "Reminders must target specific users")
-        if role in {"office_admin", "user"}:
-            # downward → upward only: reminders may go to super_admin
-            # The recipient-role check is enforced once we resolve them.
+        if role in {"office_admin", "user", "staff"}:
+            # downward → upward only. Recipient-role check is enforced after
+            # we resolve them (super_admin for office_admin/user; office_admin
+            # or super_admin for staff).
             return
         if role == "super_admin":
             # Super admins can send reminders to anyone they want.
@@ -134,9 +135,14 @@ def _validate_send(actor: dict, payload: MessageIn) -> None:
 
 
 async def _enforce_recipient_role(actor: dict, recipients: list[dict]) -> None:
-    """For office_admin / user senders sending reminders, all recipients must
-    be super_admins. (Super admin can target anyone.)"""
+    """For office_admin / user / staff senders sending reminders, restrict who
+    they may target. (Super admin can target anyone.)"""
     role = actor.get("role")
+    if role == "staff":
+        bad = [r for r in recipients if r.get("role") not in ("office_admin", "super_admin")]
+        if bad:
+            raise HTTPException(403, "Staff can only send reminders to office admins or super admins")
+        return
     if role in {"office_admin", "user"}:
         bad = [r for r in recipients if r.get("role") != "super_admin"]
         if bad:

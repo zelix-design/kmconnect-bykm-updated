@@ -443,6 +443,19 @@ async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
 
 
 # ---------- Student CRUD ----------
+@router.get("/me/referrals")
+async def my_referred_students(user: dict = Depends(get_current_user)):
+    """Students credited to the logged-in user via `referrer_user_id`
+    (referral apply link OR a converted lead). Available to any authenticated
+    user — staff use this for their dashboard. Returns lightweight rows."""
+    items = await db.students.find(
+        {"referrer_user_id": user["id"]},
+        {"_id": 0, "id": 1, "name": 1, "course": 1, "college": 1, "status": 1,
+         "created_at": 1, "reference": 1},
+    ).sort("created_at", -1).to_list(2000)
+    return items
+
+
 @router.get("/me/sc-earned")
 async def my_sc_earned(user: dict = Depends(get_current_user)):
     """Total Service-Charge (SC) earned by the logged-in user when they are

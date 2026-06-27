@@ -12,6 +12,7 @@ export const PERMISSION_PAGES = [
   { key: "clients", label: "Clients / Staff" },
   { key: "students", label: "Students" },
   { key: "leads", label: "Leads (CRM)" },
+  { key: "leave", label: "Leave" },
   { key: "expense_requests", label: "Office expenses" },
   { key: "settings", label: "Settings" },
 ];

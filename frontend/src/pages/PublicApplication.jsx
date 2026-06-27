@@ -118,6 +118,7 @@ export default function PublicApplication() {
     try {
       const payload = {
         ...app,
+        referrer_id: referrerId || null,
         payment: {
           ...app.payment,
           registration_amount: parseFloat(app.payment.registration_amount) || 0,

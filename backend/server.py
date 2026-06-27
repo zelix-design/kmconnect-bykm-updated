@@ -17,7 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave
 
 
 app = FastAPI(title="FinFlow API")
@@ -41,6 +41,7 @@ app.include_router(colleges.public_router)
 app.include_router(push.router)
 app.include_router(messages.router)
 app.include_router(leads.router)
+app.include_router(leave.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -154,6 +155,9 @@ async def startup() -> None:
     await db.leads.create_index("assigned_to_user_id")
     await db.leads.create_index([("status", 1), ("next_follow_up", 1)])
     await db.leads.create_index([("created_at", -1)])
+    await db.students.create_index("referrer_user_id")
+    await db.leave_requests.create_index([("requester_user_id", 1), ("created_at", -1)])
+    await db.leave_requests.create_index([("requester_role", 1), ("office", 1), ("status", 1)])
     await _ensure_login_attempts_index()
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(

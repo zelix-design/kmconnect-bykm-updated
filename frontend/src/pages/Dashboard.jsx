@@ -16,8 +16,9 @@ import {
   Student, Notebook, ArrowUpRight, ArrowDownRight,
   IdentificationBadge, Briefcase, Buildings, GraduationCap, Copy,
 } from "@phosphor-icons/react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import OfficeDashboard from "./OfficeDashboard";
+import StaffDashboard from "./StaffDashboard";
 import {
   rangeFor, withinFilter, monthlyBuckets, allTimeMonthlyBuckets, todayISO,
   FILTER_OPTIONS, LEDGER_TYPE_LABEL, LEDGER_TYPE_COLOR, PALETTES,
@@ -61,9 +62,9 @@ export default function Dashboard() {
   if (user?.role === "user" && user?.linked_client_id) {
     return <LinkedUserDashboard />;
   }
-  // Staff role lands on the Leads CRM (no finance dashboard)
+  // Staff role lands on a dedicated CRM-focused dashboard
   if (user?.role === "staff") {
-    return <Navigate to="/leads" replace />;
+    return <StaffDashboard />;
   }
   return <SuperAdminDashboard />;
 }
