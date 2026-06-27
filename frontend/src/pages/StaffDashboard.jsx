@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { buildApplyUrl } from "@/lib/applyUrl";
+import { buildApplyUrl, navigateToApply } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -92,8 +92,8 @@ export default function StaffDashboard() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick actions</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <ActionButton icon={UserPlus} label="Add student" sub="Quick-add to your students" testid="staff-action-add-student"
-            onClick={() => nav("/my-students")} />
+          <ActionButton icon={UserPlus} label="Add student" sub="Open your referral application form" testid="staff-action-add-student"
+            onClick={() => navigateToApply(nav, user?.id)} />
           <ActionButton icon={CalendarCheck} label="Request leave" sub="Casual / sick / earned / unpaid" testid="staff-action-leave"
             onClick={() => setLeaveOpen(true)} />
           <ActionButton icon={PaperPlaneTilt} label="Reminder to office admin" sub="Send a quick message" testid="staff-action-reminder"
