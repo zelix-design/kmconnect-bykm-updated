@@ -110,9 +110,12 @@ async def seed_admin_and_backfill() -> None:
         if patch:
             await db.users.update_one({"email": admin_email}, {"$set": patch})
 
-    # Backfill role + approval_status for legacy users so they can still log in.
+    # Backfill role for *legacy* users that have an unknown/missing role so
+    # they can still log in. IMPORTANT: never touch valid roles — converting
+    # "user" (sub-agents) or "staff" (CRM) here would silently destroy those
+    # accounts on every restart.
     await db.users.update_many(
-        {"role": {"$nin": ["super_admin", "office_admin"]}},
+        {"role": {"$nin": ["super_admin", "office_admin", "user", "staff"]}},
         {"$set": {"role": "office_admin"}},
     )
     await db.users.update_many(

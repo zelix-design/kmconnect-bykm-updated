@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -89,6 +89,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             <DialogTitle className="font-display text-xl" data-testid="lead-detail-name">{local.name}</DialogTitle>
             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${meta.cls}`} data-testid="lead-detail-status">{meta.label}</span>
           </div>
+          <DialogDescription className="sr-only">Lead details, status and follow-up history for {local.name}.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

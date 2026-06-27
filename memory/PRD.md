@@ -817,3 +817,16 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Backend `POST /api/auth/forgot-password` (generic 200, sha256-hashed token, 30-min TTL, Resend email) + `POST /api/auth/reset-password` (single-use, expiry, bcrypt update, lockout clear). New `password_reset_tokens` collection with unique token_hash index + TTL on expires_at.
 - [x] Reset link base URL from request Origin/Referer (fallback APP_BASE_URL env). Resend API key updated in backend/.env.
 - [x] Verified end-to-end via curl (single-use, expiry, login with new pw, old pw rejected); emails send (Resend message IDs); frontend renders; `CI=true` build passes (Vercel-safe).
+
+## Implementation status — 2026-06-27 (iteration 37: CRM Phase 1 — Staff role + Leads CRM)
+- [x] **New "Staff" login role** (4th role). Created by Super Admin (any office) OR Office Admin (own office only, privilege-escalation guarded). `STAFF_DEFAULT_PERMISSIONS`: overview=view, leads/leave/settings=edit, all finance pages=none. Staff land on /leads; sidebar limited to Overview/Leads/Messages/Settings.
+- [x] **Staff management page** `/staff` (StaffMembers.jsx) for super_admin + office_admin: create staff, reset password, delete (office admin scoped to own office). Endpoints: `GET /api/users/staff`, `GET /api/users/assignable`; `POST /api/users` extended for office_admin→staff; delete/reset-password scoped.
+- [x] **Leads CRM** (`routers/leads.py` + `pages/Leads.jsx` + components/leads/*): manual add + CSV bulk upload (+ template), status pipeline (new→contacted→interested→follow_up→converted→lost), assignment to staff/office-admin, scheduled follow-ups (datetime + note) with in-app/push notify to assignee, "Missed" computed view, role-scoped visibility (staff=assigned only, office_admin=own office, super_admin=all), stats endpoint. Background sweep (`_followup_sweep_loop`, every 10min) reminds assignees of due follow-ups.
+- [x] **CRITICAL seed bug fixed**: `seed.py` backfill was converting EVERY non-admin role (incl. `user` sub-agents and new `staff`) to `office_admin` on each restart. Now preserves all known roles (super_admin/office_admin/user/staff).
+- [x] PermGate now supports combined roles+page gating. perm.js adds "leads" page.
+- Verified: backend leads suite 19/19 + combined 32/32 pytest; staff role survives restart; testing_agent E2E backend 100% + frontend core flows 100%; `CI=true` build passes (Vercel-safe). Test staff: staff.blr@kmfoundation.online / Staff@123 (KM_BLR).
+
+## NEXT — CRM Phase 2 (approved, not yet built): Leave Request & Management
+- Staff/Office-admin submit leave (type: Casual/Sick/Earned/Unpaid, from-date, to-date, reason).
+- Approval hierarchy: Staff's leave → Office Admin approves; Office Admin's leave → Super Admin approves (single-level per requester).
+- "leave" permission page already wired into PERMISSION_PAGES + STAFF_DEFAULT_PERMISSIONS. Needs: leave router (CRUD + approve/reject + scoping), notifications, Leave page UI + nav, optional leave balance.
