@@ -61,6 +61,17 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
+def decode_token(token: str) -> Optional[dict]:
+    """Decode a JWT, returning the payload or None if invalid/expired."""
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            return None
+        return payload
+    except jwt.InvalidTokenError:
+        return None
+
+
 def _cookie_settings() -> tuple[bool, str]:
     """Return ``(secure, samesite)`` for the auth cookie.
 

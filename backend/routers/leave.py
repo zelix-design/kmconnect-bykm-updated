@@ -12,7 +12,7 @@ Boxes:
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -147,6 +147,100 @@ async def leave_stats(user: dict = Depends(get_current_user)):
             iq = {"requester_role": {"$in": ["office_admin", "super_admin"]}, "requester_user_id": {"$ne": user["id"]}, "status": "pending"}
         pending_inbox = await db.leave_requests.count_documents(iq)
     return {"pending_mine": pending_mine, "pending_inbox": pending_inbox, "total_mine": len(mine)}
+
+
+DEFAULT_QUOTAS = {"casual": 12, "sick": 6, "earned": 15, "unpaid": None}
+
+
+async def _get_quotas() -> dict:
+    doc = await db.app_settings.find_one({"key": "leave_quotas"})
+    q = dict(DEFAULT_QUOTAS)
+    if doc and isinstance(doc.get("value"), dict):
+        for k in DEFAULT_QUOTAS:
+            if k in doc["value"]:
+                q[k] = doc["value"][k]
+    return q
+
+
+class QuotasIn(BaseModel):
+    casual: int = Field(default=12, ge=0)
+    sick: int = Field(default=6, ge=0)
+    earned: int = Field(default=15, ge=0)
+    unpaid: Optional[int] = None  # None = unlimited
+
+
+@router.get("/quotas")
+async def get_quotas(user: dict = Depends(get_current_user)):
+    return await _get_quotas()
+
+
+@router.put("/quotas")
+async def set_quotas(payload: QuotasIn, user: dict = Depends(get_current_user)):
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    val = payload.model_dump()
+    await db.app_settings.update_one(
+        {"key": "leave_quotas"}, {"$set": {"key": "leave_quotas", "value": val}}, upsert=True
+    )
+    return val
+
+
+@router.get("/balance")
+async def my_balance(user: dict = Depends(get_current_user)):
+    """Per-type leave balance for the current user, this calendar year."""
+    quotas = await _get_quotas()
+    year = datetime.now(timezone.utc).year
+    approved = await db.leave_requests.find(
+        {"requester_user_id": user["id"], "status": "approved"},
+        {"_id": 0, "leave_type": 1, "days": 1, "from_date": 1},
+    ).to_list(2000)
+    used = {k: 0 for k in LEAVE_TYPES}
+    for a in approved:
+        try:
+            if int(str(a.get("from_date", ""))[:4]) != year:
+                continue
+        except (ValueError, TypeError):
+            pass
+        t = a.get("leave_type")
+        if t in used:
+            used[t] += int(a.get("days", 0) or 0)
+    by_type = {}
+    for t in LEAVE_TYPES:
+        quota = quotas.get(t)
+        by_type[t] = {
+            "quota": quota,
+            "used": used[t],
+            "remaining": None if quota is None else max(0, quota - used[t]),
+        }
+    return {"year": year, "by_type": by_type}
+
+
+@router.get("/calendar")
+async def leave_calendar(month: str, user: dict = Depends(get_current_user)):
+    """Approved leaves overlapping a YYYY-MM month, scoped by role."""
+    try:
+        y, m = month.split("-")
+        y, m = int(y), int(m)
+        if not (1 <= m <= 12):
+            raise ValueError
+    except (ValueError, AttributeError):
+        raise HTTPException(400, "month must be YYYY-MM")
+    from calendar import monthrange
+    start = f"{y:04d}-{m:02d}-01"
+    end = f"{y:04d}-{m:02d}-{monthrange(y, m)[1]:02d}"
+
+    role = user.get("role")
+    q: dict = {"status": "approved"}
+    if role == "staff":
+        q["requester_user_id"] = user["id"]
+    elif role == "office_admin":
+        q["office"] = user.get("office")
+    docs = await db.leave_requests.find(
+        q,
+        {"_id": 0, "id": 1, "requester_name": 1, "requester_role": 1, "leave_type": 1,
+         "from_date": 1, "to_date": 1, "days": 1},
+    ).to_list(3000)
+    return [d for d in docs if not (d.get("to_date", "") < start or d.get("from_date", "") > end)]
 
 
 @router.patch("/{leave_id}")

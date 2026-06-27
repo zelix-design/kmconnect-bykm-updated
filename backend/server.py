@@ -17,7 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads
 
 
 app = FastAPI(title="FinFlow API")
@@ -42,6 +42,7 @@ app.include_router(push.router)
 app.include_router(messages.router)
 app.include_router(leads.router)
 app.include_router(leave.router)
+app.include_router(uploads.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -170,6 +171,13 @@ async def startup() -> None:
         {"$pull": {"payments": {"received_in.name": "TestAgent"}}},
     )
     await seed_admin_and_backfill()
+    # Initialise object storage (profile photo uploads) — non-fatal if it fails.
+    try:
+        from lib.storage import init_storage
+        init_storage()
+        logger.info("[storage] initialised")
+    except Exception:
+        logger.exception("[storage] init failed — uploads will retry on first use")
     # Background sweep: remind assignees of due lead follow-ups every 10 min.
     asyncio.create_task(_followup_sweep_loop())
 

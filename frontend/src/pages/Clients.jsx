@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "@/lib/api";
+import api, { API, getStoredToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const CLIENT_TYPES = [
@@ -31,6 +31,10 @@ export function clientTypeLabel(v) {
   return CLIENT_TYPES.find((t) => t.value === v)?.label || "—";
 }
 
+export function photoSrc(u) {
+  return u ? `${API}${u.replace(/^\/api/, "")}?auth=${getStoredToken() || ""}` : null;
+}
+
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
   sub_agent_associate: "bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-400",
@@ -43,6 +47,7 @@ const TYPE_BADGE = {
 const empty = {
   name: "", client_type: "sub_agent_associate", email: "", phone: "", company: "",
   office: "", eligible_incentive: "", date_of_birth: "",
+  employee_id: "", address: "", place: "", photo_url: "",
   home_office: "",
 };
 
@@ -65,6 +70,28 @@ export default function Clients() {
 
   const load = async () => { setList((await api.get("/clients")).data); };
   useEffect(() => { load(); }, []);
+
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef(null);
+
+  const uploadPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post("/uploads/image", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setForm((f) => ({ ...f, photo_url: data.url }));
+      toast.success("Photo uploaded");
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      toast.error(typeof detail === "string" ? detail : "Upload failed");
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  };
 
   // Office-admin only sees staff in their workspace
   const visibleTypes = isOfficeAdmin ? CLIENT_TYPES.filter((t) => t.value === "staff") : CLIENT_TYPES;
@@ -94,6 +121,10 @@ export default function Clients() {
       office: c.office || "",
       eligible_incentive: c.eligible_incentive ?? "",
       date_of_birth: c.date_of_birth || "",
+      employee_id: c.employee_id || "",
+      address: c.address || "",
+      place: c.place || "",
+      photo_url: c.photo_url || "",
       home_office: c.home_office || "",
     });
     setOpen(true);
@@ -131,7 +162,7 @@ export default function Clients() {
         <div>
           <p className="label-eyebrow">People</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">
-            {isOfficeAdmin ? "Our Staff" : "Clients"}
+            {isOfficeAdmin ? "Our Staff" : "Employees"}
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -182,6 +213,33 @@ export default function Clients() {
                 </div>
                 {isStaff ? (
                   <>
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0 border border-border">
+                        {form.photo_url ? (
+                          <img src={photoSrc(form.photo_url)} alt="staff" className="w-full h-full object-cover" data-testid="cli-photo-preview" />
+                        ) : (
+                          <UserCircle size={38} className="text-muted-foreground" weight="thin" />
+                        )}
+                      </div>
+                      <div>
+                        <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg" onChange={uploadPhoto} className="hidden" data-testid="cli-photo-input" />
+                        <Button type="button" variant="outline" size="sm" disabled={uploadingPhoto} onClick={() => photoInputRef.current?.click()} data-testid="cli-photo-btn">
+                          <Camera size={14} className="mr-1.5" /> {uploadingPhoto ? "Uploading…" : (form.photo_url ? "Change photo" : "Upload photo")}
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground mt-1">JPEG/JPG · up to 5MB</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Employee ID</Label>
+                        <Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder={editing ? "" : "Auto-generated"} data-testid="cli-empid" />
+                        {!editing && <p className="text-[11px] text-muted-foreground mt-1">Leave blank to auto-generate (e.g. EMP-BLR-001).</p>}
+                      </div>
+                      <div>
+                        <Label>Date of birth</Label>
+                        <Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} data-testid="cli-dob" />
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <Label>Office</Label>
@@ -195,9 +253,13 @@ export default function Clients() {
                         </Select>
                       </div>
                       <div>
-                        <Label>Date of birth</Label>
-                        <Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} data-testid="cli-dob" />
+                        <Label>Place</Label>
+                        <Input value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })} placeholder="e.g. Bangalore" data-testid="cli-place" />
                       </div>
+                    </div>
+                    <div>
+                      <Label>Address</Label>
+                      <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Residential address" data-testid="cli-address" />
                     </div>
                     <div>
                       <Label>Eligible incentive (₹ per admission)</Label>
@@ -289,8 +351,8 @@ function ClientCard({ c, allowEdit, openEdit, remove }) {
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium">
-            {c.name.slice(0, 2).toUpperCase()}
+          <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium overflow-hidden shrink-0">
+            {c.photo_url ? <img src={photoSrc(c.photo_url)} alt={c.name} className="w-full h-full object-cover" /> : c.name.slice(0, 2).toUpperCase()}
           </div>
           <div>
             <p className="font-medium">{c.name}</p>
@@ -316,6 +378,12 @@ function ClientCard({ c, allowEdit, openEdit, remove }) {
       <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
         {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}
         {c.phone && <p className="flex items-center gap-2"><Phone size={14} /> {c.phone}</p>}
+        {c.client_type === "staff" && c.employee_id && (
+          <p className="flex items-center gap-2"><IdentificationBadge size={14} /> {c.employee_id}</p>
+        )}
+        {c.client_type === "staff" && c.place && (
+          <p className="flex items-center gap-2"><MapPin size={14} /> {c.place}</p>
+        )}
         {c.client_type === "staff" && c.date_of_birth && (
           <p className="flex items-center gap-2"><Cake size={14} /> {new Date(c.date_of_birth).toLocaleDateString()}</p>
         )}

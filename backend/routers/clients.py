@@ -47,11 +47,33 @@ async def list_clients(user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(1000)
 
 
+async def _next_employee_id(office: str | None) -> str:
+    """Generate a unique employee id like EMP-BLR-001 scoped to an office."""
+    code = (office or "GEN").replace("KM_", "")
+    prefix = f"EMP-{code}-"
+    existing = await db.clients.find(
+        {"employee_id": {"$regex": f"^{prefix}"}}, {"_id": 0, "employee_id": 1}
+    ).to_list(5000)
+    max_seq = 0
+    for d in existing:
+        try:
+            max_seq = max(max_seq, int(str(d["employee_id"]).rsplit("-", 1)[-1]))
+        except (ValueError, IndexError):
+            continue
+    seq = max_seq + 1
+    while await db.clients.find_one({"employee_id": f"{prefix}{seq:03d}"}):
+        seq += 1
+    return f"{prefix}{seq:03d}"
+
+
 @router.post("")
 async def create_client(payload: ClientIn, user: dict = Depends(require_edit("clients"))):
     data = payload.model_dump()
     if user.get("role") == "office_admin":
         data["home_office"] = user.get("office")
+    # Auto-assign an employee id for staff when not provided.
+    if data.get("client_type") == "staff" and not (data.get("employee_id") or "").strip():
+        data["employee_id"] = await _next_employee_id(data.get("office"))
     doc = {"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **data}
     await db.clients.insert_one(doc)
     doc.pop("_id", None)
@@ -69,6 +91,9 @@ async def update_client(client_id: str, payload: ClientIn, user: dict = Depends(
         )
         if existing is not None:
             data["home_office"] = existing.get("home_office")
+    # Backfill an employee id for staff if still missing.
+    if data.get("client_type") == "staff" and not (data.get("employee_id") or "").strip():
+        data["employee_id"] = await _next_employee_id(data.get("office"))
     res = await db.clients.update_one(
         _client_filter(client_id, user),
         {"$set": data},

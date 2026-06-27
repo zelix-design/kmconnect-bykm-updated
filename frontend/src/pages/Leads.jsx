@@ -10,11 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   Plus, UploadSimple, MagnifyingGlass, Target, ClockCountdown, CheckCircle, Phone, GraduationCap,
+  ListBullets, Kanban,
 } from "@phosphor-icons/react";
 import { LEAD_STATUSES, LEAD_STATUS_META, sourceLabel, fmtDateTime } from "@/components/leads/constants";
 import LeadFormDialog from "@/components/leads/LeadFormDialog";
 import LeadDetailDialog from "@/components/leads/LeadDetailDialog";
 import LeadsBulkUploadDialog from "@/components/leads/LeadsBulkUploadDialog";
+import LeadsBoard from "@/components/leads/LeadsBoard";
 
 function StatTile({ icon: Icon, label, value, tone, testid }) {
   const tones = {
@@ -49,6 +51,7 @@ export default function Leads() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [q, setQ] = useState("");
+  const [view, setView] = useState("list"); // list | board
 
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState(null);
@@ -59,8 +62,10 @@ export default function Leads() {
     setLoading(true);
     try {
       const qp = {};
-      if (statusFilter === "missed") qp.view = "missed";
-      else if (statusFilter !== "all") qp.status = statusFilter;
+      if (view !== "board") {
+        if (statusFilter === "missed") qp.view = "missed";
+        else if (statusFilter !== "all") qp.status = statusFilter;
+      }
       if (sourceFilter !== "all") qp.source = sourceFilter;
       if (assigneeFilter !== "all") qp.assigned_to = assigneeFilter;
       if (q.trim()) qp.q = q.trim();
@@ -72,7 +77,7 @@ export default function Leads() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, assigneeFilter, q]);
+  }, [statusFilter, sourceFilter, assigneeFilter, q, view]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -102,6 +107,21 @@ export default function Leads() {
   }, [params, editable, setParams]);
 
   const afterChange = () => { fetchLeads(); fetchStats(); };
+
+  const handleBoardStatus = async (lead, status) => {
+    try {
+      if (status === "converted" && !lead.converted_student_id) {
+        await api.post(`/leads/${lead.id}/convert`);
+        toast.success("Lead converted — student created");
+      } else {
+        await api.patch(`/leads/${lead.id}`, { status });
+        toast.success(`Moved to ${LEAD_STATUS_META[status].label}`);
+      }
+      afterChange();
+    } catch (err) {
+      toast.error("Could not move lead");
+    }
+  };
 
   const filterChips = useMemo(() => ([
     { key: "all", label: "All", count: stats.total },
@@ -142,23 +162,25 @@ export default function Leads() {
 
       {/* Filters */}
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-1.5" data-testid="leads-status-chips">
-          {filterChips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => setStatusFilter(c.key)}
-              data-testid={`leads-filter-${c.key}`}
-              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                statusFilter === c.key
-                  ? (c.danger ? "bg-rose-500/15 text-rose-600 border-rose-500/40" : "bg-amber-gradient text-white border-transparent")
-                  : "border-border text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {c.label} <span className="opacity-70">· {c.count}</span>
-            </button>
-          ))}
-        </div>
+        {view === "list" && (
+          <div className="flex flex-wrap gap-1.5" data-testid="leads-status-chips">
+            {filterChips.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setStatusFilter(c.key)}
+                data-testid={`leads-filter-${c.key}`}
+                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                  statusFilter === c.key
+                    ? (c.danger ? "bg-rose-500/15 text-rose-600 border-rose-500/40" : "bg-amber-gradient text-white border-transparent")
+                    : "border-border text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {c.label} <span className="opacity-70">· {c.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -174,12 +196,24 @@ export default function Leads() {
               </SelectContent>
             </Select>
           )}
+          <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto" data-testid="leads-view-toggle">
+            <button type="button" onClick={() => setView("list")} data-testid="leads-view-list"
+              className={`h-10 px-3 flex items-center gap-1.5 text-sm transition-colors ${view === "list" ? "bg-amber-gradient text-white" : "text-muted-foreground hover:bg-muted"}`}>
+              <ListBullets size={16} /> List
+            </button>
+            <button type="button" onClick={() => setView("board")} data-testid="leads-view-board"
+              className={`h-10 px-3 flex items-center gap-1.5 text-sm transition-colors ${view === "board" ? "bg-amber-gradient text-white" : "text-muted-foreground hover:bg-muted"}`}>
+              <Kanban size={16} /> Board
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* List */}
+      {/* List / Board */}
       {loading ? (
         <div className="text-center py-16 text-muted-foreground text-sm" data-testid="leads-loading">Loading leads…</div>
+      ) : view === "board" ? (
+        <LeadsBoard leads={leads} editable={editable} onCardClick={setDetailLead} onStatusChange={handleBoardStatus} />
       ) : leads.length === 0 ? (
         <Card className="py-16 text-center" data-testid="leads-empty">
           <Target size={40} className="mx-auto text-muted-foreground mb-3" weight="duotone" />
