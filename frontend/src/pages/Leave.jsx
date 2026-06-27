@@ -9,6 +9,7 @@ import { Plus, CalendarCheck, Check, X, Trash, CalendarBlank, SlidersHorizontal 
 import LeaveRequestDialog, { LEAVE_TYPES } from "@/components/leave/LeaveRequestDialog";
 import LeaveCalendar from "@/components/leave/LeaveCalendar";
 import LeavePolicyDialog from "@/components/leave/LeavePolicyDialog";
+import TeamQuotas from "@/components/leave/TeamQuotas";
 
 const STATUS_META = {
   pending: { label: "Pending", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" },
@@ -152,10 +153,18 @@ export default function Leave() {
           className={`text-sm px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 ${tab === "calendar" ? "bg-amber-gradient text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}>
           <CalendarBlank size={15} /> Calendar
         </button>
+        {isApprover && (
+          <button type="button" onClick={() => setTab("quotas")} data-testid="leave-tab-quotas"
+            className={`text-sm px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 ${tab === "quotas" ? "bg-amber-gradient text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}>
+            <SlidersHorizontal size={15} /> Team quotas
+          </button>
+        )}
       </div>
 
       {tab === "calendar" ? (
         <Card className="p-4"><LeaveCalendar /></Card>
+      ) : tab === "quotas" ? (
+        <TeamQuotas />
       ) : (
         <>
           {tab === "mine" && balance && (

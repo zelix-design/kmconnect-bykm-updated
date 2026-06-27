@@ -26,6 +26,7 @@ import {
 import { StatCard, ChartHeader, Empty } from "@/components/dashboard/StatCard";
 import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
+import LeadFunnel from "@/components/leads/LeadFunnel";
 
 const TILES = [
   { key: "transactions", label: "Transactions", icon: Receipt, palette: "amber" },
@@ -276,6 +277,8 @@ function SuperAdminDashboard() {
           {activeTile === "ledger" && <LedgerList items={ledger} currency={currency} />}
         </Card>
       </section>
+
+      {role === "super_admin" && <LeadFunnel />}
     </div>
   );
 }

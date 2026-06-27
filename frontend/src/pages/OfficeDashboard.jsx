@@ -14,6 +14,7 @@ import {
 } from "@/components/office-dashboard/AsideCards";
 import StaffPickerDialog from "@/components/office-dashboard/StaffPickerDialog";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
+import LeadFunnel from "@/components/leads/LeadFunnel";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -159,6 +160,8 @@ export default function OfficeDashboard() {
           <IncentiveRuleCard onAddAdmission={openAdmissionPicker} />
         </div>
       </div>
+
+      <LeadFunnel />
 
       <StaffPickerDialog
         open={pickerOpen}

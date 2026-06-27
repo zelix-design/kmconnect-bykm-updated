@@ -189,9 +189,37 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
         tx_query, {"_id": 0}
     ).sort("date", -1).to_list(500)
 
+    # Best-effort: resolve a matching staff LOGIN user (role="staff") for this
+    # employee record so the UI can surface / edit their leave quota. Matched
+    # by exact (case-insensitive) name within the same office.
+    staff_login_user = None
+    if is_staff and (client.get("name") or "").strip():
+        import re
+        from routers.leave import _effective_quota
+        nm = re.escape(client["name"].strip())
+        match_q: dict = {
+            "role": "staff",
+            "name": {"$regex": f"^{nm}$", "$options": "i"},
+        }
+        office = client.get("office")
+        if office:
+            match_q["office"] = office
+        lu = await db.users.find_one(
+            match_q, {"_id": 0, "id": 1, "name": 1, "office": 1, "leave_quota": 1}
+        )
+        if lu:
+            staff_login_user = {
+                "id": lu["id"],
+                "name": lu.get("name"),
+                "office": lu.get("office"),
+                "leave_quota": await _effective_quota(lu),
+                "has_override": isinstance(lu.get("leave_quota"), dict),
+            }
+
     return {
         "client": client,
         "is_staff": is_staff,
+        "staff_login_user": staff_login_user,
         "students": enriched_students,
         "transactions": txs,
         "totals": build_client_detail_totals(

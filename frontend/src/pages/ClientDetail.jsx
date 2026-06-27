@@ -6,10 +6,11 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { buildApplyUrl } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon } from "@phosphor-icons/react";
+import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon, IdentificationBadge, MapPin, House, CalendarCheck, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { clientTypeLabel } from "@/pages/Clients";
+import { clientTypeLabel, photoSrc } from "@/pages/Clients";
 import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
+import StaffQuotaDialog from "@/components/leave/StaffQuotaDialog";
 
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
@@ -34,6 +35,7 @@ export default function ClientDetail() {
   const currency = user?.currency || "USD";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [quotaOpen, setQuotaOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,7 @@ export default function ClientDetail() {
   const c = data.client;
   const t = data.totals;
   const isStaff = !!data.is_staff;
+  const loginUser = data.staff_login_user;
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="client-detail">
@@ -67,8 +70,12 @@ export default function ClientDetail() {
       <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-md bg-muted text-foreground flex items-center justify-center font-medium text-lg">
-              {(c.name || "?").slice(0, 2).toUpperCase()}
+            <div className="w-16 h-16 rounded-lg bg-muted text-foreground flex items-center justify-center font-medium text-lg overflow-hidden shrink-0">
+              {isStaff && c.photo_url ? (
+                <img src={photoSrc(c.photo_url)} alt={c.name} className="w-full h-full object-cover" data-testid="client-photo" />
+              ) : (
+                (c.name || "?").slice(0, 2).toUpperCase()
+              )}
             </div>
             <div>
               <p className="label-eyebrow">{isStaff ? "Staff" : "Client"}</p>
@@ -77,6 +84,11 @@ export default function ClientDetail() {
                 <span className={`uppercase tracking-wider px-2 py-0.5 rounded ${TYPE_BADGE[c.client_type] || "bg-muted text-foreground"}`} data-testid="client-type-badge">
                   {clientTypeLabel(c.client_type)}
                 </span>
+                {isStaff && c.employee_id && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400 uppercase tracking-wider" data-testid="client-employee-id">
+                    <IdentificationBadge size={11} weight="duotone" /> {c.employee_id}
+                  </span>
+                )}
                 {c._creator_office && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400 uppercase tracking-wider">
                     <Buildings size={11} weight="duotone" /> {c._creator_office.replace("KM_", "KM ")}
@@ -92,6 +104,8 @@ export default function ClientDetail() {
                 {c.email && <p className="flex items-center gap-2"><EnvelopeSimple size={14} /> {c.email}</p>}
                 {c.phone && <p className="flex items-center gap-2"><Phone size={14} /> {c.phone}</p>}
                 {c.company && <p className="flex items-center gap-2"><Buildings size={14} /> {c.company}</p>}
+                {isStaff && c.place && <p className="flex items-center gap-2" data-testid="client-place"><MapPin size={14} /> {c.place}</p>}
+                {isStaff && c.address && <p className="flex items-start gap-2" data-testid="client-address"><House size={14} className="mt-0.5 shrink-0" /> <span className="whitespace-pre-line">{c.address}</span></p>}
                 {isStaff && c.date_of_birth && (
                   <p className="flex items-center gap-2"><Cake size={14} /> {new Date(c.date_of_birth).toLocaleDateString()}</p>
                 )}
@@ -153,6 +167,29 @@ export default function ClientDetail() {
           </>
         )}
       </div>
+
+      {/* Leave quota (staff with a linked login account) */}
+      {isStaff && loginUser && (
+        <Card className="p-5 border border-border bg-card rounded-lg shadow-none flex flex-col sm:flex-row sm:items-center justify-between gap-3" data-testid="client-leave-quota">
+          <div>
+            <div className="flex items-center gap-2">
+              <CalendarCheck size={18} className="text-orange-600 dark:text-orange-400" weight="duotone" />
+              <p className="label-eyebrow">Leave quota (per year)</p>
+              {loginUser.has_override
+                ? <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300" data-testid="client-quota-custom">Custom</span>
+                : <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Company policy</span>}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-sm" data-testid="client-quota-values">
+              {[["Casual", loginUser.leave_quota?.casual], ["Sick", loginUser.leave_quota?.sick], ["Earned", loginUser.leave_quota?.earned], ["Unpaid", loginUser.leave_quota?.unpaid == null ? "∞" : loginUser.leave_quota?.unpaid]].map(([k, v]) => (
+                <span key={k} className="px-2 py-0.5 rounded bg-muted text-foreground tabular-nums">{k} <span className="font-medium">{v}</span></span>
+              ))}
+            </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setQuotaOpen(true)} data-testid="client-edit-quota">
+            <PencilSimple size={14} className="mr-1.5" /> Edit quota
+          </Button>
+        </Card>
+      )}
 
       {/* Students admitted */}
       <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
@@ -282,6 +319,15 @@ export default function ClientDetail() {
             </div>
           )}
         </Card>
+      )}
+      {isStaff && loginUser && (
+        <StaffQuotaDialog
+          open={quotaOpen}
+          onOpenChange={setQuotaOpen}
+          userId={loginUser.id}
+          userName={loginUser.name || c.name}
+          onSaved={load}
+        />
       )}
     </div>
   );

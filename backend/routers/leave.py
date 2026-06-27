@@ -185,10 +185,107 @@ async def set_quotas(payload: QuotasIn, user: dict = Depends(get_current_user)):
     return val
 
 
+# ---------- Per-staff quota overrides ----------
+async def _effective_quota(target: dict) -> dict:
+    """Effective quota for a user = global policy, with any per-user override
+    merged on top. An override is stored on the user doc under `leave_quota`."""
+    glob = await _get_quotas()
+    ov = target.get("leave_quota")
+    if isinstance(ov, dict):
+        q = dict(glob)
+        for k in DEFAULT_QUOTAS:
+            if k in ov:
+                q[k] = ov[k]
+        return q
+    return glob
+
+
+async def _resolve_quota_target(user_id: str, actor: dict) -> dict:
+    """Fetch the target user and assert the actor may manage their quota.
+    Super admin → any staff / office admin. Office admin → staff in own office."""
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not target:
+        raise HTTPException(404, "User not found")
+    arole = actor.get("role")
+    trole = target.get("role")
+    if arole == "super_admin":
+        if trole not in ("staff", "office_admin"):
+            raise HTTPException(400, "Quotas apply to staff and office admins")
+    elif arole == "office_admin":
+        if trole != "staff" or target.get("office") != actor.get("office"):
+            raise HTTPException(403, "You can only manage staff in your office")
+    else:
+        raise HTTPException(403, "Not allowed")
+    return target
+
+
+@router.get("/quotas/team")
+async def quota_team(user: dict = Depends(get_current_user)):
+    """List the people whose quotas the current user can manage, each with
+    their effective quota + whether they carry a per-user override."""
+    role = user.get("role")
+    if role == "super_admin":
+        q = {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved"}
+    elif role == "office_admin":
+        q = {"role": "staff", "office": user.get("office"), "approval_status": "approved"}
+    else:
+        raise HTTPException(403, "Not allowed")
+    docs = await db.users.find(
+        q,
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "office": 1, "leave_quota": 1},
+    ).sort("name", 1).to_list(1000)
+    glob = await _get_quotas()
+    members = []
+    for d in docs:
+        ov = d.get("leave_quota")
+        has = isinstance(ov, dict)
+        eff = dict(glob)
+        if has:
+            for k in DEFAULT_QUOTAS:
+                if k in ov:
+                    eff[k] = ov[k]
+        members.append({
+            "id": d["id"], "name": d.get("name"), "email": d.get("email"),
+            "role": d.get("role"), "office": d.get("office"),
+            "quota": eff, "has_override": has,
+        })
+    return {"global": glob, "members": members}
+
+
+@router.get("/quotas/user/{user_id}")
+async def quota_user(user_id: str, user: dict = Depends(get_current_user)):
+    target = await _resolve_quota_target(user_id, user)
+    return {
+        "user_id": user_id,
+        "name": target.get("name"),
+        "role": target.get("role"),
+        "office": target.get("office"),
+        "quota": await _effective_quota(target),
+        "has_override": isinstance(target.get("leave_quota"), dict),
+        "global": await _get_quotas(),
+    }
+
+
+@router.put("/quotas/user/{user_id}")
+async def set_quota_user(user_id: str, payload: QuotasIn, user: dict = Depends(get_current_user)):
+    await _resolve_quota_target(user_id, user)
+    val = payload.model_dump()
+    await db.users.update_one({"id": user_id}, {"$set": {"leave_quota": val}})
+    return {"ok": True, "user_id": user_id, "quota": val, "has_override": True}
+
+
+@router.delete("/quotas/user/{user_id}")
+async def clear_quota_user(user_id: str, user: dict = Depends(get_current_user)):
+    await _resolve_quota_target(user_id, user)
+    await db.users.update_one({"id": user_id}, {"$unset": {"leave_quota": ""}})
+    return {"ok": True, "user_id": user_id, "has_override": False}
+
+
 @router.get("/balance")
 async def my_balance(user: dict = Depends(get_current_user)):
-    """Per-type leave balance for the current user, this calendar year."""
-    quotas = await _get_quotas()
+    """Per-type leave balance for the current user, this calendar year.
+    Honours a per-user override when one is set, else the global policy."""
+    quotas = await _effective_quota(user)
     year = datetime.now(timezone.utc).year
     approved = await db.leave_requests.find(
         {"requester_user_id": user["id"], "status": "approved"},
@@ -216,8 +313,14 @@ async def my_balance(user: dict = Depends(get_current_user)):
 
 
 @router.get("/calendar")
-async def leave_calendar(month: str, user: dict = Depends(get_current_user)):
-    """Approved leaves overlapping a YYYY-MM month, scoped by role."""
+async def leave_calendar(
+    month: str,
+    user: dict = Depends(get_current_user),
+    office: Optional[str] = None,
+    member: Optional[str] = None,
+):
+    """Approved leaves overlapping a YYYY-MM month, scoped by role.
+    Optional filters: `office` (super admin only) and `member` (requester id)."""
     try:
         y, m = month.split("-")
         y, m = int(y), int(m)
@@ -235,6 +338,10 @@ async def leave_calendar(month: str, user: dict = Depends(get_current_user)):
         q["requester_user_id"] = user["id"]
     elif role == "office_admin":
         q["office"] = user.get("office")
+    elif role == "super_admin" and office:
+        q["office"] = office
+    if member:
+        q["requester_user_id"] = member
     docs = await db.leave_requests.find(
         q,
         {"_id": 0, "id": 1, "requester_name": 1, "requester_role": 1, "leave_type": 1,

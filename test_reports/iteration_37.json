@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 37 — per-staff leave-quota overrides (Team quotas tab + ClientDetail editor), calendar filters (SA office + member, OA member-only), and lead conversion funnel on SA + OA dashboards. Backend: 12/12 pytest PASS. Frontend E2E: all testids render and behave as spec'd. Regression intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "tests_executed": {
+    "backend_pytest": [
+      "GET /api/leave/quotas/team — SA sees staff + office_admin roles",
+      "GET /api/leave/quotas/team — OA scoped to own office staff only",
+      "GET /api/leave/quotas/team — staff role gets 403",
+      "PUT/GET/DELETE /api/leave/quotas/user/{uid} — OA can override own-office staff (Fathima), GET reflects, DELETE clears",
+      "PUT /api/leave/quotas/user/{office_admin_id} as OA → 403",
+      "SA PUT/GET on Fathima's quota — override propagates",
+      "GET /api/leave/calendar?month=2026-01&office=KM_BLR (SA) → 200 list",
+      "GET /api/leave/calendar?month=2026-01&member=<id> (OA) → 200 list",
+      "GET /api/leave/calendar?month=2026-13 → 400",
+      "GET /api/leads/stats (SA + OA) → contains 5 funnel stages",
+      "POST /api/clients name='Fathima Telecaller' KM_BLR + GET /api/clients/{id}/detail → staff_login_user resolved with leave_quota + has_override (cleanup deleted)"
+    ],
+    "frontend_playwright": [
+      "SA /  → lead-funnel + 5 funnel-stage-<k> + funnel-conversion-rate + funnel-lost + funnel-missed all render",
+      "SA /leave → leave-tab-quotas → team-quota-list with 8 members; quota-edit-<id> opens staff-quota-dialog; staff-quota-{casual,sick,earned} editable; staff-quota-save persists; quota-override-<id> badge appears; staff-quota-reset removes the badge",
+      "SA /leave → Calendar tab → cal-filter-office AND cal-filter-member both render",
+      "OA /  → lead-funnel renders (scoped to office)",
+      "OA /leave → Team quotas tab shows only 1 staff card (Fathima, KM_BLR) — cross-office scoping enforced",
+      "OA /leave → Calendar tab → cal-filter-office HIDDEN, cal-filter-member visible (RBAC correct)",
+      "SA /clients/<id> for staff 'Fathima Telecaller' → client-employee-id, client-place, client-address, client-leave-quota, client-edit-quota render; clicking edit opens staff-quota-dialog; saving casual=21 updates the quota card text",
+      "client-photo only renders when photo_url is present (conditional fallback to initials avatar — matches spec)",
+      "Regression: My requests + Approvals tabs visible; Leave policy button (SA only) still present"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration37_quotas_funnel.py",
+    "/app/test_reports/pytest/iteration37.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/leave.py::_resolve_quota_target — clean RBAC: SA → staff|office_admin, OA → staff in own office. 403 enforced before any write.",
+    "routers/leave.py::_effective_quota merges per-user override on top of global policy; unpaid=None correctly preserved as unlimited.",
+    "routers/leave.py::leave_calendar accepts optional office (SA-only effective — staff/OA filters still force own scope) + optional member (any role). YYYY-MM validated with 400 on bad input.",
+    "routers/leave.py::quota_team — projection excludes _id and password_hash; sorted by name; returns {global, members[{id,name,email,role,office,quota,has_override}]}.",
+    "Backend PATCH semantics quirk (out-of-scope for this iteration): /api/clients/{id} PATCH uses ClientIn which model_dumps ALL fields — partial PATCH with only {'name': ...} will wipe office/client_type/etc. to None. The home_office is preserved with an explicit model_fields_set check but other fields are not. Recommend extending the same guard to office/client_type/email/phone/etc. or switching PATCH to a partial schema. Not blocking iteration-37 features.",
+    "Frontend ClientDetail.jsx — client-photo testid is gated on photo_url; matches the 'photo avatar OR initials' spec.",
+    "LeadFunnel.jsx wired into both Dashboard (super_admin) and OfficeDashboard with consistent testids: lead-funnel, funnel-stage-<key>, funnel-conversion-rate, funnel-lost, funnel-missed.",
+    "Cleanup: temp client and quota overrides created during testing were deleted via DELETE endpoints; no stray data left."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration37_quotas_funnel.py"],
+  "success_rate": {"backend": "100% (12/12 pytest)", "frontend": "100% on all P0 flows"},
+  "test_credentials": "SA admin@kmfoundation.online / Admin@786 · OA blr1@finflow.com / Office@123 · Staff staff.blr@kmfoundation.online / Staff@123 — staff login user 'Fathima Telecaller' id 9aa85b63-c43e-471f-a456-55a88640636f",
+  "seed_data_creation": "Test created and deleted a temp client 'Fathima Telecaller' in KM_BLR (used for ClientDetail staff_login_user assertion). Also created a quota override on Fathima then deleted it. No residual test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration-37 testids confirmed working: leave-tab-quotas, team-quota-list, quota-member-<uid>, quota-edit-<uid>, quota-override-<uid>, staff-quota-dialog, staff-quota-{casual,sick,earned,unpaid}, staff-quota-save, staff-quota-reset, cal-filter-office (SA only), cal-filter-member (SA+OA), client-{photo (when photo_url present), employee-id, place, address, leave-quota, edit-quota}, lead-funnel, funnel-stage-{new|contacted|interested|follow_up|converted}, funnel-conversion-rate, funnel-lost, funnel-missed. Backend uses session/cookie + Bearer fallback; tests rely on httpOnly cookie via requests.Session.",
+  "rca of the issue": "No bugs found in iteration 37 feature scope. Pre-existing PATCH-wipes-fields behavior on /api/clients/{id} surfaced during test setup but is out of scope for this iteration and can be addressed separately."
+}
