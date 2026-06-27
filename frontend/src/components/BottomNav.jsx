@@ -17,6 +17,8 @@ import {
   ReceiptX,
   Coins,
   ChatCircleDots,
+  Target,
+  CalendarCheck,
 } from "@phosphor-icons/react";
 
 // Bottom nav side items, ranked. We render up to 4 visible items + the center FAB.
@@ -32,6 +34,14 @@ const ALL_SIDE_NAV = [
   { to: "/invoices", label: "Invoices", icon: Receipt, tid: "bottom-nav-invoices", roles: ["super_admin"] },
   { to: "/transactions", label: "Transactions", icon: CurrencyCircleDollar, tid: "bottom-nav-transactions", perm: "transactions" },
   { to: "/expense-requests", label: "Expenses", icon: ReceiptX, tid: "bottom-nav-expenses", perm: "expense_requests" },
+];
+
+// Staff get a fixed, CRM-focused bottom bar: Home · My Leads · [＋] · Messages · Leave
+const STAFF_SIDE_NAV = [
+  { to: "/", label: "Home", icon: House, end: true, tid: "bottom-nav-home" },
+  { to: "/leads", label: "My Leads", icon: Target, tid: "bottom-nav-my-leads" },
+  { to: "/messages", label: "Messages", icon: ChatCircleDots, tid: "bottom-nav-messages" },
+  { to: "/leave", label: "Leave", icon: CalendarCheck, tid: "bottom-nav-leave" },
 ];
 
 const ALL_QUICK_ACTIONS = [
@@ -80,6 +90,25 @@ const ALL_QUICK_ACTIONS = [
     tid: "qa-add-expense-request",
     perm: "expense_requests",
     roles: ["office_admin", "user"],
+  },
+  {
+    label: "Add lead",
+    sub: "New prospect",
+    icon: Target,
+    color: "from-amber-500 to-orange-600",
+    href: "/leads?new=1",
+    tid: "qa-add-lead",
+    roles: ["staff"],
+    perm: "leads",
+  },
+  {
+    label: "Add student",
+    sub: "Credit to you",
+    icon: Student,
+    color: "from-emerald-500 to-emerald-600",
+    href: "/my-students?add=1",
+    tid: "qa-staff-add-student",
+    roles: ["staff"],
   },
 ];
 
@@ -133,7 +162,7 @@ export default function BottomNav() {
   // Take the top 4 visible side items in declared order. We display them
   // around the center FAB (2 on each side). If we have fewer than 4, the
   // remaining slots render as empty placeholders so the layout stays stable.
-  const sideItems = ALL_SIDE_NAV.filter((i) => isVisible(i, user)).slice(0, 4);
+  const sideItems = (user?.role === "staff" ? STAFF_SIDE_NAV : ALL_SIDE_NAV.filter((i) => isVisible(i, user))).slice(0, 4);
   const quickActions = ALL_QUICK_ACTIONS.filter((a) => isVisible(a, user));
 
   // For linked sub-agent/associate-consultant "user" accounts the FAB

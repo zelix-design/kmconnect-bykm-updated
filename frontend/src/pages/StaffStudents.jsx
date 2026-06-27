@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,16 @@ export default function StaffStudents() {
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get("add") === "1") {
+      setForm(emptyForm);
+      setOpen(true);
+      params.delete("add");
+      setParams(params, { replace: true });
+    }
+  }, [params, setParams]);
 
   const submit = async (e) => {
     e.preventDefault();
