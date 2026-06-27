@@ -10,15 +10,18 @@ router = APIRouter(prefix="/api/clients", tags=["clients"])
 
 def _office_visibility_clause(user: dict) -> dict:
     """For office_admin, build a Mongo filter that matches records the admin
-    is allowed to see: records owned by them OR scoped to their office OR
+    is allowed to see: records owned by them OR scoped to their office
+    (home_office) OR physically in their office (office field, e.g. staff) OR
     shared with ALL via home_office."""
-    return {
-        "$or": [
-            {"user_id": user["id"]},
-            {"home_office": user.get("office")},
-            {"home_office": "ALL"},
-        ]
-    }
+    office = user.get("office")
+    ors = [
+        {"user_id": user["id"]},
+        {"home_office": office},
+        {"home_office": "ALL"},
+    ]
+    if office:
+        ors.append({"office": office})
+    return {"$or": ors}
 
 
 @router.get("")
