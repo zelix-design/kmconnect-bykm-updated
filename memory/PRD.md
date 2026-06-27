@@ -855,3 +855,19 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - ClientDetail page: surface photo + employee_id + address + place.
 - WhatsApp click-to-chat on lead phone numbers.
 - Lead pipeline analytics (conversion funnel) on admin dashboard.
+
+## Implementation status — 2026-06-27 (iteration 40: Per-staff leave quotas + calendar filters + lead conversion funnel)
+- [x] **Per-staff leave quota overrides** — global policy still exists; now each staff/office-admin can carry a per-user override stored on the user doc (`leave_quota` dict). `_effective_quota` merges override over global (unpaid=None → ∞ preserved). Backend: `GET /api/leave/quotas/team` (scoped list: SA→staff+office_admin, OA→own-office staff), `GET/PUT/DELETE /api/leave/quotas/user/{uid}` with `_resolve_quota_target` RBAC (SA→staff|office_admin; OA→own-office staff only, 403 otherwise). `/api/leave/balance` now uses effective quota.
+- [x] **Editor surfaces (both)**: Leave page → new **"Team quotas" tab** (super_admin + office_admin) listing members with C/S/E/U chips + Custom badge (`TeamQuotas.jsx`); reusable `StaffQuotaDialog.jsx` (save / reset-to-policy). Also on the **Employee detail page** (`ClientDetail.jsx`) — a "Leave quota" card with Edit button appears when the staff employee record matches a `role=staff` login user (best-effort case-insensitive name + office match → `client_detail.staff_login_user`).
+- [x] **Team leave calendar filters** — `/api/leave/calendar` accepts optional `office` (SA only) + `member` (requester id). `LeaveCalendar.jsx`: SA sees office dropdown + member dropdown; OA sees member dropdown scoped to own office (uses `/api/users/assignable`).
+- [x] **Employee detail enrichment** — photo avatar (via `photoSrc`), auto-generated Employee ID chip, Place, Address, DOB surfaced on staff `ClientDetail` header.
+- [x] **Lead conversion funnel** — new `components/leads/LeadFunnel.jsx` (5 stages New→Converted bars, conversion %, total/lost/missed footer) using `/api/leads/stats`. Rendered on Super Admin dashboard (`Dashboard.jsx`, super_admin only) and Office Admin dashboard (`OfficeDashboard.jsx`, office-scoped).
+- Verified: backend 12/12 pytest + curl (team scoping, override PUT/GET/DELETE, OA 403 on office_admin target, calendar filters, ClientDetail staff_login_user resolution) + testing_agent iteration_37.json 100% frontend P0 flows. `CI=true` build passes (Vercel-safe).
+
+## CRM/HR — remaining backlog (P2)
+- WhatsApp click-to-chat on lead phone numbers.
+- Surface `deal_with` in the Student Detail header.
+- Email-PDF for student fee statements (Resend); date-range filter on consolidated Students XLSX export.
+- One-click "Settle pending" dialog for the Ledger; recurring transactions / bill reminders.
+- Per-college seat tracking + capacity badges; Team-page activity log.
+- **Tech-debt**: `PATCH /api/clients/{id}` uses full `ClientIn` model_dump — a partial PATCH with only some fields will null out the rest (only `home_office` is guarded). Consider a partial schema or extend the model_fields_set guard. (Pre-existing; surfaced in iteration-37 testing.)
