@@ -11,8 +11,10 @@ import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, toLocalInput, fromLocalI
 
 const empty = {
   name: "", phone: "", email: "", course: "", place: "",
-  source: "walk_in", status: "new", assigned_to_user_id: "", next_follow_up: "", notes: "",
+  source: "walk_in", status: "new", assigned_to_user_id: "", next_follow_up: "", notes: "", lost_reason: "",
 };
+
+const LOST_REASONS = ["Admission Taken", "No Response", "Joined Competitor", "Not Eligible", "Other"];
 
 export default function LeadFormDialog({ open, onOpenChange, lead, assignable, user, onSaved }) {
   const isEdit = !!lead;
@@ -26,7 +28,7 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
         name: lead.name || "", phone: lead.phone || "", email: lead.email || "",
         course: lead.course || "", place: lead.place || "", source: lead.source || "walk_in",
         status: lead.status || "new", assigned_to_user_id: lead.assigned_to_user_id || "",
-        next_follow_up: toLocalInput(lead.next_follow_up), notes: lead.notes || "",
+        next_follow_up: toLocalInput(lead.next_follow_up), notes: lead.notes || "", lost_reason: lead.lost_reason || "",
       } : empty);
     }
   }, [open, lead]);
@@ -48,6 +50,7 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
         status: form.status,
         notes: form.notes.trim(),
         next_follow_up: fromLocalInput(form.next_follow_up),
+        lost_reason: form.status === "lost" ? (form.lost_reason || "") : "",
       };
       if (!isStaff) payload.assigned_to_user_id = form.assigned_to_user_id || null;
       if (isEdit) {
@@ -124,6 +127,18 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
               </Select>
             </div>
           </div>
+
+          {form.status === "lost" && (
+            <div className="space-y-1.5" data-testid="lead-lost-reason-row">
+              <Label>Lost reason</Label>
+              <Select value={form.lost_reason || ""} onValueChange={(v) => setForm((f) => ({ ...f, lost_reason: v }))}>
+                <SelectTrigger data-testid="lead-lost-reason-select" className="bg-card"><SelectValue placeholder="Why was this lead lost?" /></SelectTrigger>
+                <SelectContent>
+                  {LOST_REASONS.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {!isStaff && (
             <div className="space-y-1.5">

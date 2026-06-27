@@ -14,9 +14,14 @@ import {
 } from "@/components/office-dashboard/AsideCards";
 import StaffPickerDialog from "@/components/office-dashboard/StaffPickerDialog";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
-import LeadFunnel from "@/components/leads/LeadFunnel";
+import CrmAnalytics from "@/components/office-dashboard/CrmAnalytics";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
+
+const TABS = [
+  { value: "admissions", label: "Admissions & Incentive" },
+  { value: "crm", label: "Lead CRM" },
+];
 
 const WINDOWS = [
   { value: "week", label: "This week" },
@@ -29,6 +34,7 @@ export default function OfficeDashboard() {
   const nav = useNavigate();
   const currency = user?.currency || "INR";
   const [windowKey, setWindowKey] = useState("month");
+  const [tab, setTab] = useState("admissions");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -102,66 +108,87 @@ export default function OfficeDashboard() {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2" data-testid="office-greeting">
             {greetingForNow()}, {user?.name?.split(" ")[0] || "there"}.
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Track admissions, staff incentives & upcoming birthdays.</p>
+          <p className="text-sm text-muted-foreground mt-1">Track admissions, staff incentives & lead performance.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" data-testid="window-toggle">
-          {WINDOWS.map((w) => (
+        <div className="flex flex-wrap items-center gap-2" data-testid="office-tabs">
+          {TABS.map((tb) => (
             <button
-              key={w.value}
-              onClick={() => setWindowKey(w.value)}
-              data-testid={`window-${w.value}`}
+              key={tb.value}
+              onClick={() => setTab(tb.value)}
+              data-testid={`office-tab-${tb.value}`}
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                windowKey === w.value
+                tab === tb.value
                   ? "bg-amber-gradient text-white shadow-md shadow-orange-500/25"
                   : "bg-card border border-border text-foreground hover:bg-muted/40"
               }`}
             >
-              {w.label}
+              {tb.label}
             </button>
           ))}
         </div>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="stat-admissions" icon={GraduationCap} palette="amber"
-          eyebrow="Admissions"
-          value={loading ? "—" : (t.admissions ?? 0)}
-          hint={`in ${windowLabel}`}
-        />
-        <StatCard testId="stat-incentive-earned" icon={Trophy} palette="emerald"
-          eyebrow="Incentive earned"
-          value={loading ? "—" : formatMoney(t.incentive_earned ?? 0, currency)}
-          hint={`${t.eligible_admissions ?? 0} eligible admissions`}
-        />
-        <StatCard testId="stat-incentive-pending" icon={ClockClockwise} palette="rose"
-          eyebrow="Incentive pending"
-          value={loading ? "—" : formatMoney(t.incentive_pending ?? 0, currency)}
-          hint="Yet to mark paid"
-        />
-        <StatCard testId="stat-staff-count" icon={UserCircle} palette="violet"
-          eyebrow="Staff on roster"
-          value={loading ? "—" : (t.staff_count ?? 0)}
-          hint="Add more in Clients"
-        />
-      </div>
+      {tab === "crm" ? (
+        <CrmAnalytics />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2" data-testid="window-toggle">
+            {WINDOWS.map((w) => (
+              <button
+                key={w.value}
+                onClick={() => setWindowKey(w.value)}
+                data-testid={`window-${w.value}`}
+                className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
+                  windowKey === w.value
+                    ? "bg-foreground text-background"
+                    : "bg-card border border-border text-foreground hover:bg-muted/40"
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <StaffBreakdownList
-          breakdown={breakdown}
-          loading={loading}
-          currency={currency}
-          onMarkPaid={markPaid}
-          onUnmarkPaid={unmarkPaid}
-        />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard testId="stat-admissions" icon={GraduationCap} palette="amber"
+              eyebrow="Admissions"
+              value={loading ? "—" : (t.admissions ?? 0)}
+              hint={`in ${windowLabel}`}
+            />
+            <StatCard testId="stat-incentive-earned" icon={Trophy} palette="emerald"
+              eyebrow="Incentive earned"
+              value={loading ? "—" : formatMoney(t.incentive_earned ?? 0, currency)}
+              hint={`${t.eligible_admissions ?? 0} eligible admissions`}
+            />
+            <StatCard testId="stat-incentive-pending" icon={ClockClockwise} palette="rose"
+              eyebrow="Incentive pending"
+              value={loading ? "—" : formatMoney(t.incentive_pending ?? 0, currency)}
+              hint="Yet to mark paid"
+            />
+            <StatCard testId="stat-staff-count" icon={UserCircle} palette="violet"
+              eyebrow="Staff on roster"
+              value={loading ? "—" : (t.staff_count ?? 0)}
+              hint="Add more in Staff"
+            />
+          </div>
 
-        <div className="space-y-4">
-          <UpcomingBirthdaysCard birthdays={birthdays} />
-          <IncentiveRuleCard onAddAdmission={openAdmissionPicker} />
-        </div>
-      </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <StaffBreakdownList
+              breakdown={breakdown}
+              loading={loading}
+              currency={currency}
+              onMarkPaid={markPaid}
+              onUnmarkPaid={unmarkPaid}
+            />
 
-      <LeadFunnel />
+            <div className="space-y-4">
+              <UpcomingBirthdaysCard birthdays={birthdays} />
+              <IncentiveRuleCard onAddAdmission={openAdmissionPicker} />
+            </div>
+          </div>
+        </>
+      )}
 
       <StaffPickerDialog
         open={pickerOpen}

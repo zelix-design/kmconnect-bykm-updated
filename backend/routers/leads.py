@@ -58,6 +58,7 @@ class LeadUpdate(BaseModel):
     assigned_to_user_id: Optional[str] = None
     next_follow_up: Optional[str] = None
     notes: Optional[str] = None
+    lost_reason: Optional[str] = None
 
 
 class FollowUpIn(BaseModel):
@@ -170,6 +171,100 @@ async def lead_stats(user: dict = Depends(get_current_user)):
     return {"total": len(docs), "by_status": by_status, "missed": missed}
 
 
+LOST_REASONS = ("Admission Taken", "No Response", "Joined Competitor", "Not Eligible", "Other")
+
+
+def _student_scope_for_analytics(user: dict) -> dict:
+    if user.get("role") == "super_admin":
+        return {}
+    office = user.get("office")
+    return {"$or": [{"user_id": user["id"]}, {"home_office": office}, {"home_office": "ALL"}]}
+
+
+@router.get("/analytics")
+async def lead_analytics(user: dict = Depends(get_current_user)):
+    """Aggregated CRM analytics for the Office Admin / Super Admin dashboard:
+    KPIs, lead funnel, college- & course-wise admissions, monthly seat trend
+    and lost-reason breakdown — all scoped to the caller's office."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    now = datetime.now(timezone.utc)
+
+    leads = await db.leads.find(
+        _scope_filter(user), {"_id": 0, "status": 1, "next_follow_up": 1, "lost_reason": 1}
+    ).to_list(20000)
+    by_status = {s: 0 for s in LEAD_STATUSES}
+    missed = 0
+    lost_reasons: dict = {}
+    for d in leads:
+        st = d.get("status")
+        if st in by_status:
+            by_status[st] += 1
+        if _is_missed(d, now):
+            missed += 1
+        if st == "lost":
+            lr = (d.get("lost_reason") or "").strip() or "Unspecified"
+            lost_reasons[lr] = lost_reasons.get(lr, 0) + 1
+    total_leads = len(leads)
+    converted = by_status["converted"]
+    lost = by_status["lost"]
+    positive = by_status["contacted"] + by_status["interested"] + by_status["follow_up"]
+
+    students = await db.students.find(
+        _student_scope_for_analytics(user),
+        {"_id": 0, "status": 1, "college": 1, "course": 1, "enrollment_date": 1, "created_at": 1},
+    ).to_list(50000)
+    admissions = [s for s in students if s.get("status") != "cancelled"]
+    total_admissions = len(admissions)
+
+    college_counts: dict = {}
+    course_counts: dict = {}
+    monthly: dict = {}
+    for s in admissions:
+        col = (s.get("college") or "").strip() or "Unknown"
+        college_counts[col] = college_counts.get(col, 0) + 1
+        crs = (s.get("course") or "").strip() or "Unknown"
+        course_counts[crs] = course_counts.get(crs, 0) + 1
+        ym = (s.get("enrollment_date") or s.get("created_at") or "")[:7]
+        if len(ym) == 7:
+            monthly[ym] = monthly.get(ym, 0) + 1
+
+    conv_rate = round(converted / total_leads * 100, 1) if total_leads else 0.0
+    college_wise = sorted(
+        ({"name": k, "value": v} for k, v in college_counts.items()), key=lambda x: -x["value"]
+    )[:8]
+    course_wise = sorted(
+        ({"name": k, "value": v} for k, v in course_counts.items()), key=lambda x: -x["value"]
+    )[:8]
+    monthly_trend = [{"month": k, "value": monthly[k]} for k in sorted(monthly.keys())][-12:]
+    funnel = [
+        {"stage": "Leads", "value": total_leads},
+        {"stage": "Interested", "value": by_status["interested"]},
+        {"stage": "Converted", "value": converted},
+        {"stage": "Positive", "value": positive},
+        {"stage": "Lost", "value": lost},
+    ]
+    lost_reasons_list = sorted(
+        ({"name": k, "value": v} for k, v in lost_reasons.items()), key=lambda x: -x["value"]
+    )
+
+    return {
+        "kpis": {
+            "total_leads": total_leads,
+            "total_admissions": total_admissions,
+            "conversion_rate": conv_rate,
+            "pending_followups": missed,
+            "lost_leads": lost,
+        },
+        "funnel": funnel,
+        "by_status": by_status,
+        "college_wise": college_wise,
+        "course_wise": course_wise,
+        "monthly_trend": monthly_trend,
+        "lost_reasons": lost_reasons_list,
+    }
+
+
 # ---------- create / update / delete ----------
 @router.post("", status_code=201)
 async def create_lead(payload: LeadIn, user: dict = Depends(require_edit("leads"))):
@@ -232,6 +327,11 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
         if data["status"] not in LEAD_STATUSES:
             raise HTTPException(400, "Invalid status")
         patch["status"] = data["status"]
+        # Clear the lost reason if the lead moves out of "lost"
+        if data["status"] != "lost":
+            patch["lost_reason"] = ""
+    if "lost_reason" in data:
+        patch["lost_reason"] = (data["lost_reason"] or "").strip()
     if "source" in data and data["source"]:
         patch["source"] = data["source"] if data["source"] in LEAD_SOURCES else "other"
     if "next_follow_up" in data:
