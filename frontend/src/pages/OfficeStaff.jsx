@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
   Plus, PencilSimple, Trash, Key, Camera, UserCircle, EnvelopeSimple, IdentificationBadge,
-  MapPin, Cake, CurrencyInr, Buildings, ShieldWarning, LinkSimple,
+  MapPin, Cake, CurrencyInr, Buildings, ShieldWarning, LinkSimple, Phone,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
@@ -22,7 +22,7 @@ const OFFICES = [
 ];
 
 const emptyForm = {
-  name: "", email: "", password: "", photo_url: "", employee_id: "",
+  name: "", email: "", password: "", photo_url: "", employee_id: "", phone: "",
   date_of_birth: "", place: "", address: "", eligible_incentive: "", office: "",
 };
 
@@ -78,7 +78,7 @@ export default function OfficeStaff() {
     setEditing(r);
     setForm({
       name: r.name || "", email: r.email || "", password: "", photo_url: r.photo_url || "",
-      employee_id: r.employee_id || "", date_of_birth: r.date_of_birth || "", place: r.place || "",
+      employee_id: r.employee_id || "", phone: r.phone || "", date_of_birth: r.date_of_birth || "", place: r.place || "",
       address: r.address || "", eligible_incentive: r.eligible_incentive ?? "", office: r.office || "",
     });
     setOpen(true);
@@ -97,6 +97,7 @@ export default function OfficeStaff() {
         name: form.name.trim(),
         photo_url: form.photo_url || null,
         employee_id: form.employee_id.trim() || null,
+        phone: form.phone.trim() || null,
         date_of_birth: form.date_of_birth || null,
         place: form.place.trim() || null,
         address: form.address.trim() || null,
@@ -192,6 +193,7 @@ export default function OfficeStaff() {
 
               <div className="mt-4 space-y-1.5 text-sm text-muted-foreground">
                 {r.email && <p className="flex items-center gap-2 truncate"><EnvelopeSimple size={14} /> {r.email}</p>}
+                {r.phone && <p className="flex items-center gap-2"><Phone size={14} /> {r.phone}</p>}
                 {r.employee_id && <p className="flex items-center gap-2"><IdentificationBadge size={14} /> {r.employee_id}</p>}
                 {r.place && <p className="flex items-center gap-2"><MapPin size={14} /> {r.place}</p>}
                 {r.date_of_birth && <p className="flex items-center gap-2"><Cake size={14} /> {new Date(r.date_of_birth).toLocaleDateString()}</p>}
@@ -266,7 +268,10 @@ export default function OfficeStaff() {
               <div><Label>Date of birth</Label><Input type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} data-testid="staff-dob" /></div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>Phone number</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="e.g. 98xxxxxxx" data-testid="staff-phone" /></div>
               <div><Label>Place</Label><Input value={form.place} onChange={(e) => setForm({ ...form, place: e.target.value })} placeholder="e.g. Bangalore" data-testid="staff-place" /></div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>Incentive (₹/admission)</Label><Input type="number" min="0" step="50" value={form.eligible_incentive} onChange={(e) => setForm({ ...form, eligible_incentive: e.target.value })} placeholder="e.g. 500" data-testid="staff-incentive" /></div>
             </div>
             <div><Label>Address</Label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Residential address" data-testid="staff-address" /></div>

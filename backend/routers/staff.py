@@ -56,6 +56,7 @@ def _row_from_client(c: dict, lu: Optional[dict]) -> dict:
         "email": (lu or {}).get("email") or c.get("email") or "",
         "office": c.get("office") or (lu or {}).get("office"),
         "photo_url": c.get("photo_url") or "",
+        "phone": c.get("phone") or "",
         "employee_id": c.get("employee_id") or "",
         "date_of_birth": c.get("date_of_birth") or "",
         "place": c.get("place") or "",
@@ -74,6 +75,7 @@ def _row_from_login(u: dict) -> dict:
         "email": u.get("email") or "",
         "office": u.get("office"),
         "photo_url": "",
+        "phone": "",
         "employee_id": "",
         "date_of_birth": "",
         "place": "",
@@ -137,6 +139,7 @@ class StaffMemberIn(BaseModel):
     office: Optional[OfficeCode] = None  # required for super_admin; forced for office_admin
     photo_url: Optional[str] = None
     employee_id: Optional[str] = None
+    phone: Optional[str] = None
     date_of_birth: Optional[str] = None
     place: Optional[str] = None
     address: Optional[str] = None
@@ -180,7 +183,7 @@ async def create_member(payload: StaffMemberIn, user: dict = Depends(get_current
         "name": name,
         "client_type": "staff",
         "email": email,
-        "phone": "",
+        "phone": payload.phone or "",
         "company": "",
         "office": office,
         "home_office": office,
@@ -200,6 +203,7 @@ class StaffMemberUpdate(BaseModel):
     email: Optional[EmailStr] = None
     photo_url: Optional[str] = None
     employee_id: Optional[str] = None
+    phone: Optional[str] = None
     date_of_birth: Optional[str] = None
     place: Optional[str] = None
     address: Optional[str] = None
@@ -215,7 +219,7 @@ async def update_member(client_id: str, payload: StaffMemberUpdate, user: dict =
         raise HTTPException(404, "Staff member not found")
     data = payload.model_dump(exclude_unset=True)
     patch: dict = {}
-    for k in ("name", "photo_url", "employee_id", "place", "address"):
+    for k in ("name", "photo_url", "employee_id", "phone", "place", "address"):
         if k in data:
             patch[k] = (data[k] or "").strip() if isinstance(data[k], str) else data[k]
     if "date_of_birth" in data:
