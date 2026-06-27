@@ -843,3 +843,15 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - Leave balance tracking per staff (accrual/used), leave calendar view.
 - Kanban board view for the leads pipeline.
 - Office admin's own "Referred students" surfaced on their dashboard.
+
+## Implementation status — 2026-06-27 (iteration 39: Employees fields + Leads Kanban + Leave balance/calendar)
+- [x] **Clients → "Employees"** (nav + page title). Add-staff form now has **Profile Photo upload** (jpeg/jpg ≤5MB via Emergent **object storage**), **auto-generated Employee ID** (EMP-BLR-001 style, race-tolerant), **Address**, **Place** — shown only when Type=Our Staff. Cards show photo avatar + employee id + place. New backend: `lib/storage.py`, `routers/uploads.py` (POST /api/uploads/image, GET /api/files/{path} with Bearer-or-?auth= dual auth), `auth_lib.decode_token`, EMERGENT_LLM_KEY added to backend/.env.
+- [x] **Leads Kanban board** — List/Board toggle on /leads (`LeadsBoard.jsx`, native HTML5 drag-and-drop); column per status; drag to change status; drag to "Converted" converts to a student.
+- [x] **Leave balance + calendar + policy** — `GET /api/leave/balance` (per-type used/quota/remaining for the year), `GET/PUT /api/leave/quotas` (super-admin global policy; default Casual 12/Sick 6/Earned 15/Unpaid ∞), `GET /api/leave/calendar?month=YYYY-MM` (approved leaves, role-scoped). UI: balance cards on My Requests, a Calendar month-grid tab, Super-Admin-only Leave Policy editor.
+- Verified: backend curl (uploads accept/reject/serve/401, EMP-BLR-001→002, quotas default/PUT/403, balance, calendar) + frontend E2E 100% (testing_agent iteration_36.json, no bugs); `CI=true` build passes.
+
+## CRM/HR — remaining backlog (P2)
+- Per-staff leave quotas (currently global); leave on a shared team calendar with filters.
+- ClientDetail page: surface photo + employee_id + address + place.
+- WhatsApp click-to-chat on lead phone numbers.
+- Lead pipeline analytics (conversion funnel) on admin dashboard.
