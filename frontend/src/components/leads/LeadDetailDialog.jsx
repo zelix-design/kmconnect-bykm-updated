@@ -44,9 +44,16 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const changeStatus = async (status) => {
     setBusy(true);
     try {
-      const { data } = await api.patch(`/leads/${local.id}`, { status });
-      refresh(data);
-      toast.success(`Marked ${LEAD_STATUS_META[status].label}`);
+      if (status === "converted" && !local.converted_student_id) {
+        const { data } = await api.post(`/leads/${local.id}/convert`);
+        setLocal({ ...local, status: "converted", converted_student_id: data.student_id });
+        onChanged?.();
+        toast.success("Lead converted — student created & credited to the assignee");
+      } else {
+        const { data } = await api.patch(`/leads/${local.id}`, { status });
+        refresh(data);
+        toast.success(`Marked ${LEAD_STATUS_META[status].label}`);
+      }
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Update failed");
     } finally { setBusy(false); }
@@ -109,6 +116,11 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             )}
           </div>
           {local.notes && <p className="text-sm text-muted-foreground bg-muted/40 rounded-lg p-2.5">{local.notes}</p>}
+          {local.converted_student_id && (
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5" data-testid="lead-converted-note">
+              <GraduationCap size={14} /> Converted to a student record.
+            </p>
+          )}
 
           {/* Quick status */}
           {editable && (

@@ -830,3 +830,16 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - Staff/Office-admin submit leave (type: Casual/Sick/Earned/Unpaid, from-date, to-date, reason).
 - Approval hierarchy: Staff's leave → Office Admin approves; Office Admin's leave → Super Admin approves (single-level per requester).
 - "leave" permission page already wired into PERMISSION_PAGES + STAFF_DEFAULT_PERMISSIONS. Needs: leave router (CRUD + approve/reject + scoping), notifications, Leave page UI + nav, optional leave balance.
+
+## Implementation status — 2026-06-27 (iteration 38: CRM Phase 2 — Leave Management + Staff Dashboard)
+- [x] **Leave Request & Management** (`routers/leave.py` + `pages/Leave.jsx` + `components/leave/LeaveRequestDialog.jsx`): types Casual/Sick/Earned/Unpaid; single-level approval hierarchy — staff→Office Admin (own office), office_admin→Super Admin; submit/list(box=mine|inbox)/stats/decide(approve|reject)/cancel-own-pending; notifications to approvers on submit + requester on decision. Never-self-approve guard. Nav "Leave" for super_admin/office_admin/staff (perm "leave"); hidden for "user" role.
+- [x] **Staff Dashboard** (`pages/StaffDashboard.jsx`, rendered from Dashboard.jsx for role=staff — no more redirect): 4 stat tiles (My Leads, Missed, Students referred, Pending Leave); quick actions = Add Student (opens their referral apply form), Request Leave, Reminder to Office Admin; copyable/shareable referral application link; "Students referred" list; leads snapshot.
+- [x] **Student → Staff referral attribution** (id-based `referrer_user_id`): (a) `/apply?ref=<staff_user_id>` — `get_referrer` now resolves staff/admin login users; `ApplicationIn.referrer_id` credits the student. (b) Lead conversion `POST /api/leads/{id}/convert` creates an inquiry student credited to the lead's assignee + marks lead converted (idempotent). `GET /api/students/me/referrals` lists a user's credited students.
+- [x] **Staff reminders**: messages router now lets staff send `reminder` to office admins/super admins; ComposeMessageDialog supports staff (reminder-only, office-admin recipient picker).
+- Verified: backend 14/14 pytest (iteration35) + frontend E2E 100% (testing_agent iteration_35.json); `CI=true` build passes (Vercel-safe). Leave indexes added.
+
+## CRM — remaining / backlog ideas (P2)
+- Lead → Student "Convert" button in the Lead detail UI (endpoint exists; add a button in LeadDetailDialog).
+- Leave balance tracking per staff (accrual/used), leave calendar view.
+- Kanban board view for the leads pipeline.
+- Office admin's own "Referred students" surfaced on their dashboard.
