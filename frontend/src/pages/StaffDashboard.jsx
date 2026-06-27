@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { buildApplyUrl, navigateToApply } from "@/lib/applyUrl";
+import { buildApplyUrl } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -92,8 +92,8 @@ export default function StaffDashboard() {
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick actions</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <ActionButton icon={UserPlus} label="Add student" sub="Open your referral admission form" testid="staff-action-add-student"
-            onClick={() => navigateToApply(nav, user?.id)} />
+          <ActionButton icon={UserPlus} label="Add student" sub="Quick-add to your students" testid="staff-action-add-student"
+            onClick={() => nav("/my-students")} />
           <ActionButton icon={CalendarCheck} label="Request leave" sub="Casual / sick / earned / unpaid" testid="staff-action-leave"
             onClick={() => setLeaveOpen(true)} />
           <ActionButton icon={PaperPlaneTilt} label="Reminder to office admin" sub="Send a quick message" testid="staff-action-reminder"
@@ -134,7 +134,12 @@ export default function StaffDashboard() {
         </Card>
 
         <Card className="p-4" data-testid="staff-referrals-card">
-          <p className="font-medium text-foreground flex items-center gap-1.5 mb-3"><StudentIcon size={16} className="text-orange-600 dark:text-orange-400" /> Students referred</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-medium text-foreground flex items-center gap-1.5"><StudentIcon size={16} className="text-orange-600 dark:text-orange-400" /> Students referred</p>
+            <Button variant="ghost" size="sm" className="h-8 text-orange-600 dark:text-orange-400" onClick={() => nav("/my-students")} data-testid="staff-view-students">
+              View all <ArrowRight size={14} className="ml-1" />
+            </Button>
+          </div>
           {referrals.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">No referred students yet. Share your link or convert a lead.</p>
           ) : (

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import OfficeStaff from "@/pages/OfficeStaff";
 
 export const CLIENT_TYPES = [
   { value: "staff", label: "Our Staff" },
@@ -20,6 +21,11 @@ export const CLIENT_TYPES = [
   { value: "km_tcr_office", label: "KM TCR Office" },
   { value: "km_kmly_office", label: "KM KMLY Office" },
 ];
+
+// Page scoping: "Employees" shows staff + KM offices; "Clients" shows the
+// routing partners (sub-agents / associate consultants).
+export const EMPLOYEE_PAGE_TYPES = ["staff", "km_blr_office", "km_tcr_office", "km_kmly_office"];
+export const CLIENT_PAGE_TYPES = ["sub_agent_associate", "associate_consultant"];
 
 const OFFICES = [
   { value: "KM_BLR", label: "KM BLR" },
@@ -58,15 +64,28 @@ const HOME_OFFICE_OPTIONS = [
   { value: "ALL", label: "Shared (all offices)" },
 ];
 
-export default function Clients() {
+// Dispatcher: office admins get the unified staff page; super admins get the
+// scoped People page (Employees vs Clients) driven by the route's pageScope.
+export default function Clients({ pageScope = "clients" }) {
   const { user } = useAuth();
-  const isOfficeAdmin = user?.role === "office_admin";
+  if (user?.role === "office_admin") return <OfficeStaff />;
+  return <SuperAdminPeople pageScope={pageScope} />;
+}
+
+function SuperAdminPeople({ pageScope }) {
+  const { user } = useAuth();
+  const isEmployees = pageScope === "employees";
+  const scopeTypes = useMemo(
+    () => (isEmployees ? EMPLOYEE_PAGE_TYPES : CLIENT_PAGE_TYPES),
+    [isEmployees]
+  );
+  const defaultType = isEmployees ? "staff" : "sub_agent_associate";
   const allowEdit = canEdit(user, "clients");
   const [list, setList] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState(isOfficeAdmin ? { ...empty, client_type: "staff", office: user?.office || "" } : empty);
+  const [form, setForm] = useState({ ...empty, client_type: defaultType });
   const [editing, setEditing] = useState(null);
-  const [filter, setFilter] = useState(isOfficeAdmin ? "staff" : "all");
+  const [filter, setFilter] = useState("all");
 
   const load = async () => { setList((await api.get("/clients")).data); };
   useEffect(() => { load(); }, []);
@@ -93,28 +112,27 @@ export default function Clients() {
     }
   };
 
-  // Office-admin only sees staff in their workspace
-  const visibleTypes = isOfficeAdmin ? CLIENT_TYPES.filter((t) => t.value === "staff") : CLIENT_TYPES;
+  const visibleTypes = useMemo(
+    () => CLIENT_TYPES.filter((t) => scopeTypes.includes(t.value)),
+    [scopeTypes]
+  );
 
   const filtered = useMemo(() => {
-    let l = list;
-    if (isOfficeAdmin) l = l.filter((c) => c.client_type === "staff");
+    let l = list.filter((c) => scopeTypes.includes(c.client_type));
     if (filter !== "all") l = l.filter((c) => c.client_type === filter);
     return l;
-  }, [list, filter, isOfficeAdmin]);
+  }, [list, filter, scopeTypes]);
 
   const openCreate = () => {
     setEditing(null);
-    setForm(isOfficeAdmin
-      ? { ...empty, client_type: "staff", office: user?.office || "" }
-      : empty);
+    setForm({ ...empty, client_type: defaultType });
     setOpen(true);
   };
   const openEdit = (c) => {
     setEditing(c);
     setForm({
       name: c.name,
-      client_type: c.client_type || (isOfficeAdmin ? "staff" : "sub_agent_associate"),
+      client_type: c.client_type || defaultType,
       email: c.email || "",
       phone: c.phone || "",
       company: c.company || "",
@@ -132,7 +150,7 @@ export default function Clients() {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.client_type) { toast.error("Client Type is required"); return; }
+    if (!form.client_type) { toast.error("Type is required"); return; }
     const payload = {
       ...form,
       office: form.office || null,
@@ -162,34 +180,35 @@ export default function Clients() {
         <div>
           <p className="label-eyebrow">People</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">
-            {isOfficeAdmin ? "Our Staff" : "Employees"}
+            {isEmployees ? "Employees" : "Clients"}
           </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isEmployees ? "Staff & KM office accounts." : "Sub-agents & associate consultants."}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isOfficeAdmin && (
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="h-10 w-56" data-testid="cli-filter-type">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                {CLIENT_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="h-10 w-56" data-testid="cli-filter-type">
+              <SelectValue placeholder="Filter by type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {visibleTypes.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Dialog open={open} onOpenChange={setOpen}>
             {allowEdit && (
             <DialogTrigger asChild>
               <Button onClick={openCreate} data-testid="add-client-btn" className="h-10 btn-amber border-0">
-                <Plus size={16} className="mr-1.5" /> {isOfficeAdmin ? "Add staff" : "Add client"}
+                <Plus size={16} className="mr-1.5" /> {isEmployees ? "Add employee" : "Add client"}
               </Button>
             </DialogTrigger>
             )}
             <DialogContent className="bg-card">
               <DialogHeader>
-                <DialogTitle className="font-display">{editing ? "Edit" : "Add"} {isStaff ? "staff" : "client"}</DialogTitle>
+                <DialogTitle className="font-display">{editing ? "Edit" : "Add"} {isStaff ? "staff" : "entry"}</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
                   {isStaff ? "Onboard a staff member with their birthday and incentive eligibility." : "Enrol a routing partner."}
                 </DialogDescription>
@@ -198,7 +217,7 @@ export default function Clients() {
                 <div><Label>Name *</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="cli-name" /></div>
                 <div>
                   <Label>Type *</Label>
-                  <Select value={form.client_type} onValueChange={(v) => setForm({ ...form, client_type: v })} disabled={isOfficeAdmin}>
+                  <Select value={form.client_type} onValueChange={(v) => setForm({ ...form, client_type: v })}>
                     <SelectTrigger data-testid="cli-type"><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
                       {visibleTypes.map((t) => (
@@ -270,32 +289,30 @@ export default function Clients() {
                 ) : (
                   <div><Label>Company</Label><Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} data-testid="cli-company" /></div>
                 )}
-                {!isOfficeAdmin && (
-                  <div data-testid="cli-home-office-row">
-                    <Label>
-                      Visible to office{" "}
-                      <span className="text-xs text-muted-foreground font-normal">
-                        (Super Admin scoping — leave blank to keep private)
-                      </span>
-                    </Label>
-                    <Select
-                      value={form.home_office || "_none"}
-                      onValueChange={(v) =>
-                        setForm({ ...form, home_office: v === "_none" ? "" : v })
-                      }
-                    >
-                      <SelectTrigger data-testid="cli-home-office">
-                        <SelectValue placeholder="Private to me (default)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="_none">Private to me (default)</SelectItem>
-                        {HOME_OFFICE_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div data-testid="cli-home-office-row">
+                  <Label>
+                    Visible to office{" "}
+                    <span className="text-xs text-muted-foreground font-normal">
+                      (Super Admin scoping — leave blank to keep private)
+                    </span>
+                  </Label>
+                  <Select
+                    value={form.home_office || "_none"}
+                    onValueChange={(v) =>
+                      setForm({ ...form, home_office: v === "_none" ? "" : v })
+                    }
+                  >
+                    <SelectTrigger data-testid="cli-home-office">
+                      <SelectValue placeholder="Private to me (default)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Private to me (default)</SelectItem>
+                      {HOME_OFFICE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
                   <Button type="submit" className="btn-amber border-0" data-testid="cli-save">{editing ? "Save" : "Add"}</Button>
@@ -308,14 +325,12 @@ export default function Clients() {
 
       {filtered.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none" data-testid="empty-clients">
-          {list.length === 0 ? (isOfficeAdmin ? "No staff yet. Add your first." : "No clients yet.") : "No entries match this filter."}
+          {list.filter((c) => scopeTypes.includes(c.client_type)).length === 0
+            ? (isEmployees ? "No employees yet. Add your first." : "No clients yet.")
+            : "No entries match this filter."}
         </Card>
-      ) : isOfficeAdmin ? (
-        // Office-admin: flat grid (staff only)
-        <ClientGrid clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
       ) : (
-        // Super-admin: group by category, with Staff further sub-grouped by office
-        <GroupedClients filter={filter} clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+        <GroupedClients filter={filter} scopeTypes={scopeTypes} clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
       )}
     </div>
   );
@@ -415,12 +430,12 @@ function CategoryHeader({ label, count }) {
   );
 }
 
-function GroupedClients({ filter, clients, allowEdit, openEdit, remove }) {
+function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove }) {
   // When a specific type filter is selected, just show that category (with Staff sub-grouping)
-  const groups = CLIENT_TYPES.map((t) => ({
-    ...t,
-    items: clients.filter((c) => c.client_type === t.value),
-  })).filter((g) => (filter === "all" ? g.items.length > 0 : g.value === filter));
+  const groups = CLIENT_TYPES
+    .filter((t) => scopeTypes.includes(t.value))
+    .map((t) => ({ ...t, items: clients.filter((c) => c.client_type === t.value) }))
+    .filter((g) => (filter === "all" ? g.items.length > 0 : g.value === filter));
 
   return (
     <div className="space-y-8">

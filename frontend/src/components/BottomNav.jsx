@@ -27,6 +27,7 @@ const ALL_SIDE_NAV = [
   { to: "/my-ledger", label: "My ledger", icon: Coins, tid: "bottom-nav-my-ledger", roles: ["user"] },
   { to: "/messages", label: "Messages", icon: ChatCircleDots, tid: "bottom-nav-messages" },
   { to: "/students", label: "Students", icon: Student, tid: "bottom-nav-students", perm: "students" },
+  { to: "/my-students", label: "Students", icon: Student, tid: "bottom-nav-my-students", roles: ["staff"] },
   { to: "/clients", label: "Clients", icon: UsersThree, tid: "bottom-nav-clients", perm: "clients" },
   { to: "/invoices", label: "Invoices", icon: Receipt, tid: "bottom-nav-invoices", roles: ["super_admin"] },
   { to: "/transactions", label: "Transactions", icon: CurrencyCircleDollar, tid: "bottom-nav-transactions", perm: "transactions" },

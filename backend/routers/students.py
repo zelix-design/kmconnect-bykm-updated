@@ -456,6 +456,93 @@ async def my_referred_students(user: dict = Depends(get_current_user)):
     return items
 
 
+class StaffQuickStudentIn(BaseModel):
+    name: str = Field(..., min_length=1)
+    course: Optional[str] = ""
+    college: Optional[str] = ""
+    status: Literal["inquiry", "enrolled", "cancelled", "completed"] = "inquiry"
+
+
+@router.post("/me/quick-add", status_code=201)
+async def staff_quick_add_student(payload: StaffQuickStudentIn, user: dict = Depends(get_current_user)):
+    """Staff quick-add: enroll a student credited to the logged-in staff member.
+    Owned by a super_admin (so it surfaces centrally) and scoped to the staff's
+    office via home_office so the office admin sees it too."""
+    if user.get("role") != "staff":
+        raise HTTPException(403, "Only staff can use quick-add")
+    admin = await db.users.find_one({"role": "super_admin"}, {"_id": 0, "id": 1})
+    owner_id = (admin or {}).get("id") or user["id"]
+    now = now_iso()
+    doc = {
+        "id": gen_id(),
+        "user_id": owner_id,
+        "created_at": now,
+        "name": payload.name.strip(),
+        "course": (payload.course or "").strip(),
+        "college": (payload.college or "").strip(),
+        "reference": user.get("name") or "",
+        "referrer_user_id": user["id"],
+        "sc_out_fixed": 0.0,
+        "status": payload.status,
+        "enrollment_date": now[:10],
+        "notes": "Added by staff via quick-add",
+        "fees_plan": None,
+        "schedules": [],
+        "payments": [],
+        "application_source": "staff_quick_add",
+        "home_office": user.get("office"),
+    }
+    await db.students.insert_one(doc)
+    office_label = (user.get("office") or "").replace("KM_", "KM ")
+    bits = [b for b in [doc["college"], doc["course"]] if b]
+    await notify_super_admins(
+        type="student_enrolled",
+        title=f"New admission · {user.get('name', 'Staff')}",
+        message=f"{doc['name']}{' · ' + ' · '.join(bits) if bits else ''}"
+                f"{' · ' + office_label if office_label else ''}",
+        link=f"/students/{doc['id']}",
+        actor_user_id=user["id"],
+        metadata={"student_id": doc["id"], "reference": doc["reference"]},
+    )
+    return {"ok": True, "student_id": doc["id"]}
+
+
+@router.get("/me/referral-summary")
+async def my_referral_summary(user: dict = Depends(get_current_user)):
+    """Incentive-aware summary of the logged-in staff member's referred students.
+    Mirrors the client-detail incentive math (3+ admissions/month → eligible)."""
+    from lib.incentive_math import (
+        compute_monthly_admission_counts,
+        enrich_student_with_incentive,
+        build_client_detail_totals,
+    )
+    raw = await db.students.find(
+        {"referrer_user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(2000)
+
+    staff_client = await db.clients.find_one(
+        {"client_type": "staff", "login_user_id": user["id"]}, {"_id": 0}
+    )
+    if not staff_client and (user.get("name") or "").strip():
+        staff_client = await db.clients.find_one(
+            {"client_type": "staff",
+             "$expr": {"$eq": [{"$toLower": "$name"}, user["name"].strip().lower()]}},
+            {"_id": 0},
+        )
+    incentive_amount = float((staff_client or {}).get("eligible_incentive") or 0)
+
+    month_counts = compute_monthly_admission_counts(raw)
+    enriched = [
+        enrich_student_with_incentive(
+            s, is_staff=True, incentive_amount=incentive_amount, month_counts=month_counts
+        )
+        for s in raw
+    ]
+    enriched.sort(key=lambda x: x.get("enrollment_date") or "", reverse=True)
+    totals = build_client_detail_totals(enriched, [], incentive_amount=incentive_amount)
+    return {"students": enriched, "totals": totals, "incentive_amount": incentive_amount}
+
+
 @router.get("/me/sc-earned")
 async def my_sc_earned(user: dict = Depends(get_current_user)):
     """Total Service-Charge (SC) earned by the logged-in user when they are

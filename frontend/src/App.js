@@ -28,6 +28,7 @@ import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
 import Leads from "@/pages/Leads";
 import StaffMembers from "@/pages/StaffMembers";
+import StaffStudents from "@/pages/StaffStudents";
 import Leave from "@/pages/Leave";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
 import Messages from "@/pages/Messages";
@@ -58,7 +59,7 @@ function PublicOnly({ children }) {
 const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
 const USER_ONLY = Object.freeze(["user"]);
 const LEADS_ROLES = Object.freeze(["super_admin", "office_admin", "staff"]);
-const SUPER_OFFICE = Object.freeze(["super_admin", "office_admin"]);
+const STAFF_ONLY = Object.freeze(["staff"]);
 
 // Hostnames whose entire surface is just the public admission form. Comma-
 // separated env var, e.g. "apply.kmfoundation.online,admissions.example.com".
@@ -109,13 +110,15 @@ export default function App() {
             <Route path="/transactions" element={<PermGate page="transactions"><Transactions /></PermGate>} />
             <Route path="/accounts" element={<PermGate page="accounts"><Accounts /></PermGate>} />
             <Route path="/invoices" element={<Invoices />} />
-            <Route path="/clients" element={<PermGate page="clients"><Clients /></PermGate>} />
+            <Route path="/clients" element={<PermGate page="clients"><Clients pageScope="clients" /></PermGate>} />
+            <Route path="/employees" element={<PermGate page="clients"><Clients pageScope="employees" /></PermGate>} />
             <Route path="/clients/:id" element={<PermGate page="clients"><ClientDetail /></PermGate>} />
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
+            <Route path="/my-students" element={<PermGate roles={STAFF_ONLY}><StaffStudents /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
             <Route path="/colleges" element={<PermGate roles={SUPER_ADMIN_ONLY}><Colleges /></PermGate>} />
             <Route path="/leads" element={<PermGate roles={LEADS_ROLES} page="leads"><Leads /></PermGate>} />
-            <Route path="/staff" element={<PermGate roles={SUPER_OFFICE}><StaffMembers /></PermGate>} />
+            <Route path="/staff" element={<PermGate roles={SUPER_ADMIN_ONLY}><StaffMembers /></PermGate>} />
             <Route path="/leave" element={<PermGate roles={LEADS_ROLES} page="leave"><Leave /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
