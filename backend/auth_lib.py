@@ -134,7 +134,7 @@ def require_edit(page: str):
         if user.get("role") == "super_admin":
             return user
         perms = user.get("permissions") or {}
-        default_level = "none" if user.get("role") == "user" else "edit"
+        default_level = "none" if user.get("role") in ("user", "staff") else "edit"
         level = perms.get(page) or default_level
         if level != "edit":
             raise HTTPException(

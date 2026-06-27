@@ -7,7 +7,7 @@ from db import db
 from auth_lib import get_current_user, hash_password, gen_id, now_iso
 from models import (
     UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS,
-    USER_DEFAULT_PERMISSIONS,
+    USER_DEFAULT_PERMISSIONS, STAFF_DEFAULT_PERMISSIONS,
     OfficeCode,
 )
 
@@ -41,6 +41,36 @@ async def list_super_admins_for_picker(user: dict = Depends(get_current_user)):
         {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
     ).sort("created_at", -1).to_list(50)
     return [d for d in docs if d.get("id") != user.get("id")]
+
+
+@router.get("/staff")
+async def list_staff(user: dict = Depends(get_current_user)):
+    """Staff login accounts, scoped. Super admin sees all; office admin sees
+    only staff in their own office. Used by the Staff management page."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    q: dict = {"role": "staff"}
+    if user.get("role") == "office_admin":
+        q["office"] = user.get("office")
+    docs = await db.users.find(
+        q, {"_id": 0, "password_hash": 0},
+    ).sort("created_at", -1).to_list(500)
+    return docs
+
+
+@router.get("/assignable")
+async def list_assignable(user: dict = Depends(get_current_user)):
+    """Users a lead can be assigned to: staff + office admins, scoped by office.
+    Super admin gets every staff + office admin across all offices."""
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    q: dict = {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved"}
+    if user.get("role") in ("office_admin", "staff") and user.get("office"):
+        q["office"] = user.get("office")
+    docs = await db.users.find(
+        q, {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "office": 1},
+    ).sort("name", 1).to_list(500)
+    return docs
 
 
 @router.get("/me/ledger")
@@ -170,8 +200,8 @@ class CreateUserIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
     name: str = Field(min_length=1)
-    role: Literal["super_admin", "office_admin", "user"] = "office_admin"
-    office: Optional[OfficeCode] = None  # required when role=office_admin
+    role: Literal["super_admin", "office_admin", "user", "staff"] = "office_admin"
+    office: Optional[OfficeCode] = None  # required when role=office_admin or staff
     business_name: Optional[str] = None
     currency: Literal["USD", "INR"] = "INR"
     # Optional — only used when role="user". Links the login account to a
@@ -182,13 +212,26 @@ class CreateUserIn(BaseModel):
 
 @router.post("", status_code=201)
 async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_user)):
-    """Super-admin creates a user directly (skips self-registration flow).
-    Office admins are created already approved with default permissions so
-    they can sign in immediately. The lightweight `user` role gets a
-    stripped-down permission map covering only their personal finance pages."""
-    _require_super_admin(user)
-    if payload.role == "office_admin" and not payload.office:
-        raise HTTPException(400, "Office is required for office admin")
+    """Create a user directly (skips self-registration flow).
+
+    - Super admin can create any role (super_admin / office_admin / user / staff).
+    - Office admin can ONLY create **staff** accounts, and only in their **own
+      office** (privilege-escalation guard). They cannot create super/office
+      admins or user-role accounts.
+    Created users are already approved so they can sign in immediately."""
+    actor_role = user.get("role")
+    if actor_role == "office_admin":
+        if payload.role != "staff":
+            raise HTTPException(403, "Office admins can only create staff accounts")
+        # Office is forced to the actor's own office regardless of the payload.
+        payload.office = user.get("office")
+        if not payload.office:
+            raise HTTPException(400, "Your account has no office set")
+    elif actor_role != "super_admin":
+        raise HTTPException(403, "Not allowed to create users")
+
+    if payload.role in ("office_admin", "staff") and not payload.office:
+        raise HTTPException(400, f"Office is required for {payload.role.replace('_', ' ')}")
     existing = await db.users.find_one({"email": payload.email.lower()})
     if existing:
         raise HTTPException(409, "A user with this email already exists")
@@ -223,7 +266,7 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         "business_name": payload.business_name or "",
         "currency": payload.currency,
         "role": payload.role,
-        "office": payload.office if payload.role == "office_admin" else None,
+        "office": payload.office if payload.role in ("office_admin", "staff") else None,
         "approval_status": "approved",
         "created_at": now_iso(),
         "created_by_admin": user["id"],
@@ -233,6 +276,8 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         doc["linked_client_name"] = linked_client_name
     if payload.role == "office_admin":
         doc["permissions"] = dict(DEFAULT_PERMISSIONS)
+    elif payload.role == "staff":
+        doc["permissions"] = dict(STAFF_DEFAULT_PERMISSIONS)
     elif payload.role == "user":
         # Linked clients get students set to "view" so they can browse, but
         # all SC adjustment edits are blocked at the API level regardless.
@@ -291,14 +336,19 @@ async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dic
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: str, user: dict = Depends(get_current_user)):
-    """Permanently delete a user row. Self-deletion is blocked; any other
-    user (including additional super admins) can be removed by a super admin."""
-    _require_super_admin(user)
+    """Permanently delete a user row. Self-deletion is blocked. Super admins
+    can remove anyone (incl. other super admins). Office admins can only
+    remove **staff** accounts in their own office."""
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "office_admin":
+        if target.get("role") != "staff" or target.get("office") != user.get("office"):
+            raise HTTPException(status_code=403, detail="You can only remove staff in your office")
+    elif user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Not allowed")
     await db.users.delete_one({"id": user_id})
     return {"ok": True}
 
@@ -313,14 +363,17 @@ async def reset_user_password(
     payload: ResetPasswordIn,
     user: dict = Depends(get_current_user),
 ):
-    """Super-admin-only: directly set a new password for any user (including
-    other super admins). The target user can sign in with the new password
-    immediately. Existing JWT tokens issued before the reset stay valid
-    until they expire — out of scope for this iteration."""
-    _require_super_admin(user)
-    target = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "email": 1})
+    """Set a new password for a user. Super admin → any user. Office admin →
+    only staff in their own office. The target can sign in with the new
+    password immediately."""
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "email": 1, "role": 1, "office": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == "office_admin":
+        if target.get("role") != "staff" or target.get("office") != user.get("office"):
+            raise HTTPException(status_code=403, detail="You can only reset staff in your office")
+    elif user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Not allowed")
     # Clear any active brute-force lockout so the target can sign in right away.
     await db.login_attempts.delete_one({"email": target.get("email")})
     res = await db.users.update_one(

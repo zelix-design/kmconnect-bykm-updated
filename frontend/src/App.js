@@ -26,6 +26,8 @@ import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
 import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
+import Leads from "@/pages/Leads";
+import StaffMembers from "@/pages/StaffMembers";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
 import Messages from "@/pages/Messages";
 import PermGate from "@/components/PermGate";
@@ -54,6 +56,8 @@ function PublicOnly({ children }) {
 // fresh array each render — keeps PermGate / its children stable.
 const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
 const USER_ONLY = Object.freeze(["user"]);
+const LEADS_ROLES = Object.freeze(["super_admin", "office_admin", "staff"]);
+const SUPER_OFFICE = Object.freeze(["super_admin", "office_admin"]);
 
 // Hostnames whose entire surface is just the public admission form. Comma-
 // separated env var, e.g. "apply.kmfoundation.online,admissions.example.com".
@@ -109,6 +113,8 @@ export default function App() {
             <Route path="/students" element={<PermGate page="students"><Students /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
             <Route path="/colleges" element={<PermGate roles={SUPER_ADMIN_ONLY}><Colleges /></PermGate>} />
+            <Route path="/leads" element={<PermGate roles={LEADS_ROLES} page="leads"><Leads /></PermGate>} />
+            <Route path="/staff" element={<PermGate roles={SUPER_OFFICE}><StaffMembers /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
             <Route path="/categories" element={<Categories />} />

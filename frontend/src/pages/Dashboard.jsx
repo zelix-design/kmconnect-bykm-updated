@@ -16,7 +16,7 @@ import {
   Student, Notebook, ArrowUpRight, ArrowDownRight,
   IdentificationBadge, Briefcase, Buildings, GraduationCap, Copy,
 } from "@phosphor-icons/react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import OfficeDashboard from "./OfficeDashboard";
 import {
   rangeFor, withinFilter, monthlyBuckets, allTimeMonthlyBuckets, todayISO,
@@ -60,6 +60,10 @@ export default function Dashboard() {
   // dashboard: total students, total SC earned, and their referral link.
   if (user?.role === "user" && user?.linked_client_id) {
     return <LinkedUserDashboard />;
+  }
+  // Staff role lands on the Leads CRM (no finance dashboard)
+  if (user?.role === "staff") {
+    return <Navigate to="/leads" replace />;
   }
   return <SuperAdminDashboard />;
 }

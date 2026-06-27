@@ -9,13 +9,13 @@ OfficeCode = Literal["KM_BLR", "KM_TCR", "KM_KMLY"]
 # or "ALL" → every office admin can see it. Records left as None remain
 # private to the super_admin who owns them.
 RecordOffice = Literal["KM_BLR", "KM_TCR", "KM_KMLY", "ALL"]
-UserRole = Literal["super_admin", "office_admin", "user"]
+UserRole = Literal["super_admin", "office_admin", "user", "staff"]
 ApprovalStatus = Literal["pending", "approved", "rejected"]
 
 # Page-level permission keys controllable by super_admin (office_admin only).
 PERMISSION_PAGES = (
     "overview", "quick_entry", "transactions", "accounts", "clients",
-    "students", "expense_requests", "settings",
+    "students", "expense_requests", "settings", "leads", "leave",
 )
 PermissionLevel = Literal["edit", "view", "none"]
 DEFAULT_PERMISSIONS = {p: "edit" for p in PERMISSION_PAGES}
@@ -32,6 +32,23 @@ USER_DEFAULT_PERMISSIONS = {
     "expense_requests": "edit",  # users can submit (not approve) — backend enforces
     "clients": "none",
     "students": "none",
+    "leads": "none",
+    "leave": "none",
+}
+
+# "staff" role is a field/telecaller login: CRM Leads + their own Leave
+# requests + Settings. No finance pages.
+STAFF_DEFAULT_PERMISSIONS = {
+    "overview": "view",
+    "quick_entry": "none",
+    "transactions": "none",
+    "accounts": "none",
+    "clients": "none",
+    "students": "none",
+    "expense_requests": "none",
+    "settings": "edit",
+    "leads": "edit",
+    "leave": "edit",
 }
 
 

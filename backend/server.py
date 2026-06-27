@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 
 import logging
 import os
+import asyncio
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads
 
 
 app = FastAPI(title="FinFlow API")
@@ -39,6 +40,7 @@ app.include_router(colleges.router)
 app.include_router(colleges.public_router)
 app.include_router(push.router)
 app.include_router(messages.router)
+app.include_router(leads.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -148,6 +150,10 @@ async def startup() -> None:
     await db.colleges.create_index("name_lower", unique=True)
     await db.password_reset_tokens.create_index("token_hash", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.leads.create_index("office")
+    await db.leads.create_index("assigned_to_user_id")
+    await db.leads.create_index([("status", 1), ("next_follow_up", 1)])
+    await db.leads.create_index([("created_at", -1)])
     await _ensure_login_attempts_index()
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
@@ -160,6 +166,17 @@ async def startup() -> None:
         {"$pull": {"payments": {"received_in.name": "TestAgent"}}},
     )
     await seed_admin_and_backfill()
+    # Background sweep: remind assignees of due lead follow-ups every 10 min.
+    asyncio.create_task(_followup_sweep_loop())
+
+
+async def _followup_sweep_loop() -> None:
+    while True:
+        try:
+            await leads.sweep_due_followups()
+        except Exception:
+            logger.exception("[leads] follow-up sweep failed")
+        await asyncio.sleep(600)
 
 
 @app.on_event("shutdown")

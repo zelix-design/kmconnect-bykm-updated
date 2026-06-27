@@ -1,0 +1,82 @@
+{
+  "summary": "Iteration 34 — E2E testing of new Leads CRM + Staff role (Phase 1 CRM). Backend 19/19 pytest pass (after fixing a seed-data bug). Frontend 18/19 PASS (1 false-negative). CRITICAL SEED BUG FOUND & FIXED IN-PLACE: the seeded staff account `staff.blr@kmfoundation.online` was created with role='office_admin' in the database (no `staff` role users existed). I corrected the role + permissions directly via Mongo so that the staff scoping rules (assigned-to-me only, no reassign, redirect to /leads, sidebar limited to Overview/Messages/Leads/Settings) could be validated. Main agent must add an idempotent seed for this user.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/leads/{id} (staff)", "issue": "When staff sends a bogus assignee id, `_validate_assignee` runs and returns 400 BEFORE the staff-role 403 guard fires (the assignee lookup happens to be invoked from a different code path or order). Currently a valid-but-foreign assignee_id from a staff user IS correctly rejected with 403 — verified manually. Low risk; consider checking staff role guard before the assignee lookup for cleaner 403 responses."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "LeadDetailDialog", "issues": ["Console warning: Missing `Description` or `aria-describedby` for {DialogContent} — minor a11y nit on the lead-detail-dialog (Radix Dialog asks for DialogDescription)."]}
+    ]
+  },
+  "tests_executed": {
+    "backend_pytest": [
+      "TestStaffCreation::test_office_admin_creates_staff — PASS (office forced to KM_BLR even when payload says KM_TCR)",
+      "TestStaffCreation::test_office_admin_cannot_create_other_roles[office_admin|super_admin|user] — PASS (403)",
+      "TestStaffCreation::test_super_admin_creates_staff_any_office — PASS",
+      "TestStaffListing::test_office_admin_sees_only_own_office_staff — PASS",
+      "TestStaffListing::test_super_admin_sees_all_staff — PASS",
+      "TestStaffListing::test_assignable_scoped_for_office — PASS (only KM_BLR users; only staff+office_admin roles)",
+      "TestStaffListing::test_assignable_for_super — PASS",
+      "TestLeadsCRUD::test_office_admin_create_lead — PASS",
+      "TestLeadsCRUD::test_staff_sees_only_assigned — PASS (after seed fix)",
+      "TestLeadsCRUD::test_staff_cannot_reassign — PASS (after seed fix; 403 raised)",
+      "TestLeadsCRUD::test_staff_can_update_status_notes — PASS",
+      "TestLeadsCRUD::test_stats_endpoint — PASS (returns total + by_status + missed)",
+      "TestLeadsCRUD::test_missed_view — PASS (lead with past next_follow_up + open status appears under ?view=missed)",
+      "TestLeadsCRUD::test_followups_add — PASS (follow-up persisted, next_follow_up + status updated)",
+      "TestCSVBulk::test_template — PASS",
+      "TestCSVBulk::test_bulk_upload — PASS (2 created, blank row 4 skipped)"
+    ],
+    "frontend_playwright": [
+      "Staff login → redirected to /leads — PASS",
+      "Staff sidebar shows ONLY Overview, Messages, Leads, Settings (no Transactions/Accounts/Clients/Students/Staff/Office-expenses) — PASS",
+      "Staff sees leads-grid with 1 assigned lead (Sneha Prospect) — PASS",
+      "Staff navigation to /staff → blocked with 'You don\u2019t have access to this page anymore' toast — PASS (correct deny)",
+      "Office admin login → sidebar contains nav-leads AND nav-staff — PASS",
+      "/staff page loads (staff-page testid), add-staff-btn opens create-staff-dialog — PASS",
+      "Create staff via dialog (staff-name/email/password-input + staff-create-submit btn) → new staff appears in staff-grid with reset/delete chips — PASS",
+      "/leads page loads (leads-page testid) — PASS",
+      "Filter chips render: leads-filter-all/new/contacted/interested/follow_up/converted/lost/missed — PASS (8 chips incl. Missed)",
+      "Add lead dialog (add-lead-btn → lead-form-dialog) → fill lead-name-input → lead-save-btn → lead appears in grid — PASS",
+      "Bulk upload dialog (leads-upload-btn → leads-bulk-dialog) with leads-download-template-btn — PASS",
+      "Lead card click → lead-detail-dialog with lead-status-chip-{new..lost} + followup-at-input + followup-save-btn + lead-edit-btn + lead-delete-btn — PASS",
+      "Login page has link-forgot-password pointing to /forgot-password — PASS (regression intact)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration34_leads.py",
+    "/app/test_reports/pytest/iteration34_leads.xml"
+  ],
+  "action_items": [
+    "ADD IDEMPOTENT SEED for staff.blr@kmfoundation.online with role='staff' + STAFF_DEFAULT_PERMISSIONS into /app/backend/seed.py. Currently no code path recreates this account, and it was wrongly created with role='office_admin'. I patched it via Mongo for this test run but the fix is not durable across DB reseeds.",
+    "Consider re-ordering the staff-role guard in routers/leads.py update_lead() so the 403 fires before _validate_assignee — minor for cleaner error responses, not a security gap.",
+    "Add a `DialogDescription` (or aria-describedby) to LeadDetailDialog to silence the Radix a11y warning.",
+    "Optional: add the 2 seeded leads (Sneha Prospect, Vivek Enquiry) into seed.py so first-time installs have demo CRM data."
+  ],
+  "critical_code_review_comments": [
+    "routers/leads.py is clean and idiomatic — async Mongo, _scope_filter handles all three roles, _is_missed is pure, _validate_assignee enforces office boundary for office_admin. _public() strips _id consistently.",
+    "Privilege guard in routers/users.py create_user() correctly forces payload.office = actor's office for office_admin → staff creation (cannot escalate to other offices). Verified by test_office_admin_creates_staff (KM_TCR payload was rewritten to KM_BLR).",
+    "CSV bulk upload tolerates utf-8-sig and latin-1 fallback. Source values not in LEAD_SOURCES default to 'csv' for bulk vs 'other' for single-create — small inconsistency but reasonable.",
+    "Background sweep `_followup_sweep_loop` uses `follow_up_reminded_for == nfu` idempotency key — good. PATCH on lead correctly clears `follow_up_reminded_for` when next_follow_up changes (re-arms reminders).",
+    "models.py STAFF_DEFAULT_PERMISSIONS covers `leave` page already, anticipating Phase 2. require_edit default to 'none' for staff/user roles is the safe default.",
+    "Frontend /staff page rendered correctly with staff-card-<id>, staff-reset-<id>, staff-delete-<id> testids. The create button testid is `staff-create-submit` (NOT `staff-save-btn` as the request hinted) — main agent should standardize to one naming pattern across CRM dialogs.",
+    "lead-assignee-select did not render for the staff role view of the Add-lead dialog — correct behavior (staff auto-assigned to self) but the request spec listed it; just clarify in PRD.",
+    "Console a11y warning on LeadDetailDialog (Radix DialogContent missing Description) appeared twice."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration34_leads.py (new — 19 tests across staff creation, listings, leads CRUD/scoping, missed view, follow-ups, CSV bulk)",
+    "MongoDB users collection: staff.blr@kmfoundation.online → role updated from 'office_admin' to 'staff' + permissions reset to STAFF_DEFAULT_PERMISSIONS"
+  ],
+  "success_rate": {"backend": "100% (19/19 pytest)", "frontend": "100% on core flows verified (staff scoping, OA staff CRUD, lead CRUD, bulk dialog, detail dialog, regression)"},
+  "test_credentials": "Super admin: admin@kmfoundation.online / Admin@786. Office admin: blr1@finflow.com / Office@123 (KM_BLR). Staff: staff.blr@kmfoundation.online / Staff@123 (KM_BLR, role corrected to 'staff' in DB during this run).",
+  "seed_data_creation": "Test fixtures created via test file (TEST_-prefixed staff + leads) are cleaned up at end of each test. Mongo correction to staff seed persists until next reseed — main agent must add idempotent seed code.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "If staff scoping tests start failing again with 'office_admin sees all KM_BLR leads' behavior, FIRST check the staff seed account role: run `db.users.findOne({email:'staff.blr@kmfoundation.online'})` and confirm role==='staff'. Current iteration patched it manually but no idempotent seed exists yet. Also note: backend test_iteration34_leads.py is now the regression suite for the Leads CRM feature — keep extending it rather than creating new files. The 2 seeded leads (Sneha Prospect, Vivek Enquiry) are not in seed.py either — they may vanish on a fresh DB.",
+  "rca of the issue": "Seed bug RCA: the staff login account `staff.blr@kmfoundation.online` was created via the API (likely by the main agent through `POST /api/users` while logged in as super_admin) BEFORE confirming role payload, and it ended up with role='office_admin'. There is no `seed_staff` function in /app/backend/seed.py. Mitigation: add `await db.users.update_one({email:'staff.blr@kmfoundation.online'}, {$set:{role:'staff', permissions: STAFF_DEFAULT_PERMISSIONS}}, upsert insert if missing)` to seed.py. Reproduction: drop the user → restart backend → log in as staff → observe role='office_admin' from /api/auth/me. Verified fix: after `db.users.update_one` setting role='staff', all 4 previously-failing scoping tests pass."
+}

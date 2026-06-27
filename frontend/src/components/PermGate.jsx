@@ -16,9 +16,12 @@ export default function PermGate({ page, roles, children }) {
   const location = useLocation();
   let allowed = true;
   if (user && user !== false) {
-    if (roles && roles.length) {
-      allowed = roles.includes(user.role);
-    } else if (page) {
+    if (roles && roles.length && !roles.includes(user.role)) {
+      allowed = false;
+    }
+    // When both roles + page are given, enforce both. Super admins always
+    // pass the per-page permission check.
+    if (allowed && page && user.role !== "super_admin") {
       allowed = canView(user, page);
     }
   }
