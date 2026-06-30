@@ -888,3 +888,13 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Parity confirmed** — SA's KM_BLR scoped analytics (total_leads=2, total_admissions=9) EXACTLY match Office Admin blr1's own dashboard. CrmAnalytics.jsx accepts an `office` prop and re-fetches on change.
 - [x] **100% testing** — iteration_39.json: backend 4/4 pytest pass, frontend 100% on all flows. Vercel `CI=true yarn build` compiles successfully. No residual test data.
 
+
+
+## Implementation status — 2026-06-30 (iteration 40: Follow-up slot scheduler — auto 5-min slotting)
+- [x] **Per-user follow-up slot scheduler** — the FIRST follow-up on an empty timeline is assigned manually (editable, prefilled with the next round 5-min mark); every SUBSEQUENT follow-up is AUTO-ASSIGNED (read-only) to the next free 5-minute slot.
+- [x] **Working window 10:00–19:00 IST** (fixed UTC+5:30 offset, no DST dep), 5-min steps; rolls over to the next day's 10:00 once a day is full. Anchor = latest future booked slot + 5 min, else ceil(now → 5-min). Timeline scoped to leads `assigned_to_user_id == caller`.
+- [x] **Backend** — `GET /api/leads/next-followup-slot?exclude_lead_id=` → `{slot (ISO UTC), is_first, window}`. Pure math in `lib/followup_slots.py::compute_next_slot`. 7 unit tests + 6 API integration tests pass.
+- [x] **Frontend** — `LeadFormDialog` (new leads) and `LeadDetailDialog` ("Log a follow-up") fetch the slot on open: `is_first` → editable+prefilled (lead-followup-input / followup-at-input + hint); otherwise read-only auto box (lead-followup-auto / followup-auto-slot). Detail dialog re-fetches after each save so the slot advances by 5 min. Edit-lead keeps the normal editable input.
+- [x] **Note** — display times follow the browser locale; India (IST) users see 10:00 etc. The UTC test browser shows 04:30 (= 10:00 IST) — expected, not a bug.
+- [x] **100% testing** — iteration_40.json: backend 100%, frontend 5/5 UI flows. `CI=true yarn build` passes.
+
