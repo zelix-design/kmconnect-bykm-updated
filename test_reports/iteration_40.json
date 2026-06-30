@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 40: Validated the new per-user follow-up slot scheduler. Verified backend `GET /api/leads/next-followup-slot` (is_first transitions, +5 min increments, exclude_lead_id behavior) and full Add Lead + Detail Dialog UI flow as Staff. Backend: 7 unit tests + 6 API integration tests all PASS. Frontend: 5/5 critical UI assertions PASS (FIRST follow-up editable+prefilled+hint, SUBSEQUENT locked auto-box, detail dialog auto-slot, history rendered, edit form uses editable input).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_followup_slots.py",
+    "/app/backend/tests/test_iteration40_followup_slot_api.py",
+    "/app/test_reports/pytest/iteration40.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadDetailDialog.addFollowup: when the lead already has next_follow_up == slot.slot (e.g. just-created lead opened as the latest card), Save+reload yields the same auto slot — visually fine, but consider showing a toast hint like 'Already booked at this time' to avoid user confusion.",
+    "next_followup_slot endpoint uses {next_follow_up: {$ne: None}} which won't index well at scale; consider an index on (assigned_to_user_id, next_follow_up) if leads collection grows.",
+    "compute_next_slot has a 100k guard loop — defensive but could be replaced with a deterministic skip-set iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration40_followup_slot_api.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Staff: staff.blr@kmfoundation.online / Staff@123 (used for full E2E).",
+  "seed_data_creation": "Two temporary leads (TEST_IT40_FE_A, TEST_IT40_FE_B) were created and cleaned up via the UI delete flow; pytest leads (TEST_IT40_first/second) were cleaned in the test_cleanup_module fixture.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 40 scheduler feature is functionally complete and verified end-to-end. Backend pytest suite to keep: tests/test_followup_slots.py (unit) + tests/test_iteration40_followup_slot_api.py (integration, uses Staff creds). Important env quirk: pytest must be invoked with REACT_APP_BACKEND_URL set explicitly when running from /app/backend (e.g. `REACT_APP_BACKEND_URL=https://finance-flow-1727.preview.emergentagent.com python -m pytest tests/test_iteration40_followup_slot_api.py`). Browser DST: page runs in UTC so datetime-local fields display offsets (10:00 IST → 04:30 UTC); do not flag as bug. Note that the in-app fmtDateTime formatter uses the browser locale (Jul 1, 2026, 4:35 AM in UTC). After save in LeadDetailDialog, the slot will only advance if a NEW booking is added to the user's timeline — re-saving the same lead's already-set next_follow_up returns the same computed slot (correct behavior).",
+  "rca of the issue": "No bugs found. TEST3b initially looked like a regression (slot didn't advance after save), but RCA shows: (a) the auto-slot endpoint excludes the current lead's slot; (b) the most-recently-created lead card was opened in detail; (c) its auto-slot equaled its own existing next_follow_up; (d) saving the followup re-stored the same value, so the recomputed slot was identical. This is correct per spec — the slot only advances when a new booking is added that wasn't there before."
+}

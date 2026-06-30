@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
+from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR, WORK_END_HOUR
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -169,6 +170,39 @@ async def lead_stats(user: dict = Depends(get_current_user)):
         if _is_missed(d, now):
             missed += 1
     return {"total": len(docs), "by_status": by_status, "missed": missed}
+
+
+@router.get("/next-followup-slot")
+async def next_followup_slot(
+    user: dict = Depends(get_current_user),
+    exclude_lead_id: Optional[str] = None,
+):
+    """Compute the next available follow-up slot on the caller's own timeline.
+
+    Slots are 5-minute steps inside a 10:00-19:00 IST working window. Returns
+    `is_first=True` when the caller has no future follow-ups booked — the UI
+    then lets them pick the time manually; every later one is auto-assigned."""
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    now = datetime.now(timezone.utc)
+    docs = await db.leads.find(
+        {"assigned_to_user_id": user["id"], "next_follow_up": {"$ne": None}},
+        {"_id": 0, "id": 1, "next_follow_up": 1},
+    ).to_list(5000)
+    booked = [
+        d["next_follow_up"] for d in docs
+        if d.get("next_follow_up") and d.get("id") != exclude_lead_id
+    ]
+    slot, is_first = compute_next_slot(booked, now)
+    return {
+        "slot": slot,
+        "is_first": is_first,
+        "window": {
+            "start": f"{WORK_START_HOUR:02d}:00",
+            "end": f"{WORK_END_HOUR:02d}:00",
+            "step_minutes": SLOT_MINUTES,
+        },
+    }
 
 
 LOST_REASONS = ("Admission Taken", "No Response", "Joined Competitor", "Not Eligible", "Other")

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus } from "@phosphor-icons/react";
-import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, fromLocalInput } from "./constants";
+import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput } from "./constants";
 import { canEdit } from "@/lib/perm";
 
 function InfoRow({ icon: Icon, children }) {
@@ -32,9 +32,25 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [fuStatus, setFuStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [slot, setSlot] = useState(null);
   const editable = canEdit(user, "leads");
 
   useEffect(() => { setLocal(lead); setFuAt(""); setFuNote(""); setFuStatus(""); }, [lead]);
+
+  const loadSlot = useCallback(async () => {
+    if (!lead?.id) return;
+    try {
+      const { data } = await api.get("/leads/next-followup-slot", { params: { exclude_lead_id: lead.id } });
+      setSlot(data);
+      setFuAt(data.is_first ? toLocalInput(data.slot) : "");
+    } catch {
+      setSlot(null);
+    }
+  }, [lead?.id]);
+
+  useEffect(() => {
+    if (open && editable) loadSlot();
+  }, [open, editable, loadSlot]);
 
   if (!local) return null;
   const meta = LEAD_STATUS_META[local.status] || LEAD_STATUS_META.new;
@@ -60,15 +76,17 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   };
 
   const addFollowup = async () => {
-    if (!fuAt) { toast.error("Pick a follow-up date & time"); return; }
+    const at = slot && !slot.is_first ? slot.slot : fromLocalInput(fuAt);
+    if (!at) { toast.error("Pick a follow-up date & time"); return; }
     setBusy(true);
     try {
-      const body = { at: fromLocalInput(fuAt), note: fuNote.trim() };
+      const body = { at, note: fuNote.trim() };
       if (fuStatus) body.status = fuStatus;
       const { data } = await api.post(`/leads/${local.id}/followups`, body);
       refresh(data);
-      setFuAt(""); setFuNote(""); setFuStatus("");
+      setFuNote(""); setFuStatus("");
       toast.success("Follow-up logged");
+      loadSlot();
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Could not add follow-up");
     } finally { setBusy(false); }
@@ -145,7 +163,14 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             <div className="rounded-lg border border-border p-3 space-y-2.5" data-testid="followup-form">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><CalendarPlus size={14} /> Log a follow-up</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input type="datetime-local" value={fuAt} onChange={(e) => setFuAt(e.target.value)} data-testid="followup-at-input" />
+                {slot && !slot.is_first ? (
+                  <div className="flex flex-col justify-center rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2" data-testid="followup-auto-slot">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1"><ClockCountdown size={11} /> Auto-assigned slot</span>
+                    <span className="text-sm font-medium text-foreground" data-testid="followup-auto-slot-value">{fmtDateTime(slot.slot)}</span>
+                  </div>
+                ) : (
+                  <Input type="datetime-local" value={fuAt} onChange={(e) => setFuAt(e.target.value)} data-testid="followup-at-input" />
+                )}
                 <Select value={fuStatus || "keep"} onValueChange={(v) => setFuStatus(v === "keep" ? "" : v)}>
                   <SelectTrigger data-testid="followup-status-select" className="bg-card"><SelectValue placeholder="Keep status" /></SelectTrigger>
                   <SelectContent>
@@ -154,6 +179,13 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
                   </SelectContent>
                 </Select>
               </div>
+              {slot && (
+                <p className="text-[11px] text-muted-foreground" data-testid="followup-slot-hint">
+                  {slot.is_first
+                    ? "First follow-up — pick any time. The next ones auto-fill your next free 5-min slot (10:00–19:00)."
+                    : "Time auto-assigned to your next free 5-min slot (10:00–19:00)."}
+                </p>
+              )}
               <Textarea value={fuNote} onChange={(e) => setFuNote(e.target.value)} placeholder="Outcome / note" rows={2} data-testid="followup-note-input" />
               <Button type="button" size="sm" onClick={addFollowup} disabled={busy} data-testid="followup-save-btn" className="btn-amber border-0">Save follow-up</Button>
             </div>
