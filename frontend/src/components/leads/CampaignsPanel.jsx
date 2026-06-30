@@ -24,7 +24,7 @@ function MiniStat({ icon: Icon, label, value, tone, testid }) {
   return (
     <Card className="p-3 flex items-center gap-2.5" data-testid={testid}>
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${tones[tone]}`}><Icon size={18} weight="duotone" /></div>
-      <div><p className="text-xl font-display font-semibold leading-none">{value}</p><p className="text-[11px] text-muted-foreground mt-0.5">{label}</p></div>
+      <div><p className="text-xl font-display font-semibold leading-none" data-testid={`${testid}-value`}>{value}</p><p className="text-[11px] text-muted-foreground mt-0.5">{label}</p></div>
     </Card>
   );
 }

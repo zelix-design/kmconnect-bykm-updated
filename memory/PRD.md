@@ -911,3 +911,12 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Template** (`GET /api/leads/template`) now includes the `employee` column with examples. Dialog copy updated + "Default assignee (used when a row's employee is blank or unmatched)" label.
 - [x] **Verified E2E (curl)**: exact match → assigned; different-case match → assigned; "Ghost Employee" → default + reported; blank → default. `CI=true yarn build` passes; dialog UI confirmed via screenshot. All test leads cleaned up.
 
+## Implementation status — 2026-06-30 (iteration 43: CRM Campaigns + lead distribution)
+- [x] **"Leads" nav renamed to "CRM"** (Super/Office Admin; staff still see "My Leads") with two tabs: **Pipeline** (existing board/list) + **Campaigns**.
+- [x] **Campaigns** (Super/Office Admin only): create with name + description + optional tag (course/place/source) + target office (super admin selects; office admin server-forced to own office). List + detail views with live stats (total/assigned/unassigned/converted) and current per-employee distribution.
+- [x] **Populate**: manual multi-row "Add leads" and "Upload CSV" (reuses /api/leads/bulk with `campaign_id`; campaign leads land UNASSIGNED, per-row `employee` cell still overrides). Leads carry a `campaign_id`.
+- [x] **Distribute** to employees (scoped to campaign office) by **Equal** (round-robin), **By count**, or **By percentage**; scope = unassigned-only (default) or all leads. Each assigned employee gets a notification.
+- [x] **Backend**: new `routers/campaigns.py` (CRUD, /leads, /distribute), pure `lib/lead_distribution.py` (+6 unit tests), `leads.list` campaign_id filter, indexes on leads.campaign_id & campaigns. Office admin office is server-forced (verified).
+- [x] **Testing**: iteration_41.json → backend 20/20 (14 integration + 6 unit), frontend 15/15 across super_admin/office_admin/staff. `CI=true yarn build` passes.
+- [x] **Bug fixed (found via console RCA)**: CampaignAddLeadsDialog mis-mapped `LEAD_SOURCES` (array of {value,label} objects) as strings → duplicate React keys ("[object Object]") and all source options showed "Other". Fixed to use `s.value`/`s.label`; 0 console warnings confirmed.
+

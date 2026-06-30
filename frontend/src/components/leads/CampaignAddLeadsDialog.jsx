@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash } from "@phosphor-icons/react";
-import { LEAD_SOURCES, sourceLabel } from "./constants";
+import { LEAD_SOURCES } from "./constants";
 
 const blankRow = () => ({ name: "", phone: "", course: "", place: "" });
 
@@ -53,7 +53,7 @@ export default function CampaignAddLeadsDialog({ open, onOpenChange, campaignId,
             <Select value={source} onValueChange={setSource}>
               <SelectTrigger data-testid="campaign-addleads-source" className="w-40 h-9 bg-card"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {LEAD_SOURCES.map((s) => <SelectItem key={s} value={s}>{sourceLabel(s)}</SelectItem>)}
+                {LEAD_SOURCES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
