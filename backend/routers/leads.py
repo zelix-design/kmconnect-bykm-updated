@@ -545,9 +545,9 @@ async def csv_template(user: dict = Depends(get_current_user)) -> str:
         raise HTTPException(403, "Not allowed")
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["name", "phone", "email", "course", "place", "source", "notes"])
-    w.writerow(["Aravind Kumar", "9876543210", "aravind@example.com", "B.Tech CSE", "Bangalore", "walk_in", "Walked in, interested in CSE"])
-    w.writerow(["Priya Nair", "9988776655", "", "B.Sc Nursing", "Kochi", "referral", ""])
+    w.writerow(["name", "phone", "email", "course", "place", "source", "notes", "employee"])
+    w.writerow(["Aravind Kumar", "9876543210", "aravind@example.com", "B.Tech CSE", "Bangalore", "walk_in", "Walked in, interested in CSE", "Anjali Telecaller"])
+    w.writerow(["Priya Nair", "9988776655", "", "B.Sc Nursing", "Kochi", "referral", "", ""])
     return buf.getvalue()
 
 
@@ -557,11 +557,15 @@ async def bulk_upload(
     assigned_to_user_id: Optional[str] = Form(None),
     user: dict = Depends(require_edit("leads")),
 ) -> dict:
-    """Bulk-add leads from a CSV with header name,phone,email,course,place,source,notes.
-    Leads are assigned to the uploader by default, or to a chosen assignee
-    (must be in the uploader's office for office admins)."""
+    """Bulk-add leads from a CSV with header
+    name,phone,email,course,place,source,notes,employee.
+
+    Each lead is assigned to the default assignee (the chosen ``assigned_to_user_id``
+    or the uploader). When a row's optional ``employee`` cell names a staff member
+    or office admin (scoped to the uploader's office for office admins), that row is
+    assigned to them instead — unmatched names fall back to the default."""
     role = user.get("role")
-    # Resolve the assignee for all rows
+    # Resolve the default assignee for all rows
     assignee_id = user["id"]
     office = user.get("office")
     if role == "staff":
@@ -579,6 +583,30 @@ async def bulk_upload(
             office = a.get("office")
         else:
             office = None  # super admin without assignee → unassigned/global
+
+    # Per-row employee lookup (office/super admins only) — name → user.
+    # Office admins are scoped to their own office; ambiguous names are skipped.
+    emp_map: dict = {}
+    if role != "staff":
+        eq = {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved"}
+        if role == "office_admin" and user.get("office"):
+            eq["office"] = user.get("office")
+        emp_docs = await db.users.find(
+            eq, {"_id": 0, "id": 1, "name": 1, "office": 1}
+        ).to_list(2000)
+        for e in emp_docs:
+            key = (e.get("name") or "").strip().lower()
+            if key:
+                emp_map.setdefault(key, []).append(e)
+
+    def resolve_employee(raw):
+        key = (raw or "").strip().lower()
+        if not key:
+            return None  # no employee specified → use default
+        matches = emp_map.get(key)
+        if matches and len(matches) == 1:
+            return matches[0]
+        return False  # named but unmatched / ambiguous
 
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are supported")
@@ -600,6 +628,7 @@ async def bulk_upload(
 
     created: list[dict] = []
     skipped_rows: list[int] = []
+    unmatched_employees: list[str] = []
     now = now_iso()
     for idx, row in enumerate(reader, start=2):
         name = str(row.get(name_h) or "").strip()
@@ -607,6 +636,17 @@ async def bulk_upload(
             skipped_rows.append(idx)
             continue
         src = cell(row, "source").lower()
+        row_assignee = assignee_id
+        row_office = office
+        if role != "staff":
+            emp_raw = cell(row, "employee") or cell(row, "assigned_to")
+            if emp_raw:
+                matched = resolve_employee(emp_raw)
+                if matched:
+                    row_assignee = matched["id"]
+                    row_office = matched.get("office")
+                else:
+                    unmatched_employees.append(emp_raw)
         created.append({
             "id": gen_id(),
             "name": name,
@@ -616,8 +656,8 @@ async def bulk_upload(
             "place": cell(row, "place"),
             "source": src if src in LEAD_SOURCES else "csv",
             "status": "new",
-            "assigned_to_user_id": assignee_id,
-            "office": office,
+            "assigned_to_user_id": row_assignee,
+            "office": row_office,
             "next_follow_up": None,
             "notes": cell(row, "notes"),
             "follow_ups": [],
@@ -628,10 +668,19 @@ async def bulk_upload(
 
     if created:
         await db.leads.insert_many([dict(d) for d in created])
+    # De-dupe unmatched names (case-insensitive) while preserving first spelling.
+    seen: set = set()
+    unmatched_unique: list[str] = []
+    for n in unmatched_employees:
+        k = n.strip().lower()
+        if k and k not in seen:
+            seen.add(k)
+            unmatched_unique.append(n.strip())
     return {
         "created_count": len(created),
         "skipped_blank_rows": skipped_rows,
         "created_sample": [c["name"] for c in created[:10]],
+        "unmatched_employees": unmatched_unique,
     }
 
 

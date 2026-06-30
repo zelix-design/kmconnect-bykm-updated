@@ -904,3 +904,10 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Slotting behavior unchanged: first follow-up on an empty timeline is manual+prefilled; subsequent ones auto-lock to the next free 5-min slot (10:00–19:00 IST).
 - [x] Verified via UI smoke test (add form has no follow-up field; detail dialog hides the block at "New" and shows it after switching to "Follow-up") + `CI=true yarn build` passes.
 
+## Implementation status — 2026-06-30 (iteration 42: Per-employee assignment in bulk lead upload)
+- [x] **CSV `employee` column** added to bulk lead upload — each row can be assigned to a specific employee by name (in addition to the existing single "default assignee" dropdown). Option (c): dropdown is the default; a filled `employee` cell overrides it per row.
+- [x] **Name matching** is case-insensitive and trimmed, scoped to approved staff/office-admins (office admins → own office only; super admins → any). Ambiguous (duplicate) names are treated as unmatched. Each matched lead inherits that employee's `office`.
+- [x] **Unmatched/blank fallback**: rows with a blank or unmatched `employee` use the default assignee (dropdown or uploader). Unmatched names are de-duped and returned as `unmatched_employees` in the response and surfaced as an amber warning in the dialog.
+- [x] **Template** (`GET /api/leads/template`) now includes the `employee` column with examples. Dialog copy updated + "Default assignee (used when a row's employee is blank or unmatched)" label.
+- [x] **Verified E2E (curl)**: exact match → assigned; different-case match → assigned; "Ghost Employee" → default + reported; blank → default. `CI=true yarn build` passes; dialog UI confirmed via screenshot. All test leads cleaned up.
+

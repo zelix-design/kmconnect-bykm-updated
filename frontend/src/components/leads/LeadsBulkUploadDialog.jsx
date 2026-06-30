@@ -62,8 +62,8 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
         <DialogHeader>
           <DialogTitle className="font-display">Bulk upload leads</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            CSV columns: <code className="px-1 py-0.5 rounded bg-muted text-foreground">name, phone, email, course, place, source, notes</code>.
-            {isStaff ? " Imported leads are assigned to you." : " Choose who to assign the imported leads to."}
+            CSV columns: <code className="px-1 py-0.5 rounded bg-muted text-foreground">name, phone, email, course, place, source, notes, employee</code>.
+            {isStaff ? " Imported leads are assigned to you." : " Fill the optional 'employee' column to assign a row to a specific employee by name; blank or unmatched rows use the default assignee below."}
           </DialogDescription>
         </DialogHeader>
 
@@ -80,7 +80,7 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
 
           {!isStaff && (
             <div className="space-y-1.5">
-              <Label>Assign imported leads to</Label>
+              <Label>Default assignee <span className="text-muted-foreground font-normal">(used when a row's "employee" is blank or unmatched)</span></Label>
               <Select value={assignee || "self"} onValueChange={(v) => setAssignee(v === "self" ? "" : v)}>
                 <SelectTrigger data-testid="leads-bulk-assignee" className="bg-card"><SelectValue placeholder="Me" /></SelectTrigger>
                 <SelectContent>
@@ -114,6 +114,11 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
               </div>
               {result.skipped_blank_rows?.length > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">{result.skipped_blank_rows.length} blank row(s) skipped</p>
+              )}
+              {result.unmatched_employees?.length > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1" data-testid="leads-bulk-unmatched">
+                  {result.unmatched_employees.length} employee name(s) not matched — those leads used the default assignee: {result.unmatched_employees.join(", ")}
+                </p>
               )}
             </div>
           )}
