@@ -898,3 +898,9 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Note** — display times follow the browser locale; India (IST) users see 10:00 etc. The UTC test browser shows 04:30 (= 10:00 IST) — expected, not a bug.
 - [x] **100% testing** — iteration_40.json: backend 100%, frontend 5/5 UI flows. `CI=true yarn build` passes.
 
+## Implementation status — 2026-06-30 (iteration 41: Follow-up slotting is now stage-gated)
+- [x] **Removed the follow-up field from the Add/Edit Lead form** (`LeadFormDialog`) entirely — no more auto-slot or manual "Next follow-up" at lead creation/edit.
+- [x] **Follow-up assignment now only appears in the lead detail dialog when the stage = "Follow-up"** (`LeadDetailDialog`: the "Log a follow-up" block is gated on `local.status === "follow_up"`). Changing a lead's stage to Follow-up reveals the slot-assignment UI; the slot is fetched only then.
+- [x] Slotting behavior unchanged: first follow-up on an empty timeline is manual+prefilled; subsequent ones auto-lock to the next free 5-min slot (10:00–19:00 IST).
+- [x] Verified via UI smoke test (add form has no follow-up field; detail dialog hides the block at "New" and shows it after switching to "Follow-up") + `CI=true yarn build` passes.
+

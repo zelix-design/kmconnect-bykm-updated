@@ -49,8 +49,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   }, [lead?.id]);
 
   useEffect(() => {
-    if (open && editable) loadSlot();
-  }, [open, editable, loadSlot]);
+    if (open && editable && local?.status === "follow_up") loadSlot();
+  }, [open, editable, local?.status, loadSlot]);
 
   if (!local) return null;
   const meta = LEAD_STATUS_META[local.status] || LEAD_STATUS_META.new;
@@ -158,8 +158,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             </div>
           )}
 
-          {/* Log follow-up */}
-          {editable && (
+          {/* Log follow-up — only shown once the lead is in the Follow-up stage */}
+          {editable && local.status === "follow_up" && (
             <div className="rounded-lg border border-border p-3 space-y-2.5" data-testid="followup-form">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><CalendarPlus size={14} /> Log a follow-up</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

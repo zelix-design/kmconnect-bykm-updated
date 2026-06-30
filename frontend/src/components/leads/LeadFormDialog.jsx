@@ -7,12 +7,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ClockCountdown } from "@phosphor-icons/react";
-import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, toLocalInput, fromLocalInput, fmtDateTime } from "./constants";
+import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES } from "./constants";
 
 const empty = {
   name: "", phone: "", email: "", course: "", place: "",
-  source: "walk_in", status: "new", assigned_to_user_id: "", next_follow_up: "", notes: "", lost_reason: "",
+  source: "walk_in", status: "new", assigned_to_user_id: "", notes: "", lost_reason: "",
 };
 
 const LOST_REASONS = ["Admission Taken", "No Response", "Joined Competitor", "Not Eligible", "Other"];
@@ -22,7 +21,6 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
   const isStaff = user?.role === "staff";
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
-  const [autoSlot, setAutoSlot] = useState(null);
 
   useEffect(() => {
     if (open) {
@@ -30,22 +28,10 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
         name: lead.name || "", phone: lead.phone || "", email: lead.email || "",
         course: lead.course || "", place: lead.place || "", source: lead.source || "walk_in",
         status: lead.status || "new", assigned_to_user_id: lead.assigned_to_user_id || "",
-        next_follow_up: toLocalInput(lead.next_follow_up), notes: lead.notes || "", lost_reason: lead.lost_reason || "",
+        notes: lead.notes || "", lost_reason: lead.lost_reason || "",
       } : empty);
     }
   }, [open, lead]);
-
-  // New leads auto-slot the next follow-up; the first booking is manual.
-  useEffect(() => {
-    if (!open || isEdit) { setAutoSlot(null); return; }
-    let cancelled = false;
-    api.get("/leads/next-followup-slot").then(({ data }) => {
-      if (cancelled) return;
-      setAutoSlot(data);
-      if (data.is_first) setForm((f) => ({ ...f, next_follow_up: toLocalInput(data.slot) }));
-    }).catch(() => { if (!cancelled) setAutoSlot(null); });
-    return () => { cancelled = true; };
-  }, [open, isEdit]);
 
   const handle = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -63,7 +49,6 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
         source: form.source,
         status: form.status,
         notes: form.notes.trim(),
-        next_follow_up: (!isEdit && autoSlot && !autoSlot.is_first) ? autoSlot.slot : fromLocalInput(form.next_follow_up),
         lost_reason: form.status === "lost" ? (form.lost_reason || "") : "",
       };
       if (!isStaff) payload.assigned_to_user_id = form.assigned_to_user_id || null;
@@ -170,26 +155,6 @@ export default function LeadFormDialog({ open, onOpenChange, lead, assignable, u
               </Select>
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="lead-followup">Next follow-up</Label>
-            {(!isEdit && autoSlot && !autoSlot.is_first) ? (
-              <div className="flex items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2.5" data-testid="lead-followup-auto">
-                <ClockCountdown size={16} className="text-blue-600 dark:text-blue-300 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground" data-testid="lead-followup-auto-value">{fmtDateTime(autoSlot.slot)}</p>
-                  <p className="text-[11px] text-muted-foreground">Auto-assigned · next free 5-min slot (10:00–19:00)</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <Input id="lead-followup" type="datetime-local" data-testid="lead-followup-input" value={form.next_follow_up} onChange={handle("next_follow_up")} />
-                {!isEdit && autoSlot && autoSlot.is_first && (
-                  <p className="text-[11px] text-muted-foreground" data-testid="lead-followup-first-hint">First follow-up — pick any time. The next ones auto-fill at 5-min intervals.</p>
-                )}
-              </>
-            )}
-          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="lead-notes">Notes</Label>
