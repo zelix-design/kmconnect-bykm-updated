@@ -122,6 +122,7 @@ async def list_leads(
     status: Optional[str] = None,
     assigned_to: Optional[str] = None,
     source: Optional[str] = None,
+    campaign_id: Optional[str] = None,
     q: Optional[str] = None,
     view: Optional[str] = None,  # "missed" | "today" | None
 ):
@@ -134,6 +135,8 @@ async def list_leads(
         query["assigned_to_user_id"] = assigned_to
     if source and source in LEAD_SOURCES:
         query["source"] = source
+    if campaign_id:
+        query["campaign_id"] = campaign_id
     if q:
         rx = {"$regex": q.strip(), "$options": "i"}
         query["$or"] = [{"name": rx}, {"phone": rx}, {"email": rx}, {"course": rx}, {"place": rx}]
@@ -555,6 +558,7 @@ async def csv_template(user: dict = Depends(get_current_user)) -> str:
 async def bulk_upload(
     file: UploadFile = File(...),
     assigned_to_user_id: Optional[str] = Form(None),
+    campaign_id: Optional[str] = Form(None),
     user: dict = Depends(require_edit("leads")),
 ) -> dict:
     """Bulk-add leads from a CSV with header
@@ -563,7 +567,11 @@ async def bulk_upload(
     Each lead is assigned to the default assignee (the chosen ``assigned_to_user_id``
     or the uploader). When a row's optional ``employee`` cell names a staff member
     or office admin (scoped to the uploader's office for office admins), that row is
-    assigned to them instead — unmatched names fall back to the default."""
+    assigned to them instead — unmatched names fall back to the default.
+
+    When ``campaign_id`` is supplied (super/office admin only), rows are tagged to
+    that campaign, scoped to its office and left UNASSIGNED by default so they can
+    be distributed afterwards; a matching ``employee`` cell still overrides."""
     role = user.get("role")
     # Resolve the default assignee for all rows
     assignee_id = user["id"]
@@ -584,13 +592,28 @@ async def bulk_upload(
         else:
             office = None  # super admin without assignee → unassigned/global
 
+    # Campaign uploads: tag + scope to the campaign's office, default unassigned.
+    if campaign_id:
+        if role == "staff":
+            raise HTTPException(403, "Staff cannot upload to a campaign")
+        cscope = {} if role == "super_admin" else {"office": user.get("office")}
+        campaign = await db.campaigns.find_one(
+            {**cscope, "id": campaign_id}, {"_id": 0, "id": 1, "office": 1}
+        )
+        if not campaign:
+            raise HTTPException(404, "Campaign not found")
+        office = campaign["office"]
+        assignee_id = None
+
     # Per-row employee lookup (office/super admins only) — name → user.
-    # Office admins are scoped to their own office; ambiguous names are skipped.
+    # Scoped to the campaign's office when uploading to a campaign, otherwise the
+    # office admin's own office.
     emp_map: dict = {}
     if role != "staff":
         eq = {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved"}
-        if role == "office_admin" and user.get("office"):
-            eq["office"] = user.get("office")
+        emp_office = office if campaign_id else (user.get("office") if role == "office_admin" else None)
+        if emp_office:
+            eq["office"] = emp_office
         emp_docs = await db.users.find(
             eq, {"_id": 0, "id": 1, "name": 1, "office": 1}
         ).to_list(2000)
@@ -658,6 +681,7 @@ async def bulk_upload(
             "status": "new",
             "assigned_to_user_id": row_assignee,
             "office": row_office,
+            "campaign_id": campaign_id,
             "next_follow_up": None,
             "notes": cell(row, "notes"),
             "follow_ups": [],

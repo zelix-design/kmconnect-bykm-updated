@@ -7,8 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import { DownloadSimple, CheckCircle, FileCsv } from "@phosphor-icons/react";
 
-export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, assignable, user }) {
+export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, assignable, user, campaignId = null }) {
   const isStaff = user?.role === "staff";
+  const campaignMode = !!campaignId;
   const [file, setFile] = useState(null);
   const [assignee, setAssignee] = useState("");
   const [result, setResult] = useState(null);
@@ -41,7 +42,8 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
     try {
       const fd = new FormData();
       fd.append("file", file);
-      if (!isStaff && assignee) fd.append("assigned_to_user_id", assignee);
+      if (campaignMode) fd.append("campaign_id", campaignId);
+      else if (!isStaff && assignee) fd.append("assigned_to_user_id", assignee);
       const r = await api.post("/leads/bulk", fd, { headers: { "Content-Type": "multipart/form-data" } });
       setResult(r.data);
       if (r.data.created_count > 0) {
@@ -63,7 +65,9 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
           <DialogTitle className="font-display">Bulk upload leads</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             CSV columns: <code className="px-1 py-0.5 rounded bg-muted text-foreground">name, phone, email, course, place, source, notes, employee</code>.
-            {isStaff ? " Imported leads are assigned to you." : " Fill the optional 'employee' column to assign a row to a specific employee by name; blank or unmatched rows use the default assignee below."}
+            {campaignMode
+              ? " Leads are added to this campaign, unassigned — distribute them afterwards. A matching 'employee' cell still assigns that row."
+              : (isStaff ? " Imported leads are assigned to you." : " Fill the optional 'employee' column to assign a row to a specific employee by name; blank or unmatched rows use the default assignee below.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -78,7 +82,7 @@ export default function LeadsBulkUploadDialog({ open, onOpenChange, onUploaded, 
             </Button>
           </div>
 
-          {!isStaff && (
+          {!isStaff && !campaignMode && (
             <div className="space-y-1.5">
               <Label>Default assignee <span className="text-muted-foreground font-normal">(used when a row's "employee" is blank or unmatched)</span></Label>
               <Select value={assignee || "self"} onValueChange={(v) => setAssignee(v === "self" ? "" : v)}>

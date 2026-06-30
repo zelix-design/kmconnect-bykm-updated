@@ -17,7 +17,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns
 
 
 app = FastAPI(title="FinFlow API")
@@ -44,6 +44,7 @@ app.include_router(leads.router)
 app.include_router(leave.router)
 app.include_router(uploads.router)
 app.include_router(staff.router)
+app.include_router(campaigns.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -155,6 +156,8 @@ async def startup() -> None:
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.leads.create_index("office")
     await db.leads.create_index("assigned_to_user_id")
+    await db.leads.create_index("campaign_id")
+    await db.campaigns.create_index([("office", 1), ("created_at", -1)])
     await db.leads.create_index([("status", 1), ("next_follow_up", 1)])
     await db.leads.create_index([("created_at", -1)])
     await db.students.create_index("referrer_user_id")

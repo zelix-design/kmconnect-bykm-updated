@@ -17,6 +17,7 @@ import LeadFormDialog from "@/components/leads/LeadFormDialog";
 import LeadDetailDialog from "@/components/leads/LeadDetailDialog";
 import LeadsBulkUploadDialog from "@/components/leads/LeadsBulkUploadDialog";
 import LeadsBoard from "@/components/leads/LeadsBoard";
+import CampaignsPanel from "@/components/leads/CampaignsPanel";
 
 function StatTile({ icon: Icon, label, value, tone, testid }) {
   const tones = {
@@ -57,6 +58,7 @@ export default function Leads() {
   const [editLead, setEditLead] = useState(null);
   const [detailLead, setDetailLead] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [crmTab, setCrmTab] = useState("pipeline"); // pipeline | campaigns (non-staff)
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -135,12 +137,12 @@ export default function Leads() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label-eyebrow">CRM</p>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{isStaff ? "My Leads" : "Leads"}</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{isStaff ? "My Leads" : "CRM"}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {isStaff ? "Your assigned prospects and follow-ups." : "Track prospective students across the pipeline."}
+            {isStaff ? "Your assigned prospects and follow-ups." : "Track prospective students across the pipeline and run lead campaigns."}
           </p>
         </div>
-        {editable && (
+        {editable && (isStaff || crmTab === "pipeline") && (
           <div className="flex items-center gap-2">
             {!isStaff && (
               <Button variant="outline" onClick={() => setBulkOpen(true)} data-testid="leads-upload-btn">
@@ -154,6 +156,29 @@ export default function Leads() {
         )}
       </div>
 
+      {/* CRM tabs (admins only) */}
+      {!isStaff && (
+        <div className="flex items-center gap-1 border-b border-border" data-testid="crm-tabs">
+          {[["pipeline", "Pipeline"], ["campaigns", "Campaigns"]].map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setCrmTab(k)}
+              data-testid={`crm-tab-${k}`}
+              className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                crmTab === k ? "border-orange-500 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!isStaff && crmTab === "campaigns" ? (
+        <CampaignsPanel user={user} />
+      ) : (
+      <>
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="leads-stats">
         <StatTile icon={Target} label="Total leads" value={stats.total} tone="amber" testid="stat-total-leads" />
@@ -255,6 +280,8 @@ export default function Leads() {
             );
           })}
         </div>
+      )}
+      </>
       )}
 
       <LeadFormDialog

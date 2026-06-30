@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 41 — CRM Campaigns feature verified end-to-end. Backend: 14 new integration tests + 6 existing unit tests (20/20 PASS). Frontend: full UI flow exercised for Office Admin (create campaign, manual add 3 leads, equal-distribute across 2 employees, delete campaign), plus role-scoping checks for Super Admin (sees campaign-office-select) and Staff (sees 'My Leads' only — no Campaigns tab, no Pipeline tab, no CRM nav label).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Campaign stat tiles (campaign-stat-total / unassigned / assigned / converted)", "issues": ["Numeric value and label render concatenated in textContent (e.g. '3Total leads', '0Unassigned'). Visually fine due to layout but flattens accessibility / makes test selectors fragile. Consider wrapping the count in its own span so screen-readers and tests can read it cleanly."]}
+    ],
+    "console_warnings": [
+      {"component": "CampaignAddLeadsDialog (or Leads list under campaign-detail)", "issue": "React warning 'Encountered two children with the same key' printed ~35× while interacting with the add-leads dialog and campaign-detail. Indicates duplicate map() keys — probably row index reused or lead.id colliding when newly-added leads share a transient key. Not a functional break but should be fixed."}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration41_campaigns.py",
+    "/app/backend/tests/test_lead_distribution.py",
+    "/app/test_reports/pytest/iteration41.xml"
+  ],
+  "action_items": [
+    "Fix React duplicate-key warning in the campaign add-leads / campaign-detail lead list (use stable lead.id, not array index, and de-dupe keys after server insert).",
+    "(Nice-to-have) Wrap stat counter numbers in a dedicated span so '3' and 'Total leads' aren't concatenated in textContent."
+  ],
+  "critical_code_review_comments": [
+    "campaigns.py / leads.py: campaign deletion only detaches leads (sets campaign_id=null) but keeps them in the pipeline — this matches the PR note in the request; ensure UX surfaces this so admins know orphaned leads remain.",
+    "Distribute endpoint correctly rejects empty employee list, empty scope, and invalid method (400s) — well covered.",
+    "Office admin office is server-forced (verified: sending office=KM_TCR as blr1 still persists KM_BLR). Good.",
+    "_office_employees() pulls staff + office_admin; campaign distribution can therefore assign leads to office_admin accounts — intentional but worth confirming with product.",
+    "CSV bulk-upload route is /api/leads/bulk (not /bulk-upload) and accepts campaign_id form field — works as designed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration41_campaigns.py (new)"
+  ],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% (15/15 scripted UI checks across office_admin, super_admin, staff)"},
+  "test_credentials": "Used /app/memory/test_credentials.md: admin@kmfoundation.online/Admin@786, blr1@finflow.com/Office@123, staff.blr@kmfoundation.online/Staff@123.",
+  "seed_data_creation": "All test data prefixed with QA_IT41_ (backend tests) and QA_UI_ (UI test). Backend test fixture cleans up campaigns + their leads on teardown; UI test deletes the single campaign it creates via the campaign-delete-btn. A handful of QA_UI_Lead* leads may remain detached after delete (campaign delete only detaches leads) — main agent can sweep with `DELETE /api/leads/{id}` for names starting with QA_UI_ if needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend integration suite for campaigns lives at /app/backend/tests/test_iteration41_campaigns.py (run from /app/backend with pytest). CSV bulk upload route is /api/leads/bulk (not /bulk-upload). Office admin campaign office is server-forced to their own office regardless of payload. campaign-stat-* testids contain concatenated number+label text. React key warning observed in add-leads dialog flow — non-blocking but worth fixing.",
+  "rca of the issue": "N/A — no failing scenarios. Single non-blocking finding (React duplicate-key warning) likely caused by using `key={idx}` or a transient row id in the dialog's row mapping; the warning fires whenever a row is added or after server-side insert re-renders the leads list."
+}
