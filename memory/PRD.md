@@ -929,3 +929,11 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Testing**: iteration_42.json → backend 6/6 pytest, frontend 100% across super_admin/office_admin/staff. `CI=true yarn build` passes; 0 console key-warnings.
 - [ ] **Note / open consideration**: leads NOT attached to any campaign are no longer visible in the admin CRM (only via campaigns). Staff still see their assigned leads under "My Leads". If needed, an "All / uncategorised leads" view can be added.
 
+
+## Implementation status — 2026-06-27 (iteration 43: All-leads / Uncategorised view + Assign-to-campaign)
+- [x] **CRM "All leads" tab** (admins) — third tab alongside Overview + Campaigns (`crm-tab-all`). Renders `LeadsPipeline` in `allLeadsMode`.
+- [x] **"Uncategorised only" toggle** (`leads-uncategorized-toggle`) filters to leads with no campaign (backend `GET /api/leads?uncategorized=true` → `$or:[{campaign_id:null},{campaign_id:{$exists:false}}]`). Lead cards show a campaign badge (`lead-campaign-badge-{id}`) reading the campaign name or "Uncategorised".
+- [x] **Assign-to-campaign in Lead detail** — `LeadDetailDialog.jsx` now accepts a `campaigns` prop (passed only in All-leads view, admins only) and renders `lead-campaign-assign` + `lead-campaign-select`. Selecting a campaign calls `POST /api/leads/{id}/campaign {campaign_id}`; "No campaign · Uncategorised" detaches. No-ops when value unchanged.
+- [x] **Backend** `POST /api/leads/{id}/campaign` (assign_lead_campaign) — super/office admin only; validates campaign is in caller's scope, sets `campaign_id` + forces `office = campaign.office`; `campaign_id=null` detaches (office preserved intentionally).
+- [x] **Staff scoping** — staff never see the All-leads tab, the toggle, or the assign UI (campaigns prop withheld); still see only their assigned leads under "My Leads".
+- [x] **Testing** — iteration_43.json: backend 5/5 pytest (assign/detach round-trip, uncategorized filter, invalid campaign/lead 404, staff 403, office-admin same-office assign), frontend 100% (assign→badge refresh→detach round-trip, staff regression). `CI=true yarn build` passes clean.
