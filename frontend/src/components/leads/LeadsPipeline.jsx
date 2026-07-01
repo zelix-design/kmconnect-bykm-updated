@@ -38,7 +38,7 @@ function StatTile({ icon: Icon, label, value, tone, testid }) {
 // Reusable lead pipeline (stats + filters + board/list + dialogs).
 // `campaignId` scopes everything to one campaign; `showActions` toggles the
 // Add lead / Upload CSV toolbar; `onChanged` fires after any mutation.
-export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged }) {
+export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged, allLeadsMode = false }) {
   const [params, setParams] = useSearchParams();
   const isStaff = user?.role === "staff";
   const editable = canEdit(user, "leads");
@@ -58,12 +58,15 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const [editLead, setEditLead] = useState(null);
   const [detailLead, setDetailLead] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
+  const [campaigns, setCampaigns] = useState([]);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
     try {
       const qp = {};
       if (campaignId) qp.campaign_id = campaignId;
+      if (allLeadsMode && uncategorizedOnly) qp.uncategorized = true;
       if (view !== "board") {
         if (statusFilter === "missed") qp.view = "missed";
         else if (statusFilter !== "all") qp.status = statusFilter;
@@ -78,16 +81,19 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId]);
+  }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, allLeadsMode, uncategorizedOnly]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const { data } = await api.get("/leads/stats", { params: campaignId ? { campaign_id: campaignId } : {} });
+      const params = {};
+      if (campaignId) params.campaign_id = campaignId;
+      if (allLeadsMode && uncategorizedOnly) params.uncategorized = true;
+      const { data } = await api.get("/leads/stats", { params });
       setStats(data);
     } catch (err) {
       /* non-blocking */
     }
-  }, [campaignId]);
+  }, [campaignId, allLeadsMode, uncategorizedOnly]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
@@ -96,6 +102,11 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     if (isStaff) return;
     api.get("/users/assignable").then(({ data }) => setAssignable(data)).catch(() => {});
   }, [isStaff]);
+
+  useEffect(() => {
+    if (!allLeadsMode) return;
+    api.get("/campaigns").then(({ data }) => setCampaigns(data)).catch(() => {});
+  }, [allLeadsMode]);
 
   useEffect(() => {
     if (showActions && !campaignId && params.get("new") === "1" && editable) {
@@ -128,6 +139,11 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     ...LEAD_STATUSES.map((s) => ({ key: s, label: LEAD_STATUS_META[s].label, count: stats.by_status?.[s] || 0 })),
     { key: "missed", label: "Missed", count: stats.missed, danger: true },
   ]), [stats]);
+
+  const campaignMap = useMemo(
+    () => Object.fromEntries((campaigns || []).map((c) => [c.id, c.name])),
+    [campaigns]
+  );
 
   return (
     <div className="space-y-5" data-testid="leads-pipeline">
@@ -188,6 +204,12 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
               </SelectContent>
             </Select>
           )}
+          {allLeadsMode && (
+            <button type="button" onClick={() => setUncategorizedOnly((v) => !v)} data-testid="leads-uncategorized-toggle"
+              className={`h-10 px-3 rounded-lg border text-sm transition-colors ${uncategorizedOnly ? "bg-amber-gradient text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}>
+              Uncategorised only
+            </button>
+          )}
           <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto" data-testid="leads-view-toggle">
             <button type="button" onClick={() => setView("list")} data-testid="leads-view-list"
               className={`h-10 px-3 flex items-center gap-1.5 text-sm transition-colors ${view === "list" ? "bg-amber-gradient text-white" : "text-muted-foreground hover:bg-muted"}`}>
@@ -236,6 +258,11 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                 <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
                   <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{sourceLabel(l.source)}</span>
                   {l.assigned_to_name && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>}
+                  {allLeadsMode && (
+                    <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
+                      {l.campaign_id ? (campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
+                    </span>
+                  )}
                   {l.next_follow_up && (
                     <span className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${l.is_missed ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`} data-testid={l.is_missed ? `lead-missed-${l.id}` : undefined}>
                       <ClockCountdown size={11} /> {fmtDateTime(l.next_follow_up)}{l.is_missed ? " · Missed" : ""}
@@ -263,6 +290,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
         user={user}
         onChanged={afterChange}
         onEdit={(l) => { setEditLead(l); setFormOpen(true); }}
+        campaigns={allLeadsMode ? campaigns : undefined}
       />
       <LeadsBulkUploadDialog
         open={bulkOpen}

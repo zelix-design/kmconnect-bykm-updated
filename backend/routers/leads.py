@@ -123,6 +123,7 @@ async def list_leads(
     assigned_to: Optional[str] = None,
     source: Optional[str] = None,
     campaign_id: Optional[str] = None,
+    uncategorized: Optional[bool] = None,
     q: Optional[str] = None,
     view: Optional[str] = None,  # "missed" | "today" | None
 ):
@@ -137,9 +138,15 @@ async def list_leads(
         query["source"] = source
     if campaign_id:
         query["campaign_id"] = campaign_id
+    if uncategorized:
+        query["$and"] = [{"$or": [{"campaign_id": None}, {"campaign_id": {"$exists": False}}]}]
     if q:
         rx = {"$regex": q.strip(), "$options": "i"}
-        query["$or"] = [{"name": rx}, {"phone": rx}, {"email": rx}, {"course": rx}, {"place": rx}]
+        or_clause = [{"name": rx}, {"phone": rx}, {"email": rx}, {"course": rx}, {"place": rx}]
+        if uncategorized:
+            query["$and"].append({"$or": or_clause})
+        else:
+            query["$or"] = or_clause
     docs = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
 
     now = datetime.now(timezone.utc)
@@ -158,13 +165,52 @@ async def list_leads(
     return docs
 
 
+class AssignCampaignIn(BaseModel):
+    campaign_id: Optional[str] = None
+
+
+@router.post("/{lead_id}/campaign")
+async def assign_lead_campaign(
+    lead_id: str,
+    payload: AssignCampaignIn,
+    user: dict = Depends(require_edit("leads")),
+):
+    """Attach a lead to a campaign (or detach with campaign_id=null).
+    Super/Office Admin only; the campaign must be in the caller's scope."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    update = {"updated_at": now_iso()}
+    if payload.campaign_id:
+        cscope = {} if user["role"] == "super_admin" else {"office": user.get("office")}
+        campaign = await db.campaigns.find_one(
+            {**cscope, "id": payload.campaign_id}, {"_id": 0, "id": 1, "office": 1}
+        )
+        if not campaign:
+            raise HTTPException(404, "Campaign not found")
+        update["campaign_id"] = payload.campaign_id
+        update["office"] = campaign["office"]
+    else:
+        update["campaign_id"] = None
+    await db.leads.update_one({"id": lead_id}, {"$set": update})
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if fresh.get("assigned_to_user_id"):
+        u = await db.users.find_one({"id": fresh["assigned_to_user_id"]}, {"_id": 0, "name": 1})
+        fresh["assigned_to_name"] = u.get("name") if u else None
+    return fresh
+
+
 @router.get("/stats")
-async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Optional[str] = None):
+async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Optional[str] = None, uncategorized: Optional[bool] = None):
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
     scope = _scope_filter(user)
     if campaign_id:
         scope = {**scope, "campaign_id": campaign_id}
+    if uncategorized:
+        scope = {**scope, "$or": [{"campaign_id": None}, {"campaign_id": {"$exists": False}}]}
     docs = await db.leads.find(scope, {"_id": 0, "status": 1, "next_follow_up": 1}).to_list(50000)
     now = datetime.now(timezone.utc)
     by_status = {s: 0 for s in LEAD_STATUSES}

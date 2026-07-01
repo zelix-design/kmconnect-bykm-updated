@@ -26,7 +26,7 @@ export default function Leads() {
         <>
           {/* CRM tabs */}
           <div className="flex items-center gap-1 border-b border-border" data-testid="crm-tabs">
-            {[["overview", "Overview"], ["campaigns", "Campaigns"]].map(([k, label]) => (
+            {[["overview", "Overview"], ["campaigns", "Campaigns"], ["all", "All leads"]].map(([k, label]) => (
               <button
                 key={k}
                 type="button"
@@ -45,8 +45,12 @@ export default function Leads() {
             <div data-testid="crm-overview">
               <CrmAnalytics />
             </div>
-          ) : (
+          ) : crmTab === "campaigns" ? (
             <CampaignsPanel user={user} />
+          ) : (
+            <div data-testid="crm-all-leads">
+              <LeadsPipeline user={user} allLeadsMode />
+            </div>
           )}
         </>
       )}
