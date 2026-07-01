@@ -920,3 +920,12 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Testing**: iteration_41.json → backend 20/20 (14 integration + 6 unit), frontend 15/15 across super_admin/office_admin/staff. `CI=true yarn build` passes.
 - [x] **Bug fixed (found via console RCA)**: CampaignAddLeadsDialog mis-mapped `LEAD_SOURCES` (array of {value,label} objects) as strings → duplicate React keys ("[object Object]") and all source options showed "Other". Fixed to use `s.value`/`s.label`; 0 console warnings confirmed.
 
+## Implementation status — 2026-06-30 (iteration 44: CRM restructured to Overview + Campaigns; pipeline moved inside campaigns)
+- [x] **CRM page = two tabs** for Super/Office Admin: **Overview** (default — the Lead-CRM analytics dashboard: KPIs, funnel, monthly trend, college/course-wise) + **Campaigns**. The standalone "Pipeline" tab was removed.
+- [x] **Pipeline moved inside each campaign** — opening a campaign shows that campaign's full pipeline (stats/chips/search/list+board/lead-detail/follow-ups) scoped to its leads. Extracted reusable `LeadsPipeline.jsx` (props: campaignId, showActions, onChanged); inside a campaign it hides its own Add/Upload toolbar + stat tiles (campaign header already shows those).
+- [x] **Staff** see their own pipeline ("My Leads") directly, no tabs.
+- [x] **Refresh sync**: campaign add-leads/upload/distribute remount the pipeline via `key={pipelineKey}` so new leads/assignments show immediately.
+- [x] **Backend**: `GET /api/leads/stats` now accepts optional `campaign_id` scoping. Office Admin Dashboard "Lead CRM" analytics tab unchanged (analytics shown in both places, per user).
+- [x] **Testing**: iteration_42.json → backend 6/6 pytest, frontend 100% across super_admin/office_admin/staff. `CI=true yarn build` passes; 0 console key-warnings.
+- [ ] **Note / open consideration**: leads NOT attached to any campaign are no longer visible in the admin CRM (only via campaigns). Staff still see their assigned leads under "My Leads". If needed, an "All / uncategorised leads" view can be added.
+
