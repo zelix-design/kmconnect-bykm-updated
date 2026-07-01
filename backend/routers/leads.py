@@ -159,10 +159,13 @@ async def list_leads(
 
 
 @router.get("/stats")
-async def lead_stats(user: dict = Depends(get_current_user)):
+async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Optional[str] = None):
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
-    docs = await db.leads.find(_scope_filter(user), {"_id": 0, "status": 1, "next_follow_up": 1}).to_list(5000)
+    scope = _scope_filter(user)
+    if campaign_id:
+        scope = {**scope, "campaign_id": campaign_id}
+    docs = await db.leads.find(scope, {"_id": 0, "status": 1, "next_follow_up": 1}).to_list(50000)
     now = datetime.now(timezone.utc)
     by_status = {s: 0 for s in LEAD_STATUSES}
     missed = 0

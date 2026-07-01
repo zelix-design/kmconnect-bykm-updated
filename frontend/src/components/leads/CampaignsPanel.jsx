@@ -6,11 +6,11 @@ import { toast } from "sonner";
 import {
   Plus, Megaphone, ArrowLeft, UploadSimple, ShareNetwork, Trash, Target, UserCheck, UsersThree, CheckCircle,
 } from "@phosphor-icons/react";
-import { LEAD_STATUS_META } from "./constants";
 import CampaignFormDialog from "./CampaignFormDialog";
 import CampaignAddLeadsDialog from "./CampaignAddLeadsDialog";
 import CampaignDistributeDialog from "./CampaignDistributeDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
+import LeadsPipeline from "./LeadsPipeline";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
@@ -34,11 +34,11 @@ export default function CampaignsPanel({ user }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [leads, setLeads] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [distOpen, setDistOpen] = useState(false);
+  const [pipelineKey, setPipelineKey] = useState(0);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -49,11 +49,8 @@ export default function CampaignsPanel({ user }) {
 
   const loadDetail = useCallback(async (id) => {
     try {
-      const [{ data: d }, { data: ls }] = await Promise.all([
-        api.get(`/campaigns/${id}`),
-        api.get("/leads", { params: { campaign_id: id } }),
-      ]);
-      setDetail(d); setLeads(ls);
+      const { data } = await api.get(`/campaigns/${id}`);
+      setDetail(data);
     } catch { toast.error("Could not load campaign"); }
   }, []);
 
@@ -61,8 +58,9 @@ export default function CampaignsPanel({ user }) {
   useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId, loadDetail]);
 
   const open = (id) => setSelectedId(id);
-  const back = () => { setSelectedId(null); setDetail(null); setLeads([]); loadList(); };
+  const back = () => { setSelectedId(null); setDetail(null); loadList(); };
   const refreshDetail = () => loadDetail(selectedId);
+  const refreshAll = () => { loadDetail(selectedId); setPipelineKey((k) => k + 1); };
 
   const removeCampaign = async () => {
     if (!window.confirm("Delete this campaign? Its leads stay in the pipeline (untagged).")) return;
@@ -115,36 +113,14 @@ export default function CampaignsPanel({ user }) {
           </div>
         )}
 
-        <div>
-          <p className="text-xs font-medium text-muted-foreground mb-2">Leads ({leads.length})</p>
-          {leads.length === 0 ? (
-            <Card className="py-10 text-center text-sm text-muted-foreground" data-testid="campaign-leads-empty">No leads yet — add or upload some, then distribute.</Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5" data-testid="campaign-leads-grid">
-              {leads.map((l) => {
-                const meta = LEAD_STATUS_META[l.status] || LEAD_STATUS_META.new;
-                return (
-                  <div key={l.id} className="rounded-xl border border-border bg-card p-3" data-testid={`campaign-lead-${l.id}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-medium text-foreground truncate text-sm">{l.name}</p>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${meta.cls}`}>{meta.label}</span>
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
-                      {l.course && <span className="text-muted-foreground">{l.course}</span>}
-                      {l.assigned_to_name
-                        ? <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>
-                        : <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Unassigned</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+        <div className="pt-1">
+          <p className="text-xs font-medium text-muted-foreground mb-3">Campaign pipeline</p>
+          <LeadsPipeline key={pipelineKey} user={user} campaignId={selectedId} showActions={false} onChanged={refreshDetail} />
         </div>
 
-        <CampaignAddLeadsDialog open={addOpen} onOpenChange={setAddOpen} campaignId={selectedId} onAdded={refreshDetail} />
-        <LeadsBulkUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={refreshDetail} user={user} campaignId={selectedId} />
-        <CampaignDistributeDialog open={distOpen} onOpenChange={setDistOpen} campaignId={selectedId} employees={detail.employees} stats={s} onDistributed={refreshDetail} />
+        <CampaignAddLeadsDialog open={addOpen} onOpenChange={setAddOpen} campaignId={selectedId} onAdded={refreshAll} />
+        <LeadsBulkUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={refreshAll} user={user} campaignId={selectedId} />
+        <CampaignDistributeDialog open={distOpen} onOpenChange={setDistOpen} campaignId={selectedId} employees={detail.employees} stats={s} onDistributed={refreshAll} />
       </div>
     );
   }

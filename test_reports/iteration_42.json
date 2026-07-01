@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 42 — CRM restructure verified end-to-end. Backend: 6/6 new pytest cases for /leads/stats & /leads campaign_id scoping PASS. Frontend UI (Playwright, live preview URL): Office Admin, Super Admin & Staff shells all match spec — Office/Super see crm-tab-overview (default) + crm-tab-campaigns with NO separate pipeline tab; crm-overview renders crm-analytics; opening a campaign shows campaign-detail with campaign header buttons (add-leads/upload/distribute) + 4 mini stats + embedded LeadsPipeline scoped to that campaign; the pipeline HIDES its own add-lead-btn/leads-upload-btn/leads-stats when inside a campaign; adding 2 leads via campaign-add-leads-btn correctly bumped campaign-stat-total-value to 2 and rendered 2 lead-card-* items; chips (leads-filter-new), search, list/board toggles and lead-detail dialog all work scoped to the campaign; Staff sees 'My Leads' heading with leads-pipeline + leads-stats and NO crm-tabs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration42_crm_restructure.py",
+    "/app/test_reports/pytest/iteration42.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Leads.jsx cleanly gates admins vs staff via user.role; default tab 'overview' matches spec.",
+    "LeadsPipeline correctly hides leads-stats + toolbar (add/upload) when campaignId is provided and passes campaign_id to both /leads and /leads/stats — server-side scoping verified in pytest.",
+    "CampaignsPanel re-mounts the pipeline via pipelineKey after add/upload/distribute — clean pattern to force refetch.",
+    "Backend /api/leads/stats?campaign_id and /api/leads?campaign_id honour the filter and return zero for a bogus campaign id (no 500)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration42_crm_restructure.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all restructure checks + campaign add/search/board/detail + role scoping)"},
+  "test_credentials": "Used /app/memory/test_credentials.md — admin@kmfoundation.online/Admin@786, blr1@finflow.com/Office@123, staff.blr@kmfoundation.online/Staff@123.",
+  "seed_data_creation": "Prefixed all test data with QA_IT42_. Backend fixture cleaned up its campaigns + leads on teardown. UI-created campaign 'QA_IT42_CampA' and its 2 leads (QA_IT42_L0_*/L1_*) were cleaned via post-run script (verified 200 on all deletes). No residuals in the DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression for CRM restructure lives at /app/backend/tests/test_iteration42_crm_restructure.py. Run via `REACT_APP_BACKEND_URL=<public-url> pytest`. UI restructure verified via Playwright — key testids: crm-tabs, crm-tab-overview/campaigns, crm-overview, crm-analytics, campaign-detail, campaign-add-leads-btn/upload-btn/distribute-btn, campaign-stat-total-value, leads-pipeline (inside campaign hides add-lead-btn/leads-upload-btn/leads-stats), leads-filter-new/all/missed, leads-view-list/board, lead-card-{id}. React duplicate-key warning from iteration 41 was not reproduced in this iteration's flows. OA-dashboard 'Lead CRM' tab regression check was previously verified in iteration 41 and Leads.jsx does not touch CrmAnalytics's dashboard use.",
+  "rca of the issue": "N/A — no failing scenarios."
+}
