@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 43 — 'Assign to campaign' inside LeadDetailDialog fully verified end-to-end. Backend: 5/5 pytest cases PASS for POST /api/leads/{id}/campaign (assign-then-detach round-trip, uncategorized filter round-trip, invalid campaign_id → 404, invalid lead_id → 404, staff → 403/404, office admin can assign within own office). Frontend (Playwright, public preview URL): Super Admin sees crm-tab-overview / crm-tab-campaigns / crm-tab-all. Under 'All leads' the leads-pipeline renders with leads-uncategorized-toggle; toggling filters to 36 uncategorised cards, each carrying a lead-campaign-badge reading 'Uncategorised'. Opening a card shows lead-detail-dialog with lead-campaign-assign + lead-campaign-select whose current value is 'No campaign · Uncategorised'. Picking a campaign fires 'Assigned to campaign' toast, the lead disappears from the uncategorised list on close, and its badge switches to the campaign name after toggling the filter off. Detaching (choosing 'No campaign · Uncategorised') fires 'Removed from campaign' toast and the lead reappears in the uncategorised list. Staff regression: staff /leads renders 'My Leads' with leads-pipeline + 8 assigned cards, NO crm-tabs, NO leads-uncategorized-toggle, and the lead-detail-dialog for staff does NOT render lead-campaign-assign (campaigns prop is not passed for staff).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration43_assign_campaign.py",
+    "/app/test_reports/pytest/iteration43.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadDetailDialog.changeCampaign correctly no-ops when the value hasn't changed (guards against Select's onValueChange firing on mount with the current value) — clean UX and no spurious network calls.",
+    "The 'Assign to campaign' block is properly gated on editable && isAdmin && Array.isArray(campaigns) so staff never see the UI even if a lead was opened from a shared component; LeadsPipeline reinforces this by only passing campaigns when allLeadsMode.",
+    "Backend POST /leads/{id}/campaign scopes campaign lookup to the caller's office (super_admin gets global scope) and forces lead.office to campaign.office on assign — prevents cross-office leakage.",
+    "list_leads uncategorized=true correctly uses $or on {campaign_id: null} OR {campaign_id missing} — matches both legacy (no field) and detached (null) leads.",
+    "Minor: AssignCampaignIn only sets office on assign, not on detach — a previously-scoped lead keeps its old office after detach. This is intentional (office follows the campaign, not the detach action) but worth documenting in the endpoint docstring."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration43_assign_campaign.py (new)"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (assign, detach, badge refresh, uncategorized filter round-trip, staff scoping)"},
+  "test_credentials": "Used /app/memory/test_credentials.md — admin@kmfoundation.online/Admin@786, blr1@finflow.com/Office@123, staff.blr@kmfoundation.online/Staff@123.",
+  "seed_data_creation": "Prefixed with QA_IT43_. Backend pytest teardown deletes its own leads + campaigns. UI-created campaign 'QA_IT43_UIcamp' cleaned via post-run script (verified 200). Existing seeded leads used for UI assign/detach — same lead was detached back to Uncategorised at the end so no residual state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression test file: /app/backend/tests/test_iteration43_assign_campaign.py. Key UI testids for this feature: crm-tab-overview/campaigns/all, leads-pipeline, leads-uncategorized-toggle, lead-campaign-badge-{id} (reads campaign name or 'Uncategorised'), lead-detail-dialog, lead-campaign-assign, lead-campaign-select. Endpoint is POST /api/leads/{id}/campaign with body {campaign_id: <id>|null}. Staff must NOT see lead-campaign-assign — LeadsPipeline only passes campaigns prop when allLeadsMode is true, which Leads.jsx only sets in the admin 'All leads' tab.",
+  "rca of the issue": "N/A — no failing scenarios."
+}

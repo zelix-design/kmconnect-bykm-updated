@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus } from "@phosphor-icons/react";
+import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple } from "@phosphor-icons/react";
 import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput } from "./constants";
 import { canEdit } from "@/lib/perm";
 
@@ -25,7 +25,7 @@ function InfoRow({ icon: Icon, children }) {
   );
 }
 
-export default function LeadDetailDialog({ open, onOpenChange, lead, user, onChanged, onEdit }) {
+export default function LeadDetailDialog({ open, onOpenChange, lead, user, onChanged, onEdit, campaigns }) {
   const [local, setLocal] = useState(lead);
   const [fuAt, setFuAt] = useState("");
   const [fuNote, setFuNote] = useState("");
@@ -34,6 +34,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [slot, setSlot] = useState(null);
   const editable = canEdit(user, "leads");
+  const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
 
   useEffect(() => { setLocal(lead); setFuAt(""); setFuNote(""); setFuStatus(""); }, [lead]);
 
@@ -92,8 +93,20 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     } finally { setBusy(false); }
   };
 
-  const doDelete = async () => {
+  const changeCampaign = async (val) => {
+    const campaign_id = val === "none" ? null : val;
+    if (campaign_id === (local.campaign_id || null)) return;
     setBusy(true);
+    try {
+      const { data } = await api.post(`/leads/${local.id}/campaign`, { campaign_id });
+      refresh(data);
+      toast.success(campaign_id ? "Assigned to campaign" : "Removed from campaign");
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Could not update campaign");
+    } finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {    setBusy(true);
     try {
       await api.delete(`/leads/${local.id}`);
       toast.success("Lead deleted");
@@ -155,6 +168,20 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
                   {LEAD_STATUS_META[s].label}
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Assign to campaign — admins only, shown in the All-leads view */}
+          {editable && isAdmin && Array.isArray(campaigns) && (
+            <div className="rounded-lg border border-border p-3 space-y-2" data-testid="lead-campaign-assign">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><MegaphoneSimple size={14} /> Campaign</p>
+              <Select value={local.campaign_id || "none"} onValueChange={changeCampaign} disabled={busy}>
+                <SelectTrigger data-testid="lead-campaign-select" className="bg-card"><SelectValue placeholder="No campaign" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No campaign · Uncategorised</SelectItem>
+                  {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
