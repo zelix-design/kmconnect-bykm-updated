@@ -19,8 +19,8 @@ import CrmAnalytics from "@/components/office-dashboard/CrmAnalytics";
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
 
 const TABS = [
-  { value: "admissions", label: "Admissions & Incentive" },
   { value: "crm", label: "Lead CRM" },
+  { value: "admissions", label: "Admissions & Incentive" },
 ];
 
 const WINDOWS = [

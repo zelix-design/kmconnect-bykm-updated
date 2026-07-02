@@ -946,3 +946,8 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Backend `GET /api/public/referrer/{ref}` already resolved slugs (UUID → client slug → staff user); no backend changes needed.
 - [x] **Testing**: backend pytest 9/9 (`tests/test_iteration44_slug_referral.py`, report iteration_44.json) incl. e2e slug attribution; Playwright verified clipboard = `https://apply.kmfoundation.co.in/ref=slug-test-agent` and Quick Entry redirect target for a linked user; `CI=true yarn build` clean.
 - Persistent test seed: client "Slug Test Agent" + linked user `slugtest.user@kmf.co` / `SlugTest@123`.
+
+## Implementation status — 2026-07-02 (iteration 45b: PWA InstallPrompt)
+- [x] Added `/app/frontend/src/components/InstallPrompt.jsx` (from user artifact, adapted: FinFlow branding, `/pwa-icon-192.png` icon, theme-aware card, `animate-slide-up` keyframe added to tailwind.config.js). Mounted in AppShell next to BottomNav.
+- [x] Chrome/Edge/Android: captures `beforeinstallprompt` → crimson Install banner → native prompt on click. iOS Safari: Add-to-Home-Screen instructions. Dismiss remembered 24h (`pwa-install-dismissed`). Hidden when already standalone.
+- [x] Verified via Playwright (synthetic beforeinstallprompt: banner shows, prompt() called, dismiss persists) + `CI=true yarn build` clean.

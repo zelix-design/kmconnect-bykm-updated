@@ -6,6 +6,7 @@ import { canView } from "@/lib/perm";
 import { buildApplyUrl } from "@/lib/applyUrl";
 import NotificationsBell from "@/components/NotificationsBell";
 import BottomNav from "@/components/BottomNav";
+import InstallPrompt from "@/components/InstallPrompt";
 import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
@@ -345,6 +346,7 @@ export default function AppShell() {
         </div>
       </main>
       <BottomNav />
+      <InstallPrompt />
     </div>
   );
 }

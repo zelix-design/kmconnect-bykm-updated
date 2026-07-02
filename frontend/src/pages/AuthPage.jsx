@@ -74,7 +74,7 @@ export default function AuthPage({ mode }) {
 
         <div className="relative z-10 max-w-md space-y-6">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs uppercase tracking-[0.18em] font-semibold">
-            <Sparkle size={12} weight="fill" /> Small business · ledger
+            <Sparkle size={12} weight="fill" /> Edu CRM · ledger
           </span>
           <h1 className="font-display text-5xl xl:text-6xl font-bold leading-[1.05]">
             Money,<br />
