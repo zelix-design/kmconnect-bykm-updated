@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
-import { buildApplyUrl } from "@/lib/applyUrl";
+import { buildApplyUrl, slugifyRef } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon, IdentificationBadge, MapPin, House, CalendarCheck, PencilSimple } from "@phosphor-icons/react";
@@ -119,14 +119,9 @@ export default function ClientDetail() {
             <Button
               variant="outline"
               onClick={() => {
-                // Prefer a human-readable slug (e.g. /apply?ref=john-doe).
-                // Falls back to the UUID if the client somehow has no name.
-                const slug = (c.name || "")
-                  .trim()
-                  .toLowerCase()
-                  .replace(/[^a-z0-9]+/g, "-")
-                  .replace(/^-+|-+$/g, "");
-                const ref = slug || c.id;
+                // Prefer a human-readable slug (e.g. /ref=john-doe). Falls
+                // back to the UUID if the client somehow has no name.
+                const ref = slugifyRef(c.name) || c.id;
                 const url = buildApplyUrl(ref);
                 navigator.clipboard.writeText(url).then(
                   () => toast.success("Referral link copied", { description: url }),

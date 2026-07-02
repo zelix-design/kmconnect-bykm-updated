@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, todayISO } from "@/lib/format";
-import { navigateToApply } from "@/lib/applyUrl";
+import { navigateToApply, linkedUserRef } from "@/lib/applyUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,18 +54,18 @@ export default function QuickEntry() {
   const isOfficeAdmin = user?.role === "office_admin";
   const isSuper = user?.role === "super_admin";
   const isLightUser = user?.role === "user";
-  const linkedClientId = user?.linked_client_id;
+  const linkedRef = linkedUserRef(user);
 
   // Linked sub-agents / consultants: "Quick Entry" is their primary call-to-
   // action for onboarding a new student. Redirect straight to the public
-  // application form with their referral code so every prospect they push
-  // through it is auto-attributed to them. Use replace() so the browser back
-  // button returns to the dashboard, not into a loop.
+  // application form with their referral slug (e.g. /ref=john-doe) so every
+  // prospect they push through it is auto-attributed to them. Use replace()
+  // so the browser back button returns to the dashboard, not into a loop.
   useEffect(() => {
-    if (isLightUser && linkedClientId) {
-      navigateToApply(nav, linkedClientId, { replace: true });
+    if (isLightUser && linkedRef) {
+      navigateToApply(nav, linkedRef, { replace: true });
     }
-  }, [isLightUser, linkedClientId, nav]);
+  }, [isLightUser, linkedRef, nav]);
 
   // The lightweight "user" role only needs the debit/credit form — skip the
   // hub entirely and land them right on the Add Transaction view.

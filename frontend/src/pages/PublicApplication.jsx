@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +27,14 @@ const API = `${ROOT_API}/public`;
 
 export default function PublicApplication() {
   const [searchParams] = useSearchParams();
-  const referrerId = searchParams.get("ref");
+  // Referral ref arrives either as a query (`/apply?ref=john-doe`) or, on the
+  // dedicated apply domain, as a short path (`apply.example.com/ref=john-doe`).
+  const pathRef = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    const m = window.location.pathname.match(/(?:^|\/)ref=([^/?#]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }, []);
+  const referrerId = searchParams.get("ref") || pathRef;
   const [step, setStep] = useState(0);
   const [app, setApp] = useState(() => emptyApplication());
   const [courses, setCourses] = useState([]);
@@ -72,7 +79,7 @@ export default function PublicApplication() {
   useEffect(() => {
     if (!referrerId) return;
     let cancelled = false;
-    axios.get(`${API}/referrer/${referrerId}`)
+    axios.get(`${API}/referrer/${encodeURIComponent(referrerId)}`)
       .then(({ data }) => {
         if (cancelled) return;
         setReferrer(data);
@@ -118,7 +125,7 @@ export default function PublicApplication() {
     try {
       const payload = {
         ...app,
-        referrer_id: referrerId || null,
+        referrer_id: referrer?.id || referrerId || null,
         payment: {
           ...app.payment,
           registration_amount: parseFloat(app.payment.registration_amount) || 0,

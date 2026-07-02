@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { canView } from "@/lib/perm";
-import { navigateToApply } from "@/lib/applyUrl";
+import { navigateToApply, linkedUserRef } from "@/lib/applyUrl";
 import {
   House,
   Student,
@@ -169,7 +169,7 @@ export default function BottomNav() {
   // bypasses the quick-add sheet and jumps straight to the public application
   // form pre-filled with their referral code — they only need to onboard
   // students and the sheet's other actions don't apply.
-  const linkedRef = user?.role === "user" ? user?.linked_client_id : null;
+  const linkedRef = user?.role === "user" ? linkedUserRef(user) : null;
   const isLinkedUser = !!linkedRef;
   const onFabClick = () => {
     if (isLinkedUser) {

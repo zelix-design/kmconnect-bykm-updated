@@ -937,3 +937,12 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Backend** `POST /api/leads/{id}/campaign` (assign_lead_campaign) — super/office admin only; validates campaign is in caller's scope, sets `campaign_id` + forces `office = campaign.office`; `campaign_id=null` detaches (office preserved intentionally).
 - [x] **Staff scoping** — staff never see the All-leads tab, the toggle, or the assign UI (campaigns prop withheld); still see only their assigned leads under "My Leads".
 - [x] **Testing** — iteration_43.json: backend 5/5 pytest (assign/detach round-trip, uncategorized filter, invalid campaign/lead 404, staff 403, office-admin same-office assign), frontend 100% (assign→badge refresh→detach round-trip, staff regression). `CI=true yarn build` passes clean.
+
+## Implementation status — 2026-07-02 (iteration 45: Human-readable referral slugs + apply.kmfoundation.co.in)
+- [x] **Referral URL format changed** to `https://apply.kmfoundation.co.in/ref=<client-name-slug>` (e.g. `/ref=john-doe`). `frontend/.env` now sets `REACT_APP_APPLY_PUBLIC_URL=https://apply.kmfoundation.co.in` + `REACT_APP_PUBLIC_APPLY_HOSTS=apply.kmfoundation.co.in`. **User must set the same two env vars on Vercel** (old value was apply.kmfoundation.online).
+- [x] `applyUrl.js`: new `slugifyRef(name)` (mirrors backend slugify) + `linkedUserRef(user)` (slug of linked_client_name, UUID fallback). `buildApplyUrl(ref)` → `${base}/ref=<slug>` when apply domain set; same-origin fallback stays `/apply?ref=<slug>`.
+- [x] **User dashboard "Copy referral link"** + **Quick Entry click-to-open** (QuickEntry.jsx, BottomNav FAB, Students.jsx add-student redirects) all use the slug ref now.
+- [x] `PublicApplication.jsx` parses ref from query OR path (`/ref=<slug>`), and submit echoes resolved `referrer.id` so slug links keep exact attribution. ClientDetail copy-link reuses `slugifyRef`.
+- [x] Backend `GET /api/public/referrer/{ref}` already resolved slugs (UUID → client slug → staff user); no backend changes needed.
+- [x] **Testing**: backend pytest 9/9 (`tests/test_iteration44_slug_referral.py`, report iteration_44.json) incl. e2e slug attribution; Playwright verified clipboard = `https://apply.kmfoundation.co.in/ref=slug-test-agent` and Quick Entry redirect target for a linked user; `CI=true yarn build` clean.
+- Persistent test seed: client "Slug Test Agent" + linked user `slugtest.user@kmf.co` / `SlugTest@123`.

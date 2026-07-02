@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate, greetingForNow } from "@/lib/format";
-import { buildApplyUrl } from "@/lib/applyUrl";
+import { buildApplyUrl, linkedUserRef } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -815,11 +815,12 @@ function LinkedUserDashboard() {
     })();
   }, []);
 
-  // Referral URL = <apply-domain>/?ref=<client_id> (or same-origin /apply when
-  // REACT_APP_APPLY_PUBLIC_URL is unset — see lib/applyUrl.js).
+  // Referral URL = <apply-domain>/ref=<name-slug> (or same-origin /apply when
+  // REACT_APP_APPLY_PUBLIC_URL is unset — see lib/applyUrl.js). Prefers the
+  // human-readable slug, e.g. apply.kmfoundation.co.in/ref=john-doe.
   const referralUrl = useMemo(() => {
-    if (!user?.linked_client_id) return "";
-    return buildApplyUrl(user.linked_client_id);
+    const ref = linkedUserRef(user);
+    return ref ? buildApplyUrl(ref) : "";
   }, [user]);
 
   const copyReferral = () => {
