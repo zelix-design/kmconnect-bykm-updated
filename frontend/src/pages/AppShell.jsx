@@ -246,7 +246,7 @@ export default function AppShell() {
     || PAGE_TITLES[location.pathname]
     || (location.pathname.startsWith("/students/") ? "Student" : "")
     || (location.pathname.startsWith("/agents/") ? "Agent detail" : "")
-    || "FinFlow by KM Foundation";
+    || "KM Connect";
 
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
