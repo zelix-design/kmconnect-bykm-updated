@@ -196,6 +196,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm">
+                {local.visit.institution && <p className="text-muted-foreground sm:col-span-2">Institution: <span className="text-foreground">{local.visit.institution}</span></p>}
                 <p className="text-muted-foreground">Departure: <span className="text-foreground">{fmtDateTime(local.visit.departure_at)}</span></p>
                 <p className="text-muted-foreground">Arrival: <span className="text-foreground">{fmtDateTime(local.visit.arrival_at)}</span></p>
                 {local.visit.travel_mode && <p className="text-muted-foreground">Travel: <span className="text-foreground">{local.visit.travel_mode}</span></p>}

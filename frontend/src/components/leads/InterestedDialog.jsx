@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { fromLocalInput } from "./constants";
 import VisitFields from "./VisitFields";
 
-const EMPTY_VISIT = { departure_at: "", arrival_at: "", travel_mode: "", who_comes: "", drop_point: "" };
+const EMPTY_VISIT = { institution: "", departure_at: "", arrival_at: "", travel_mode: "", who_comes: "", drop_point: "" };
 
 // Capture form shown when a lead is marked "Interested": parent/alternate
 // numbers + optional campus-visit schedule (WhatsApps the student on submit).
@@ -42,6 +42,7 @@ export default function InterestedDialog({ open, onOpenChange, lead, onDone }) {
         campus_visit_interested: visitInterested,
         visit: visitInterested
           ? {
+              institution: visit.institution,
               departure_at: fromLocalInput(visit.departure_at),
               arrival_at: fromLocalInput(visit.arrival_at),
               travel_mode: visit.travel_mode,

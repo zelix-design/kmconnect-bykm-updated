@@ -74,6 +74,7 @@ class FollowUpIn(BaseModel):
 class VisitIn(BaseModel):
     departure_at: Optional[str] = None  # ISO datetime (UTC)
     arrival_at: Optional[str] = None
+    institution: Optional[str] = ""  # campus/college being visited
     travel_mode: Optional[str] = ""
     who_comes: Optional[str] = ""
     drop_point: Optional[str] = ""
@@ -181,6 +182,7 @@ async def _schedule_visit(lead: dict, visit_in: VisitIn, user: dict) -> tuple[di
         "status": "scheduled",
         "departure_at": visit_in.departure_at,
         "arrival_at": visit_in.arrival_at,
+        "institution": (visit_in.institution or "").strip(),
         "travel_mode": (visit_in.travel_mode or "").strip(),
         "who_comes": (visit_in.who_comes or "").strip(),
         "drop_point": (visit_in.drop_point or "").strip(),
@@ -194,6 +196,7 @@ async def _schedule_visit(lead: dict, visit_in: VisitIn, user: dict) -> tuple[di
     wa = await send_visit_scheduled(
         name=lead.get("name") or "",
         phone=lead.get("phone") or "",
+        institution=doc["institution"] or "KM Foundation partner campus",
         departure_at=visit_in.departure_at,
         arrival_at=visit_in.arrival_at,
         travel_mode=doc["travel_mode"],

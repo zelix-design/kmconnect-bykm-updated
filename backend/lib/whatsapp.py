@@ -62,6 +62,19 @@ def fmt_dt_ist(iso: str | None) -> str:
         return str(iso)
 
 
+def fmt_date_ist(iso: str | None) -> str:
+    """ISO datetime → '03 Jul 2026' (date only, IST)."""
+    if not iso:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(IST).strftime("%d %b %Y")
+    except (TypeError, ValueError):
+        return str(iso)
+
+
 async def send_template(phone: str, template_name: str, body_values: list, language: str = "en") -> dict:
     """POST a template message via Interakt. Returns {ok, detail, ...}."""
     cfg = _cfg()
@@ -124,12 +137,14 @@ async def send_template(phone: str, template_name: str, body_values: list, langu
     return result
 
 
-async def send_visit_scheduled(*, name: str, phone: str, departure_at: str | None,
+async def send_visit_scheduled(*, name: str, phone: str, institution: str, departure_at: str | None,
                                arrival_at: str | None, travel_mode: str, drop_point: str) -> dict:
-    """Template vars: 1=name 2=departure 3=arrival 4=travel mode 5=drop point."""
+    """Approved template vars: 1=name 2=institution 3=visit date 4=departure
+    5=mode of travel 6=pickup/drop point. Visit date = arrival day."""
     return await send_template(
         phone, _cfg()["visit_tpl"],
-        [name, fmt_dt_ist(departure_at), fmt_dt_ist(arrival_at), travel_mode, drop_point],
+        [name, institution, fmt_date_ist(arrival_at or departure_at),
+         fmt_dt_ist(departure_at), travel_mode, drop_point],
     )
 
 

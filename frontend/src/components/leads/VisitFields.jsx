@@ -9,6 +9,10 @@ export default function VisitFields({ value, onChange }) {
   const set = (k, v) => onChange({ ...value, [k]: v });
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" data-testid="visit-fields">
+      <div className="space-y-1 sm:col-span-2">
+        <Label className="text-xs">Institution / campus being visited</Label>
+        <Input value={value.institution || ""} onChange={(e) => set("institution", e.target.value)} placeholder="e.g. Sri Siddartha Medical College" data-testid="visit-institution-input" />
+      </div>
       <div className="space-y-1">
         <Label className="text-xs">Departure date &amp; time *</Label>
         <Input type="datetime-local" value={value.departure_at} onChange={(e) => set("departure_at", e.target.value)} data-testid="visit-departure-input" />
