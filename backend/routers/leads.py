@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR, WORK_END_HOUR
+from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -30,6 +32,7 @@ router = APIRouter(prefix="/api/leads", tags=["leads"])
 LEAD_STATUSES = ("new", "contacted", "interested", "follow_up", "converted", "lost")
 LEAD_SOURCES = ("walk_in", "referral", "social", "website", "csv", "other")
 OPEN_STATUSES = ("new", "contacted", "interested", "follow_up")
+VISIT_STATUSES = ("scheduled", "confused", "admitted", "lost")
 
 LeadStatus = str
 LeadSource = str
@@ -66,6 +69,35 @@ class FollowUpIn(BaseModel):
     at: str  # scheduled ISO datetime (UTC)
     note: Optional[str] = ""
     status: Optional[str] = None  # optionally move the lead's status
+
+
+class VisitIn(BaseModel):
+    departure_at: Optional[str] = None  # ISO datetime (UTC)
+    arrival_at: Optional[str] = None
+    travel_mode: Optional[str] = ""
+    who_comes: Optional[str] = ""
+    drop_point: Optional[str] = ""
+
+
+class InterestedIn(BaseModel):
+    parent_number: Optional[str] = ""
+    alternate_number: Optional[str] = ""
+    campus_visit_interested: bool = False
+    visit: Optional[VisitIn] = None
+
+
+class VisitUpdate(BaseModel):
+    status: Optional[str] = None  # scheduled | confused | admitted | lost
+    attending_admin_id: Optional[str] = None  # "" clears the assignment
+
+
+class ConvertIn(BaseModel):
+    city: Optional[str] = ""
+    course: Optional[str] = ""
+    college: Optional[str] = ""
+    send_link: bool = True
+    campus_visit_interested: bool = False
+    visit: Optional[VisitIn] = None
 
 
 # ---------- helpers ----------
@@ -113,6 +145,72 @@ async def _validate_assignee(assignee_id: str, office: Optional[str], require_of
 def _public(lead: dict) -> dict:
     lead.pop("_id", None)
     return lead
+
+
+def _referral_link(ref: str) -> str:
+    base = (os.environ.get("APPLY_PUBLIC_URL") or "").rstrip("/")
+    return f"{base}/ref={ref}" if base else f"/apply?ref={ref}"
+
+
+async def _notify_visit_admins(lead: dict, title: str, message: str, actor_id: str) -> None:
+    """Best-effort notification to super admins + the lead office's admins."""
+    try:
+        await notify_super_admins(
+            type="campus_visit", title=title, message=message,
+            link="/leads", actor_user_id=actor_id,
+        )
+        q: dict = {"role": "office_admin", "approval_status": "approved"}
+        if lead.get("office"):
+            q["office"] = lead["office"]
+        offs = await db.users.find(q, {"_id": 0, "id": 1}).to_list(50)
+        if offs:
+            await notify_users(
+                [o["id"] for o in offs],
+                type="campus_visit", title=title, message=message,
+                link="/leads", actor_user_id=actor_id,
+            )
+    except Exception:
+        pass
+
+
+async def _schedule_visit(lead: dict, visit_in: VisitIn, user: dict) -> tuple[dict, dict]:
+    """Store a campus visit on the lead, WhatsApp the student, notify admins."""
+    now = now_iso()
+    doc = {
+        "id": gen_id(),
+        "status": "scheduled",
+        "departure_at": visit_in.departure_at,
+        "arrival_at": visit_in.arrival_at,
+        "travel_mode": (visit_in.travel_mode or "").strip(),
+        "who_comes": (visit_in.who_comes or "").strip(),
+        "drop_point": (visit_in.drop_point or "").strip(),
+        "attending_admin_id": None,
+        "attending_admin_name": None,
+        "created_by_user_id": user["id"],
+        "created_by_name": user.get("name"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    wa = await send_visit_scheduled(
+        name=lead.get("name") or "",
+        phone=lead.get("phone") or "",
+        departure_at=visit_in.departure_at,
+        arrival_at=visit_in.arrival_at,
+        travel_mode=doc["travel_mode"],
+        drop_point=doc["drop_point"],
+    )
+    doc["whatsapp_sent"] = bool(wa.get("ok"))
+    await db.leads.update_one(
+        {"id": lead["id"]},
+        {"$set": {"visit": doc, "campus_visit_interested": True, "updated_at": now}},
+    )
+    await _notify_visit_admins(
+        lead,
+        "Campus visit scheduled",
+        f"{lead.get('name')} · departure {fmt_dt_ist(visit_in.departure_at)}",
+        user["id"],
+    )
+    return doc, wa
 
 
 # ---------- list / stats ----------
@@ -471,10 +569,11 @@ async def delete_lead(lead_id: str, user: dict = Depends(require_edit("leads")))
 
 
 @router.post("/{lead_id}/convert", status_code=201)
-async def convert_lead(lead_id: str, user: dict = Depends(require_edit("leads"))):
+async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: dict = Depends(require_edit("leads"))):
     """Convert a lead into an inquiry Student, credited to the lead's assignee
-    (referrer_user_id). Marks the lead 'converted'. Idempotent — returns the
-    existing student if already converted."""
+    (referrer_user_id). Optionally records city/course/college, WhatsApps the
+    referral application link and schedules a campus visit. Idempotent —
+    returns the existing student if already converted."""
     lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
     if not lead:
         raise HTTPException(404, "Lead not found")
@@ -494,13 +593,15 @@ async def convert_lead(lead_id: str, user: dict = Depends(require_edit("leads"))
         note_bits.append(f"Email: {lead['email']}")
     if lead.get("place"):
         note_bits.append(f"Place: {lead['place']}")
+    if payload and payload.city:
+        note_bits.append(f"City: {payload.city}")
     student_doc = {
         "id": student_id,
         "user_id": owner_id,
         "created_at": now,
         "name": lead.get("name"),
-        "course": lead.get("course") or "",
-        "college": "",
+        "course": ((payload.course if payload else "") or lead.get("course") or ""),
+        "college": ((payload.college or "") if payload else ""),
         "reference": (referrer or {}).get("name") or "",
         "referrer_user_id": referrer_user_id,
         "sc_out_fixed": 0.0,
@@ -514,10 +615,30 @@ async def convert_lead(lead_id: str, user: dict = Depends(require_edit("leads"))
         "lead_id": lead_id,
     }
     await db.students.insert_one(student_doc)
-    await db.leads.update_one(
-        {"id": lead_id},
-        {"$set": {"status": "converted", "converted_student_id": student_id, "updated_at": now}},
-    )
+    lead_patch = {"status": "converted", "converted_student_id": student_id, "updated_at": now}
+    if payload and (payload.city or payload.course or payload.college):
+        lead_patch["conversion_details"] = {
+            "city": payload.city or "",
+            "course": payload.course or "",
+            "college": payload.college or "",
+        }
+    await db.leads.update_one({"id": lead_id}, {"$set": lead_patch})
+
+    wa_link = None
+    if payload and payload.send_link and lead.get("phone"):
+        wa_link = await send_application_link(
+            name=lead.get("name") or "",
+            phone=lead["phone"],
+            course=((payload.course or "") or lead.get("course") or ""),
+            college=payload.college or "",
+            city=payload.city or "",
+            link=_referral_link(referrer_user_id),
+        )
+    wa_visit = None
+    if payload and payload.campus_visit_interested and payload.visit and (
+        payload.visit.departure_at or payload.visit.arrival_at
+    ):
+        _, wa_visit = await _schedule_visit(lead, payload.visit, user)
     try:
         await notify_super_admins(
             type="student_application",
@@ -528,7 +649,93 @@ async def convert_lead(lead_id: str, user: dict = Depends(require_edit("leads"))
         )
     except Exception:
         pass
-    return {"ok": True, "student_id": student_id}
+    return {"ok": True, "student_id": student_id, "whatsapp": wa_link, "visit_whatsapp": wa_visit}
+
+
+# ---------- interested + campus visit ----------
+@router.get("/attending-admins")
+async def attending_admins(user: dict = Depends(get_current_user)):
+    """Super + Office admins who can attend a campus visit."""
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    return await db.users.find(
+        {"role": {"$in": ["super_admin", "office_admin"]}, "approval_status": "approved"},
+        {"_id": 0, "id": 1, "name": 1, "role": 1, "office": 1},
+    ).sort("name", 1).to_list(100)
+
+
+@router.post("/{lead_id}/interested")
+async def mark_interested(lead_id: str, payload: InterestedIn, user: dict = Depends(require_edit("leads"))):
+    """Mark a lead Interested, capturing parent/alternate numbers and an
+    optional campus-visit schedule (WhatsApps the student + notifies admins)."""
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    await db.leads.update_one({"id": lead_id}, {"$set": {
+        "status": "interested",
+        "lost_reason": "",
+        "parent_number": (payload.parent_number or "").strip(),
+        "alternate_number": (payload.alternate_number or "").strip(),
+        "campus_visit_interested": bool(payload.campus_visit_interested),
+        "updated_at": now_iso(),
+    }})
+    wa = None
+    if payload.campus_visit_interested and payload.visit and (
+        payload.visit.departure_at or payload.visit.arrival_at
+    ):
+        _, wa = await _schedule_visit(lead, payload.visit, user)
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    return {"lead": fresh, "whatsapp": wa}
+
+
+@router.patch("/{lead_id}/visit")
+async def update_visit(lead_id: str, payload: VisitUpdate, user: dict = Depends(require_edit("leads"))):
+    """Assign the attending admin and/or move the visit outcome status."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only super or office admins manage visits")
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead or not lead.get("visit"):
+        raise HTTPException(404, "No scheduled visit on this lead")
+    sets: dict = {}
+    notify_attending = None
+    if payload.attending_admin_id is not None:
+        if payload.attending_admin_id == "":
+            sets["visit.attending_admin_id"] = None
+            sets["visit.attending_admin_name"] = None
+        else:
+            admin = await db.users.find_one(
+                {"id": payload.attending_admin_id, "role": {"$in": ["super_admin", "office_admin"]},
+                 "approval_status": "approved"},
+                {"_id": 0, "id": 1, "name": 1},
+            )
+            if not admin:
+                raise HTTPException(400, "Attending person must be a super or office admin")
+            sets["visit.attending_admin_id"] = admin["id"]
+            sets["visit.attending_admin_name"] = admin.get("name")
+            notify_attending = admin["id"]
+    if payload.status:
+        if payload.status not in VISIT_STATUSES:
+            raise HTTPException(400, "Invalid visit status")
+        sets["visit.status"] = payload.status
+    if not sets:
+        raise HTTPException(400, "Nothing to update")
+    sets["visit.updated_at"] = now_iso()
+    sets["updated_at"] = now_iso()
+    await db.leads.update_one({"id": lead_id}, {"$set": sets})
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if notify_attending and notify_attending != user["id"]:
+        try:
+            await notify_users(
+                [notify_attending],
+                type="campus_visit",
+                title="You're attending a campus visit",
+                message=f"{lead.get('name')} · departure {fmt_dt_ist((lead.get('visit') or {}).get('departure_at'))}",
+                link="/leads",
+                actor_user_id=user["id"],
+            )
+        except Exception:
+            pass
+    return fresh
 
 
 # ---------- follow-ups ----------

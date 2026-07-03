@@ -120,14 +120,15 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const afterChange = () => { fetchLeads(); fetchStats(); onChanged?.(); };
 
   const handleBoardStatus = async (lead, status) => {
+    // Interested & Converted require their capture forms — open the detail
+    // dialog which auto-launches the right one.
+    if (status === "interested" || (status === "converted" && !lead.converted_student_id)) {
+      setDetailLead({ ...lead, __autoAction: status });
+      return;
+    }
     try {
-      if (status === "converted" && !lead.converted_student_id) {
-        await api.post(`/leads/${lead.id}/convert`);
-        toast.success("Lead converted — student created");
-      } else {
-        await api.patch(`/leads/${lead.id}`, { status });
-        toast.success(`Moved to ${LEAD_STATUS_META[status].label}`);
-      }
+      await api.patch(`/leads/${lead.id}`, { status });
+      toast.success(`Moved to ${LEAD_STATUS_META[status].label}`);
       afterChange();
     } catch (err) {
       toast.error("Could not move lead");

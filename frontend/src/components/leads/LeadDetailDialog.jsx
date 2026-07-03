@@ -11,9 +11,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple } from "@phosphor-icons/react";
-import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput } from "./constants";
+import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple, Bus, UsersThree, WhatsappLogo } from "@phosphor-icons/react";
+import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput, VISIT_STATUSES, VISIT_STATUS_META } from "./constants";
 import { canEdit } from "@/lib/perm";
+import InterestedDialog from "./InterestedDialog";
+import ConvertDialog from "./ConvertDialog";
 
 function InfoRow({ icon: Icon, children }) {
   if (!children) return null;
@@ -33,6 +35,9 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [slot, setSlot] = useState(null);
+  const [interestedOpen, setInterestedOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
+  const [admins, setAdmins] = useState([]);
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
 
@@ -53,26 +58,47 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     if (open && editable && local?.status === "follow_up") loadSlot();
   }, [open, editable, local?.status, loadSlot]);
 
+  // Board drag/click to Interested/Converted routes through the capture forms.
+  useEffect(() => {
+    if (!open || !lead?.__autoAction) return;
+    if (lead.__autoAction === "interested") setInterestedOpen(true);
+    else if (lead.__autoAction === "converted") setConvertOpen(true);
+  }, [open, lead]);
+
+  const hasVisit = !!local?.visit;
+  useEffect(() => {
+    if (open && hasVisit && isAdmin) {
+      api.get("/leads/attending-admins").then(({ data }) => setAdmins(data)).catch(() => {});
+    }
+  }, [open, hasVisit, isAdmin]);
+
   if (!local) return null;
   const meta = LEAD_STATUS_META[local.status] || LEAD_STATUS_META.new;
 
   const refresh = (updated) => { setLocal(updated); onChanged?.(); };
 
   const changeStatus = async (status) => {
+    // Interested & Converted have dedicated capture forms
+    if (status === "interested") { setInterestedOpen(true); return; }
+    if (status === "converted" && !local.converted_student_id) { setConvertOpen(true); return; }
     setBusy(true);
     try {
-      if (status === "converted" && !local.converted_student_id) {
-        const { data } = await api.post(`/leads/${local.id}/convert`);
-        setLocal({ ...local, status: "converted", converted_student_id: data.student_id });
-        onChanged?.();
-        toast.success("Lead converted — student created & credited to the assignee");
-      } else {
-        const { data } = await api.patch(`/leads/${local.id}`, { status });
-        refresh(data);
-        toast.success(`Marked ${LEAD_STATUS_META[status].label}`);
-      }
+      const { data } = await api.patch(`/leads/${local.id}`, { status });
+      refresh(data);
+      toast.success(`Marked ${LEAD_STATUS_META[status].label}`);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Update failed");
+    } finally { setBusy(false); }
+  };
+
+  const patchVisit = async (body) => {
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/leads/${local.id}/visit`, body);
+      refresh(data);
+      toast.success("Visit updated");
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Visit update failed");
     } finally { setBusy(false); }
   };
 
@@ -136,6 +162,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             <InfoRow icon={EnvelopeSimple}>{local.email}</InfoRow>
             <InfoRow icon={GraduationCap}>{local.course}</InfoRow>
             <InfoRow icon={MapPin}>{local.place}</InfoRow>
+            {local.parent_number ? <InfoRow icon={Phone}>{`Parent: ${local.parent_number}`}</InfoRow> : null}
+            {local.alternate_number ? <InfoRow icon={Phone}>{`Alternate: ${local.alternate_number}`}</InfoRow> : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="px-2 py-0.5 rounded-full bg-muted">{sourceLabel(local.source)}</span>
@@ -150,7 +178,75 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
           {local.converted_student_id && (
             <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5" data-testid="lead-converted-note">
               <GraduationCap size={14} /> Converted to a student record.
+              {local.conversion_details && (local.conversion_details.course || local.conversion_details.college) && (
+                <span className="text-muted-foreground">
+                  {[local.conversion_details.course, local.conversion_details.college, local.conversion_details.city].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </p>
+          )}
+
+          {/* Campus visit */}
+          {local.visit && (
+            <div className="rounded-lg border border-border p-3 space-y-2.5" data-testid="lead-visit-panel">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Bus size={14} /> Campus visit</p>
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${(VISIT_STATUS_META[local.visit.status] || VISIT_STATUS_META.scheduled).cls}`} data-testid="visit-status-badge">
+                  {(VISIT_STATUS_META[local.visit.status] || VISIT_STATUS_META.scheduled).label}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-sm">
+                <p className="text-muted-foreground">Departure: <span className="text-foreground">{fmtDateTime(local.visit.departure_at)}</span></p>
+                <p className="text-muted-foreground">Arrival: <span className="text-foreground">{fmtDateTime(local.visit.arrival_at)}</span></p>
+                {local.visit.travel_mode && <p className="text-muted-foreground">Travel: <span className="text-foreground">{local.visit.travel_mode}</span></p>}
+                {local.visit.who_comes && <p className="text-muted-foreground">Who comes: <span className="text-foreground">{local.visit.who_comes}</span></p>}
+                {local.visit.drop_point && <p className="text-muted-foreground sm:col-span-2">Pick-up/Drop: <span className="text-foreground">{local.visit.drop_point}</span></p>}
+              </div>
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1" data-testid="visit-wa-status">
+                <WhatsappLogo size={13} className={local.visit.whatsapp_sent ? "text-emerald-600" : "text-rose-500"} />
+                {local.visit.whatsapp_sent ? "WhatsApp confirmation sent to student" : "WhatsApp not sent"}
+              </p>
+              {isAdmin && editable ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1"><UsersThree size={13} /> Attending</p>
+                    <Select
+                      value={local.visit.attending_admin_id || "none"}
+                      onValueChange={(v) => patchVisit({ attending_admin_id: v === "none" ? "" : v })}
+                      disabled={busy}
+                    >
+                      <SelectTrigger data-testid="visit-attending-select" className="bg-card h-9"><SelectValue placeholder="Assign who attends" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Unassigned</SelectItem>
+                        {admins.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            {a.name} · {a.role === "super_admin" ? "Super admin" : `Office (${a.office || "—"})`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {VISIT_STATUSES.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={busy || s === local.visit.status}
+                        onClick={() => patchVisit({ status: s })}
+                        data-testid={`visit-status-chip-${s}`}
+                        className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${s === local.visit.status ? VISIT_STATUS_META[s].cls : "border-border text-muted-foreground hover:bg-muted"}`}
+                      >
+                        {VISIT_STATUS_META[s].label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                local.visit.attending_admin_name && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1"><UsersThree size={13} /> Attending: {local.visit.attending_admin_name}</p>
+                )
+              )}
+            </div>
           )}
 
           {/* Quick status */}
@@ -243,6 +339,19 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
           )}
         </div>
       </DialogContent>
+
+      <InterestedDialog
+        open={interestedOpen}
+        onOpenChange={setInterestedOpen}
+        lead={local}
+        onDone={(fresh) => refresh(fresh)}
+      />
+      <ConvertDialog
+        open={convertOpen}
+        onOpenChange={setConvertOpen}
+        lead={local}
+        onDone={(patch) => refresh({ ...local, ...patch })}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent data-testid="lead-delete-confirm">

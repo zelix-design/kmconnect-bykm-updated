@@ -24,6 +24,17 @@ export function sourceLabel(v) {
   return LEAD_SOURCES.find((s) => s.value === v)?.label || "Other";
 }
 
+export const VISIT_STATUSES = ["scheduled", "confused", "admitted", "lost"];
+
+export const VISIT_STATUS_META = {
+  scheduled: { label: "Scheduled", cls: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+  confused: { label: "Confused", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  admitted: { label: "Admitted", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+  lost: { label: "Lost", cls: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30" },
+};
+
+export const TRAVEL_MODES = ["Bus", "Train", "Flight", "Own vehicle", "Cab / Taxi", "Other"];
+
 export function toLocalInput(iso) {
   if (!iso) return "";
   const d = new Date(iso);
