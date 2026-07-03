@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 46 regression: extended LEAD_STATUSES (11 values) + Lead Journey timeline verified end-to-end on backend and frontend. 16/16 new backend tests pass, iteration-45 regression (14/14) still passes, and every frontend touchpoint (13 filter chips, 11 board cols, 11 status chips, LeadJourney with journey-event-* entries, CrmAnalytics 11 snap rows, Staff-scoped view) is intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration46_lead_journey.py",
+    "/app/backend/tests/test_iteration45_interested_convert.py",
+    "/app/test_reports/pytest/iteration46_results.xml"
+  ],
+  "test_coverage": {
+    "backend": {
+      "iteration46_new": "16/16 PASS (PATCH status→post-conv appends status_history from/to/by_name; invalid status→400; multi-step 4-hop accumulation; POST /followups with status=fee_paid pushes both a follow_up and a status_history entry with note='via follow-up'; GET /leads/stats returns all 11 by_status keys for super/office/staff scopes; no legacy 'contacted' key; CSV /leads/bulk still defaults status='new')",
+      "iteration45_regression": "14/14 PASS (Interested / Attending admins / Visit PATCH / Convert flows unchanged)"
+    },
+    "frontend": {
+      "filter_chips": "13/13 present (leads-filter-{all,new,not_connected,interested,follow_up,converted,application_submitted,admission_confirmed,fee_paid,completed,not_turned,lost,missed})",
+      "board_columns": "11/11 present (board-col-{new..lost})",
+      "detail_dialog_status_chips": "11/11 present (lead-status-chip-{new..lost})",
+      "lead_journey": "Renders with journey-event-created, journey-event-visit, journey-event-status-<id> entries. Clicking chip 'application_submitted' issued PATCH /api/leads/{id}, toast 'Marked Application Submitted' appeared, badge updated to 'Application Submitted', journey grew from 10→11 events immediately.",
+      "crm_analytics_snap": "11/11 crm-snap-* rows visible on Office Admin CRM Overview tab",
+      "staff_scope": "Staff (staff.blr@kmfoundation.online) sees 13 chips + 8 assigned leads only; extended chip strip available"
+    }
+  },
+  "critical_code_review_comments": [
+    "routers/leads.py _status_event helper is clean and shared across PATCH/convert/interested/followups — good DRY.",
+    "PATCH /api/leads/{id}: status_history is only appended when new status != old status — correct idempotency.",
+    "POST /api/leads/{id}/followups appends status_history with note='via follow-up' via $push, but that push key is `status_history` and it's added alongside `follow_ups` in the same $push dict — verified working in tests.",
+    "Frontend LeadJourney sorts by timestamp asc and includes created/visit/follow_up + status_history — matches spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration46_lead_journey.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Super admin/office admin/staff per /app/memory/test_credentials.md; used safe phone 0000000000 for WA path.",
+  "seed_data_creation": "Ephemeral TEST_it46 leads created & deleted in teardown_module. Also reverted the touched 'Gibi Philip' lead back to status='converted' after UI transition test so production seed remains untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "LEAD_STATUSES is now the 11-value tuple; CONVERTED_STATUSES groups the 5 post-conv states used by /analytics and LeadFunnel conversion-rate math. Every status write in leads.py already appends a status_history event via _status_event. LeadJourney (frontend) reads created_at + visit + follow_ups + status_history and renders journey-event-{kind}[-id].",
+  "rca of the issue": "N/A — no bugs found."
+}

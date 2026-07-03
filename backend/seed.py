@@ -123,6 +123,16 @@ async def seed_admin_and_backfill() -> None:
         {"$set": {"approval_status": "approved"}},  # existing users remain logged in
     )
 
+    # One-time migration: rename lead status "contacted" → "not_connected".
+    # The frontend + backend now use `not_connected` for the second pipeline
+    # stage. Old data survives if a fresh install imports a legacy dump.
+    try:
+        await db.leads.update_many(
+            {"status": "contacted"}, {"$set": {"status": "not_connected"}}
+        )
+    except Exception:
+        pass
+
     # Backfill missing default categories for existing users (idempotent)
     async for u in db.users.find({}, {"id": 1, "_id": 0}):
         existing_cats = await db.categories.find(

@@ -167,17 +167,22 @@ export default function CrmAnalytics({ office = null }) {
           <div className="space-y-2.5">
             {[
               ["new", "New", "bg-slate-400"],
-              ["contacted", "Contacted", "bg-amber-500"],
+              ["not_connected", "Not Connected", "bg-slate-500"],
               ["interested", "Interested", "bg-violet-500"],
               ["follow_up", "Follow-up", "bg-sky-500"],
               ["converted", "Converted", "bg-emerald-500"],
+              ["application_submitted", "Application", "bg-teal-500"],
+              ["admission_confirmed", "Admission", "bg-indigo-500"],
+              ["fee_paid", "Fee Paid", "bg-lime-500"],
+              ["completed", "Completed", "bg-green-600"],
+              ["not_turned", "Not Turned", "bg-orange-500"],
               ["lost", "Lost", "bg-rose-500"],
             ].map(([key, label, bar]) => {
               const total = Object.values(byStatus).reduce((a, b) => a + b, 0) || 1;
               const v = byStatus[key] || 0;
               return (
                 <div key={key} className="flex items-center gap-3" data-testid={`crm-snap-${key}`}>
-                  <span className="w-20 text-xs text-muted-foreground shrink-0">{label}</span>
+                  <span className="w-24 text-xs text-muted-foreground shrink-0">{label}</span>
                   <div className="flex-1 h-6 rounded-md bg-muted/60 overflow-hidden">
                     <div className={`h-full ${bar} rounded-md transition-all`} style={{ width: `${Math.round((v / total) * 100)}%` }} />
                   </div>

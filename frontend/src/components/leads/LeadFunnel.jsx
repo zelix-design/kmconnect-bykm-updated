@@ -5,10 +5,14 @@ import { Funnel, TrendUp, XCircle, WarningCircle } from "@phosphor-icons/react";
 
 const STAGES = [
   { key: "new", label: "New", bar: "bg-sky-500", text: "text-sky-600 dark:text-sky-400" },
-  { key: "contacted", label: "Contacted", bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400" },
+  { key: "not_connected", label: "Not Connected", bar: "bg-slate-500", text: "text-slate-600 dark:text-slate-400" },
   { key: "interested", label: "Interested", bar: "bg-violet-500", text: "text-violet-600 dark:text-violet-400" },
   { key: "follow_up", label: "Follow-up", bar: "bg-blue-500", text: "text-blue-600 dark:text-blue-400" },
   { key: "converted", label: "Converted", bar: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
+  { key: "application_submitted", label: "Application Submitted", bar: "bg-teal-500", text: "text-teal-600 dark:text-teal-400" },
+  { key: "admission_confirmed", label: "Admission Confirmed", bar: "bg-indigo-500", text: "text-indigo-600 dark:text-indigo-400" },
+  { key: "fee_paid", label: "Fee Paid", bar: "bg-lime-500", text: "text-lime-600 dark:text-lime-400" },
+  { key: "completed", label: "Completed", bar: "bg-green-600", text: "text-green-700 dark:text-green-300" },
 ];
 
 export default function LeadFunnel() {
@@ -26,9 +30,15 @@ export default function LeadFunnel() {
   const by = stats?.by_status || {};
   const total = stats?.total ?? 0;
   const converted = by.converted || 0;
+  const applicationSubmitted = by.application_submitted || 0;
+  const admissionConfirmed = by.admission_confirmed || 0;
+  const feePaid = by.fee_paid || 0;
+  const completed = by.completed || 0;
+  const enrolled = converted + applicationSubmitted + admissionConfirmed + feePaid + completed;
   const lost = by.lost || 0;
+  const notTurned = by.not_turned || 0;
   const missed = stats?.missed ?? 0;
-  const conversionRate = total > 0 ? Math.round((converted / total) * 100) : 0;
+  const conversionRate = total > 0 ? Math.round((enrolled / total) * 100) : 0;
   const maxCount = Math.max(1, ...STAGES.map((s) => by[s.key] || 0));
 
   return (
@@ -74,6 +84,9 @@ export default function LeadFunnel() {
       <div className="px-6 py-4 border-t border-border/60 flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <span className="flex items-center gap-1.5 text-muted-foreground"><span className="font-medium text-foreground tabular-nums">{total}</span> total leads</span>
         <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400" data-testid="funnel-lost"><XCircle size={14} weight="duotone" /> <span className="font-medium tabular-nums">{lost}</span> lost</span>
+        {notTurned > 0 && (
+          <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400" data-testid="funnel-not-turned"><WarningCircle size={14} weight="duotone" /> <span className="font-medium tabular-nums">{notTurned}</span> not turned</span>
+        )}
         <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400" data-testid="funnel-missed"><WarningCircle size={14} weight="duotone" /> <span className="font-medium tabular-nums">{missed}</span> missed follow-ups</span>
       </div>
     </Card>

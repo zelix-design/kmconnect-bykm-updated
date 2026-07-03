@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple, Bus, UsersThree, WhatsappLogo } from "@phosphor-icons/react";
-import { LEAD_STATUSES, LEAD_STATUS_META, LEAD_SOURCES, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput, VISIT_STATUSES, VISIT_STATUS_META } from "./constants";
+import { LEAD_STATUSES, LEAD_STATUS_META, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput, VISIT_STATUSES, VISIT_STATUS_META } from "./constants";
 import { canEdit } from "@/lib/perm";
 import InterestedDialog from "./InterestedDialog";
 import ConvertDialog from "./ConvertDialog";
+import LeadJourney from "./LeadJourney";
 
 function InfoRow({ icon: Icon, children }) {
   if (!children) return null;
@@ -143,17 +144,15 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     } finally { setBusy(false); setConfirmDelete(false); }
   };
 
-  const history = [...(local.follow_ups || [])].reverse();
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card max-w-lg" data-testid="lead-detail-dialog">
+      <DialogContent className="bg-card max-w-xl" data-testid="lead-detail-dialog">
         <DialogHeader>
           <div className="flex items-start justify-between gap-3 pr-6">
             <DialogTitle className="font-display text-xl" data-testid="lead-detail-name">{local.name}</DialogTitle>
             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${meta.cls}`} data-testid="lead-detail-status">{meta.label}</span>
           </div>
-          <DialogDescription className="sr-only">Lead details, status and follow-up history for {local.name}.</DialogDescription>
+          <DialogDescription className="sr-only">Lead details, status transitions and journey timeline for {local.name}.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -315,18 +314,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             </div>
           )}
 
-          {/* Timeline */}
-          {history.length > 0 && (
-            <div className="space-y-2" data-testid="followup-history">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">History</p>
-              {history.map((f) => (
-                <div key={f.id} className="text-sm border-l-2 border-amber-500/40 pl-3 py-0.5">
-                  <p className="text-foreground">{fmtDateTime(f.at)}{f.note ? ` · ${f.note}` : ""}</p>
-                  <p className="text-[11px] text-muted-foreground">{f.created_by_name || "Someone"} · logged {fmtDateTime(f.created_at)}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Journey timeline (status transitions, follow-ups, visit, created) */}
+          <LeadJourney lead={local} />
 
           {editable && (
             <div className="flex items-center justify-between pt-1">
@@ -358,7 +347,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
         <AlertDialogContent data-testid="lead-delete-confirm">
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this lead?</AlertDialogTitle>
-            <AlertDialogDescription>This permanently removes {local.name} and its follow-up history.</AlertDialogDescription>
+            <AlertDialogDescription>This permanently removes {local.name} and its journey history.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
