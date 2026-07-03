@@ -67,30 +67,32 @@ export default function AuthPage({ mode }) {
             <img src="/km-mark.png" alt="KM Foundation" className="w-9 h-9 object-contain" />
           </div>
           <div className="flex flex-col">
-            <span className="font-display text-xl tracking-tight font-semibold leading-tight">FinFlow</span>
+            <span className="font-display text-xl tracking-tight font-semibold leading-tight">KM Connect</span>
             <span className="text-[11px] uppercase tracking-[0.18em] text-white/80">by KM Foundation</span>
           </div>
         </div>
 
+
+
         <div className="relative z-10 max-w-md space-y-6">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs uppercase tracking-[0.18em] font-semibold">
-            <Sparkle size={12} weight="fill" /> Edu CRM · ledger
-          </span>
-          <h1 className="font-display text-5xl xl:text-6xl font-bold leading-[1.05]">
-            Money,<br />
-            <span className="text-white/90 font-light italic">organized.</span>
+          <span className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm text-xs uppercase tracking-[0.18em] font-semibold">
+            <Sparkle size={14} weight="fill" /> ReferralHub · Office Portal</span>
+        
+          <h1 className="font-display text-5xl xl:text-5xl font-bold leading-[1.20]">
+            AdmissionOps,<br />
+            <span className="text-white/90 font-light italic">Real-TimeTracker.</span>
           </h1>
-          <p className="text-white/85 text-base leading-relaxed">
-            Track every invoice, expense, and rupee across accounts. Built for founders, consultants & education agents who'd rather build than bookkeep.
+          <p className="font-display text [6px] text-white/60 text-base leading-relaxed">
+            The Complete Partner & Admission Management Platform for Educational Consultancies.
           </p>
           <ul className="pt-2 space-y-3 text-sm text-white/90">
-            <li className="flex items-center gap-3"><Wallet size={18} weight="duotone" /> Multi-currency · USD &amp; INR</li>
+            <li className="flex items-center gap-3"><Wallet size={18} weight="duotone" /> Incentive & Accounts · INR</li>
             <li className="flex items-center gap-3"><ShieldCheck size={18} weight="duotone" /> Encrypted, JWT-based access</li>
-            <li className="flex items-center gap-3"><ChartBar size={18} weight="duotone" /> Realtime dashboards &amp; PDF invoices</li>
+            <li className="flex items-center gap-3"><ChartBar size={18} weight="duotone" /> Overview Dashboards &amp; Application PDF</li>
           </ul>
         </div>
 
-        <div className="relative z-10 text-xs text-white/70">© FinFlow by KM Foundation · 2026</div>
+        <div className="relative z-10 text-xs text-white/70">© KM Connect by KM Foundation · 2026</div>
       </div>
 
       {/* Form */}
@@ -114,13 +116,13 @@ export default function AuthPage({ mode }) {
                 <img src="/km-mark.png" alt="KM Foundation" className="w-8 h-8 object-contain" />
               </div>
               <div className="flex flex-col">
-                <span className="font-display text-base font-semibold leading-tight">FinFlow</span>
+                <span className="font-display text-base font-semibold leading-tight">KM Connect</span>
                 <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">by KM Foundation</span>
               </div>
             </div>
             <p className="label-eyebrow">{isLogin ? "Welcome back" : (pendingMsg ? "Almost there" : "Get started")}</p>
             <h2 className="font-display text-3xl sm:text-4xl font-semibold text-foreground tracking-tight">
-              {isLogin ? "Sign in to your ledger" : (pendingMsg ? "Awaiting approval" : "Request office access")}
+              {isLogin ? "Sign in to Connect" : (pendingMsg ? "Awaiting approval" : "Request office access")}
             </h2>
             <p className="text-muted-foreground text-sm">
               {isLogin ? "Pick up where you left off." : (pendingMsg ? "A super admin will review your request shortly." : "Register your office and a super admin will activate your access.")}

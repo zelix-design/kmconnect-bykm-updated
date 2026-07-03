@@ -131,7 +131,7 @@ function SidebarContent({ onItemClick, user, onLogout }) {
           <img src="/km-mark.png" alt="KM Foundation" className="w-9 h-9 object-contain" />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="font-display text-base font-semibold tracking-tight text-[hsl(var(--sidebar-fg))] truncate">FinFlow</span>
+          <span className="font-display text-base font-semibold tracking-tight text-[hsl(var(--sidebar-fg))] truncate">KM Connect</span>
           <span className="text-[10px] uppercase tracking-[0.16em] text-[hsl(var(--sidebar-muted))] truncate">by KM Foundation</span>
         </div>
       </div>

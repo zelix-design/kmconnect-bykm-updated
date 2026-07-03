@@ -1,4 +1,4 @@
-// FinFlow Desktop — Electron main process
+// KM Connect Desktop — Electron main process
 //
 // Loads the deployed Vercel URL by default (zero-build releases).
 // You can switch to LOAD_LOCAL=true to ship a fully offline desktop build

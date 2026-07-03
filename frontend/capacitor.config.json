@@ -1,6 +1,6 @@
 {
-  "appId": "online.kmfoundation.finflow",
-  "appName": "FinFlow",
+  "appId": "online.kmfoundation.kmconnect",
+  "appName": "KM Connect",
   "webDir": "build",
   "server": {
     "url": "https://finflow-by-km-updated-2-mp4p.vercel.app",

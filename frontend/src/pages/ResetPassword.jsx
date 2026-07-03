@@ -61,7 +61,7 @@ export default function ResetPassword() {
             <img src="/km-mark.png" alt="KM Foundation" className="w-8 h-8 object-contain" />
           </div>
           <div className="flex flex-col">
-            <span className="font-display text-base font-semibold leading-tight">FinFlow</span>
+            <span className="font-display text-base font-semibold leading-tight">KM Connect</span>
             <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">by KM Foundation</span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 {
-  "name": "finflow-desktop",
+  "name": "KM Connect-desktop",
   "version": "1.0.0",
-  "description": "FinFlow by KM Foundation — Desktop wrapper",
+  "description": "KM Connect — Desktop wrapper",
   "main": "main.js",
   "author": "KM Foundation",
   "license": "UNLICENSED",
@@ -18,8 +18,8 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
-    "appId": "online.kmfoundation.finflow",
-    "productName": "FinFlow",
+    "appId": "online.kmfoundation.kmconnect",
+    "productName": "KM Connect",
     "copyright": "© 2026 KM Foundation Educational Services LLP",
     "directories": {
       "output": "dist"
@@ -42,7 +42,7 @@
       "identity": null
     },
     "dmg": {
-      "title": "FinFlow ${version}",
+      "title": "KM Connect ${version}",
       "backgroundColor": "#fff7ed",
       "window": { "width": 540, "height": 380 },
       "contents": [

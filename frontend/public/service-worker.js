@@ -1,4 +1,4 @@
-// FinFlow — minimal service worker for PWA installability + basic offline shell.
+// KM Connect — minimal service worker for PWA installability + basic offline shell.
 // Strategy:
 //   - Cache the app shell (HTML, CSS, JS, icons) on first load.
 //   - Network-first for everything (so users always get fresh data when online).
@@ -63,12 +63,12 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) { /* not JSON */ }
-  const title = data.title || "FinFlow";
+  const title = data.title || "KM Connect";
   const options = {
     body: data.body || "",
     icon: data.icon || "/pwa-icon-192.png",
     badge: data.badge || "/finflow-icon.png",
-    tag: data.tag || "finflow",
+    tag: data.tag || "KM Connect",
     data: { url: data.url || "/" },
     renotify: false,
     requireInteraction: false,

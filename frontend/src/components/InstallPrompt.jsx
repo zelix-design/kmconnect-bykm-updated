@@ -84,7 +84,7 @@ export default function InstallPrompt() {
             <img src="/pwa-icon-192.png" alt="FinFlow" className="w-8 h-8 rounded" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-foreground">Install FinFlow</h3>
+            <h3 className="font-bold text-foreground">Install KM Connect</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Add to your home screen for quick access
             </p>
@@ -130,7 +130,7 @@ export default function InstallPrompt() {
             <img src="/pwa-icon-192.png" alt="FinFlow" className="w-8 h-8 rounded" />
           </div>
           <div className="flex-1 text-white">
-            <h3 className="font-bold">Install FinFlow</h3>
+            <h3 className="font-bold">Install KM Connect</h3>
             <p className="text-sm text-white/80">Quick access from your home screen</p>
           </div>
           <Button
