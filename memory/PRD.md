@@ -951,3 +951,8 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Added `/app/frontend/src/components/InstallPrompt.jsx` (from user artifact, adapted: FinFlow branding, `/pwa-icon-192.png` icon, theme-aware card, `animate-slide-up` keyframe added to tailwind.config.js). Mounted in AppShell next to BottomNav.
 - [x] Chrome/Edge/Android: captures `beforeinstallprompt` → crimson Install banner → native prompt on click. iOS Safari: Add-to-Home-Screen instructions. Dismiss remembered 24h (`pwa-install-dismissed`). Hidden when already standalone.
 - [x] Verified via Playwright (synthetic beforeinstallprompt: banner shows, prompt() called, dismiss persists) + `CI=true yarn build` clean.
+
+## Implementation status — 2026-07-03 (iteration 45c: Sidebar groups collapsed by default)
+- [x] Super-admin sidebar groups (Accounts / Office / Add details) now start COLLAPSED — only the header with caret shows; click to expand, click again to collapse. Hoisted `GROUP_ROUTES` constant in AppShell.jsx (DRY between buildSections + initial state).
+- [x] The group containing the current route auto-expands on load (e.g. landing on /transactions opens Accounts) so the active link is never hidden.
+- [x] Verified via Playwright: default aria-expanded=false for all 3 groups, expand/collapse toggle, auto-expand on direct /transactions visit. CI build clean.

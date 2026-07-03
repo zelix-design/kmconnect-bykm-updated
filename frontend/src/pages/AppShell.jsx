@@ -78,6 +78,12 @@ function initialsOf(name) {
 
 // Super Admin gets a grouped sidebar with collapsible sections (Accounts /
 // Office / Add details). Every other role keeps a single flat list.
+const GROUP_ROUTES = {
+  accounts: ["/accounts", "/transactions", "/agents", "/invoices"],
+  office: ["/office-overview", "/employees", "/leads", "/staff", "/leave"],
+  details: ["/colleges", "/categories"],
+};
+
 function buildSections(navItems, role) {
   const byTo = {};
   navItems.forEach((i) => { byTo[i.to] = i; });
@@ -87,17 +93,27 @@ function buildSections(navItems, role) {
   }
   return [
     { type: "items", label: "Workspace", items: pick(["/", "/quick-entry"]) },
-    { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(["/accounts", "/transactions", "/agents", "/invoices"]) },
+    { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(GROUP_ROUTES.accounts) },
     { type: "items", items: pick(["/messages", "/clients", "/students"]) },
-    { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(["/office-overview", "/employees", "/leads", "/staff", "/leave"]) },
-    { type: "group", key: "details", label: "Add details", icon: FolderSimplePlus, items: pick(["/colleges", "/categories"]) },
+    { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(GROUP_ROUTES.office) },
+    { type: "group", key: "details", label: "Add details", icon: FolderSimplePlus, items: pick(GROUP_ROUTES.details) },
     { type: "items", items: pick(["/users", "/expense-requests", "/settings"]) },
   ].filter((s) => s.items.length > 0);
 }
 
 function SidebarContent({ onItemClick, user, onLogout }) {
   const role = user?.role;
-  const [collapsed, setCollapsed] = React.useState({});
+  // Groups start COLLAPSED — click the header to expand. The group that
+  // contains the current page opens automatically so the active link is
+  // never hidden.
+  const [collapsed, setCollapsed] = React.useState(() => {
+    const path = typeof window !== "undefined" ? window.location.pathname : "";
+    const init = {};
+    for (const [key, routes] of Object.entries(GROUP_ROUTES)) {
+      init[key] = !routes.some((t) => path === t || path.startsWith(`${t}/`));
+    }
+    return init;
+  });
   const navItems = ALL_NAV.filter((i) => {
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !canView(user, i.perm)) return false;

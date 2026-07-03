@@ -40,7 +40,7 @@ function _drawHeader(doc, { title, eyebrow, client, user }) {
   doc.setFontSize(11);
   doc.setTextColor(28, 25, 23);
   doc.text(
-    user?.business_name || user?.name || "FinFlow by KM Foundation",
+    user?.business_name || user?.name || "KM Connet",
     pageWidth - margin,
     70,
     { align: "right" }
@@ -84,7 +84,7 @@ function _drawFooter(doc) {
   const pageHeight = doc.internal.pageSize.getHeight();
   doc.setFontSize(8);
   doc.setTextColor(168, 162, 158);
-  doc.text("FinFlow by KM Foundation", 48, pageHeight - 24);
+  doc.text("KM Connect", 48, pageHeight - 24);
   doc.text("Generated " + new Date().toLocaleString(), pageWidth - 48, pageHeight - 24, { align: "right" });
 }
 
