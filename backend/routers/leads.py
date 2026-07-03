@@ -29,10 +29,15 @@ from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
 
-LEAD_STATUSES = ("new", "contacted", "interested", "follow_up", "converted", "lost")
+LEAD_STATUSES = (
+    "new", "not_connected", "interested", "follow_up", "converted",
+    "application_submitted", "admission_confirmed", "fee_paid", "completed",
+    "not_turned", "lost",
+)
 LEAD_SOURCES = ("walk_in", "referral", "social", "website", "csv", "other")
-OPEN_STATUSES = ("new", "contacted", "interested", "follow_up")
-VISIT_STATUSES = ("scheduled", "confused", "admitted", "lost")
+OPEN_STATUSES = ("new", "not_connected", "interested", "follow_up")
+VISIT_STATUSES = ("scheduled", "completed", "confused", "admitted", "lost")
+CONVERTED_STATUSES = ("converted", "application_submitted", "admission_confirmed", "fee_paid", "completed")
 
 LeadStatus = str
 LeadSource = str
@@ -151,6 +156,19 @@ def _public(lead: dict) -> dict:
 def _referral_link(ref: str) -> str:
     base = (os.environ.get("APPLY_PUBLIC_URL") or "").rstrip("/")
     return f"{base}/ref={ref}" if base else f"/apply?ref={ref}"
+
+
+def _status_event(from_status, to_status, user: dict, note: str = "") -> dict:
+    """One entry in a lead's status_history journey log."""
+    return {
+        "id": gen_id(),
+        "at": now_iso(),
+        "from": from_status,
+        "to": to_status,
+        "by_user_id": user["id"],
+        "by_name": user.get("name"),
+        "note": note,
+    }
 
 
 async def _notify_visit_admins(lead: dict, title: str, message: str, actor_id: str) -> None:
@@ -408,9 +426,9 @@ async def lead_analytics(user: dict = Depends(get_current_user), office: Optiona
             lr = (d.get("lost_reason") or "").strip() or "Unspecified"
             lost_reasons[lr] = lost_reasons.get(lr, 0) + 1
     total_leads = len(leads)
-    converted = by_status["converted"]
+    converted = sum(by_status[s] for s in CONVERTED_STATUSES)
     lost = by_status["lost"]
-    positive = by_status["contacted"] + by_status["interested"] + by_status["follow_up"]
+    positive = by_status["not_connected"] + by_status["interested"] + by_status["follow_up"]
 
     students = await db.students.find(
         student_scope,
@@ -443,8 +461,8 @@ async def lead_analytics(user: dict = Depends(get_current_user), office: Optiona
         {"stage": "Leads", "value": total_leads},
         {"stage": "Interested", "value": by_status["interested"]},
         {"stage": "Converted", "value": converted},
-        {"stage": "Positive", "value": positive},
-        {"stage": "Lost", "value": lost},
+        {"stage": "Completed", "value": by_status["completed"]},
+        {"stage": "Lost", "value": lost + by_status["not_turned"]},
     ]
     lost_reasons_list = sorted(
         ({"name": k, "value": v} for k, v in lost_reasons.items()), key=lambda x: -x["value"]
@@ -555,7 +573,10 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
         else:
             patch["assigned_to_user_id"] = None
     patch["updated_at"] = now_iso()
-    await db.leads.update_one({"id": lead_id}, {"$set": patch})
+    ops: dict = {"$set": patch}
+    if patch.get("status") and patch["status"] != lead.get("status"):
+        ops["$push"] = {"status_history": _status_event(lead.get("status"), patch["status"], user)}
+    await db.leads.update_one({"id": lead_id}, ops)
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if new_assignee:
         await _notify_assignment(fresh, actor=user)
@@ -625,7 +646,10 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
             "course": payload.course or "",
             "college": payload.college or "",
         }
-    await db.leads.update_one({"id": lead_id}, {"$set": lead_patch})
+    await db.leads.update_one({"id": lead_id}, {
+        "$set": lead_patch,
+        "$push": {"status_history": _status_event(lead.get("status"), "converted", user)},
+    })
 
     wa_link = None
     if payload and payload.send_link and lead.get("phone"):
@@ -674,14 +698,17 @@ async def mark_interested(lead_id: str, payload: InterestedIn, user: dict = Depe
     lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
     if not lead:
         raise HTTPException(404, "Lead not found")
-    await db.leads.update_one({"id": lead_id}, {"$set": {
+    ops: dict = {"$set": {
         "status": "interested",
         "lost_reason": "",
         "parent_number": (payload.parent_number or "").strip(),
         "alternate_number": (payload.alternate_number or "").strip(),
         "campus_visit_interested": bool(payload.campus_visit_interested),
         "updated_at": now_iso(),
-    }})
+    }}
+    if lead.get("status") != "interested":
+        ops["$push"] = {"status_history": _status_event(lead.get("status"), "interested", user)}
+    await db.leads.update_one({"id": lead_id}, ops)
     wa = None
     if payload.campus_visit_interested and payload.visit and (
         payload.visit.departure_at or payload.visit.arrival_at
@@ -733,7 +760,7 @@ async def update_visit(lead_id: str, payload: VisitUpdate, user: dict = Depends(
                 type="campus_visit",
                 title="You're attending a campus visit",
                 message=f"{lead.get('name')} · departure {fmt_dt_ist((lead.get('visit') or {}).get('departure_at'))}",
-                link="/leads",
+                link=f"/leads?lead={lead_id}",
                 actor_user_id=user["id"],
             )
         except Exception:
@@ -763,11 +790,12 @@ async def add_followup(lead_id: str, payload: FollowUpIn, user: dict = Depends(r
     }
     if payload.status and payload.status in LEAD_STATUSES:
         patch["status"] = payload.status
-    elif lead.get("status") == "new":
-        patch["status"] = "contacted"
+    push_ops: dict = {"follow_ups": entry}
+    if patch.get("status") and patch["status"] != lead.get("status"):
+        push_ops["status_history"] = _status_event(lead.get("status"), patch["status"], user, note="via follow-up")
     await db.leads.update_one(
         {"id": lead_id},
-        {"$push": {"follow_ups": entry}, "$set": patch},
+        {"$push": push_ops, "$set": patch},
     )
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     # Tell the assignee a follow-up was scheduled (if someone else scheduled it)
@@ -778,7 +806,7 @@ async def add_followup(lead_id: str, payload: FollowUpIn, user: dict = Depends(r
             type="lead_followup",
             title="Follow-up scheduled",
             message=f"{fresh.get('name')} · {(payload.at or '')[:16].replace('T', ' ')}",
-            link="/leads",
+            link=f"/leads?lead={lead_id}",
             actor_user_id=user["id"],
             metadata={"lead_id": lead_id},
         )
@@ -794,7 +822,7 @@ async def _notify_assignment(lead: dict, actor: dict) -> None:
         type="lead_assigned",
         title="New lead assigned to you",
         message=f"{lead.get('name')}{' · ' + lead.get('course') if lead.get('course') else ''}",
-        link="/leads",
+        link=f"/leads?lead={lead.get('id')}",
         actor_user_id=actor.get("id"),
         metadata={"lead_id": lead.get("id")},
     )
