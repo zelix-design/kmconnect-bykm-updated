@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { Card } from "@/components/ui/card";
-import { Bus, Calendar, ArrowsClockwise, ChatCircleText, MapPin, ArrowRight, User } from "@phosphor-icons/react";
+import { Bus, Calendar, ArrowsClockwise, ChatCircleText, MapPin, ArrowRight, User, Clock } from "@phosphor-icons/react";
 import { VISIT_STATUS_META, fmtDateTime } from "./constants";
 
 /**
@@ -102,13 +102,19 @@ export default function TodayVisitsPanel({ user }) {
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="today-visits-grid">
             {visits.map((v) => {
               const meta = VISIT_STATUS_META[v.visit?.status] || VISIT_STATUS_META.scheduled;
+              const isPreview = v.phase === "preview";
               return (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => openLead(v.id)}
                   data-testid={`today-visit-${v.id}`}
-                  className="text-left rounded-xl border border-border bg-card p-3.5 hover:border-orange-500/40 hover:shadow-md transition-all group"
+                  data-phase={v.phase || "live"}
+                  className={`text-left rounded-xl border p-3.5 hover:shadow-md transition-all group ${
+                    isPreview
+                      ? "border-amber-500/40 bg-amber-500/[0.03] hover:border-amber-500/60"
+                      : "border-border bg-card hover:border-orange-500/40"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -117,12 +123,22 @@ export default function TodayVisitsPanel({ user }) {
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{v.course}</p>
                       )}
                     </div>
-                    <span
-                      data-testid={`today-visit-stage-${v.id}`}
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${meta.cls}`}
-                    >
-                      {meta.label}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {isPreview && (
+                        <span
+                          data-testid={`today-visit-tomorrow-${v.id}`}
+                          className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40 flex items-center gap-1"
+                        >
+                          <Clock size={10} weight="fill" /> Tomorrow Visit
+                        </span>
+                      )}
+                      <span
+                        data-testid={`today-visit-stage-${v.id}`}
+                        className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${meta.cls}`}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
                   </div>
                   <div className="mt-2.5 space-y-1 text-xs text-muted-foreground">
                     {v.visit?.institution && (

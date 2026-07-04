@@ -14,7 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -839,17 +839,21 @@ async def resend_application_link(lead_id: str, user: dict = Depends(require_edi
 async def visits_today(user: dict = Depends(get_current_user)):
     """Live 'today's campus visits' board for the CRM Overview.
 
-    Returns every lead scoped to the caller with a ``visit`` whose departure or
-    arrival timestamp falls on today's date (server time, UTC). Sorted by
-    departure time ascending, so the earliest visit is on top.
+    Time-window semantics (per user request):
+      * Card appears **24 hours before** the visit's ``departure_at`` (or
+        ``arrival_at`` if departure is unset) — tagged ``phase="preview"``
+        with a "Tomorrow Visit" pill on the frontend.
+      * Card is ``phase="live"`` once the anchor time (departure/arrival)
+        has passed — the whole visit day stays visible.
+      * Card auto-disappears at end-of-day (server UTC) of the arrival
+        timestamp (or the anchor + 1 day if arrival is unset).
 
-    Staff see only visits on leads assigned to them. Office admins see their
-    office. Super admins see everything.
+    Scope: staff → own leads only, office_admin → own office, super_admin →
+    everything. Sorted live-first, then preview, both by departure asc.
     """
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
-    now = datetime.now(timezone.utc)
-    today_iso = now.date().isoformat()
+    now_dt = datetime.now(timezone.utc)
     scope = _scope_filter(user)
     scope["visit"] = {"$ne": None}
     docs = await db.leads.find(
@@ -859,15 +863,34 @@ async def visits_today(user: dict = Depends(get_current_user)):
             "assigned_to_user_id": 1, "visit": 1, "status": 1,
         },
     ).to_list(500)
+
+    def _parse(iso: Optional[str]) -> Optional[datetime]:
+        if not iso:
+            return None
+        try:
+            # Mongo stores ISO 8601 UTC strings — handle both `Z` and offset forms.
+            return datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
     out: list[dict] = []
     for d in docs:
         v = d.get("visit") or {}
-        # Normalize legacy visit statuses on the fly (untouched at rest).
         v["status"] = VISIT_STATUS_LEGACY.get(v.get("status"), v.get("status"))
-        dep = (v.get("departure_at") or "")[:10]
-        arr = (v.get("arrival_at") or "")[:10]
-        if dep != today_iso and arr != today_iso:
+        dep = _parse(v.get("departure_at"))
+        arr = _parse(v.get("arrival_at"))
+        anchor = dep or arr
+        if not anchor:
             continue
+        preview_start = anchor - timedelta(hours=24)
+        # Visit is over at end-of-day of the arrival timestamp (fallback: anchor
+        # + 1 day so single-timestamp visits still linger through the day).
+        end_marker = (arr or (anchor + timedelta(days=1))).replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
+        if now_dt < preview_start or now_dt > end_marker:
+            continue
+        phase = "live" if now_dt >= anchor else "preview"
         out.append({
             "id": d["id"],
             "name": d.get("name"),
@@ -877,9 +900,21 @@ async def visits_today(user: dict = Depends(get_current_user)):
             "assigned_to_user_id": d.get("assigned_to_user_id"),
             "status": d.get("status"),
             "visit": v,
+            "phase": phase,
         })
-    out.sort(key=lambda r: (r["visit"].get("departure_at") or "9999", r["visit"].get("arrival_at") or "9999"))
-    return {"date": today_iso, "count": len(out), "visits": out}
+    # Live cards float to the top; within a phase, earliest departure first.
+    out.sort(key=lambda r: (
+        0 if r["phase"] == "live" else 1,
+        r["visit"].get("departure_at") or "9999",
+        r["visit"].get("arrival_at") or "9999",
+    ))
+    return {
+        "date": now_dt.date().isoformat(),
+        "count": len(out),
+        "live_count": sum(1 for r in out if r["phase"] == "live"),
+        "preview_count": sum(1 for r in out if r["phase"] == "preview"),
+        "visits": out,
+    }
 
 
 # ---------- interested + campus visit ----------

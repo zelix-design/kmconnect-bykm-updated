@@ -1,23 +1,58 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import api from "@/lib/api";
 import CrmAnalytics from "@/components/office-dashboard/CrmAnalytics";
 import CampaignsPanel from "@/components/leads/CampaignsPanel";
 import LeadsPipeline from "@/components/leads/LeadsPipeline";
 import TodayVisitsPanel from "@/components/leads/TodayVisitsPanel";
+import LeadDetailDialog from "@/components/leads/LeadDetailDialog";
 
 export default function Leads() {
   const { user } = useAuth();
   const isStaff = user?.role === "staff";
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [crmTab, setCrmTab] = useState("overview"); // overview | campaigns (admins)
 
-  // Notifications + Today's Visit cards deep-link with `?lead=<id>` — force
-  // the "All leads" tab where LeadsPipeline can pick up the query param and
-  // pop open the detail dialog.
+  // ---- Deep-link `?lead=<id>` (notifications, Today's Visits cards) --------
+  // Fetches the lead and pops the detail dialog IN-PLACE on whichever tab the
+  // caller is currently viewing — no auto-switch. When the dialog closes we
+  // strip the param so the URL stays clean.
+  const [deepLead, setDeepLead] = useState(null);
+  const [pipelineRefreshKey, setPipelineRefreshKey] = useState(0);
+  const leadParam = params.get("lead");
+
   useEffect(() => {
-    if (params.get("lead") && !isStaff) setCrmTab("all");
-  }, [params, isStaff]);
+    if (!leadParam) return;
+    let cancelled = false;
+    // Try search-by-query first (fast), then fall back to full list scan.
+    api.get(`/leads`, { params: { q: leadParam } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const hit = (data || []).find((l) => l.id === leadParam);
+        if (hit) setDeepLead(hit);
+        else {
+          api.get(`/leads`).then(({ data: all }) => {
+            if (cancelled) return;
+            const h = (all || []).find((l) => l.id === leadParam);
+            if (h) setDeepLead(h);
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [leadParam]);
+
+  const closeDeepLink = useCallback(() => {
+    setDeepLead(null);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("lead");
+      return next;
+    }, { replace: true });
+  }, [setParams]);
+
+  const bumpPipeline = useCallback(() => setPipelineRefreshKey((k) => k + 1), []);
 
   return (
     <div className="space-y-6" data-testid="leads-page">
@@ -33,7 +68,7 @@ export default function Leads() {
       {isStaff ? (
         <>
           <TodayVisitsPanel user={user} />
-          <LeadsPipeline user={user} />
+          <LeadsPipeline user={user} refreshKey={pipelineRefreshKey} />
         </>
       ) : (
         <>
@@ -63,11 +98,21 @@ export default function Leads() {
             <CampaignsPanel user={user} />
           ) : (
             <div data-testid="crm-all-leads">
-              <LeadsPipeline user={user} allLeadsMode />
+              <LeadsPipeline user={user} allLeadsMode refreshKey={pipelineRefreshKey} />
             </div>
           )}
         </>
       )}
+
+      {/* Shared detail dialog for deep-linked leads (notifications + Today's Visits).
+          Opens ON TOP of the current tab — no auto-switch. */}
+      <LeadDetailDialog
+        open={!!deepLead}
+        onOpenChange={(v) => { if (!v) closeDeepLink(); }}
+        lead={deepLead}
+        user={user}
+        onChanged={() => { bumpPipeline(); }}
+      />
     </div>
   );
 }

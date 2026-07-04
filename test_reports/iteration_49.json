@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 49 (Live Today's Campus Visits phase field + in-place deep-link) — Backend: 10/10 new tests PASS (test_iteration49_visit_window_and_deeplink.py) + 48/48 regression tests (it45+it46+it48) still PASS. Frontend: verified deep-link ?lead=<id> keeps the current CRM tab active (Overview & Campaigns both tested), opens LeadDetailDialog on top, TodayVisitsPanel remains rendered behind, Escape strips ?lead= from URL. Preview cards carry data-phase='preview' + the today-visit-tomorrow-<id> pill; live cards carry data-phase='live' and do NOT render the pill; both keep the stage chip. Staff view (no tabs) also opens dialog in-place with TodayVisitsPanel visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration49_visit_window_and_deeplink.py",
+    "/app/test_reports/pytest/iteration49.xml",
+    "/app/test_reports/pytest/iteration49_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TodayVisitsPanel poll interval (60s) already pauses on document.visibilityState hidden — nice improvement over iteration 48.",
+    "visits_today end_marker uses arr (or anchor+1d) with hour=23:59:59 UTC — this is UTC end-of-day, not the user's local (IST) end-of-day. For KM Foundation (IST +05:30), a visit whose arrival is 23:00 UTC on day N (04:30 IST on day N+1) will disappear at 23:59:59 UTC of day N — potentially too early from an IST perspective. Consider computing end-of-day in IST if the UX contract is 'until end of arrival day (IST)'.",
+    "Deep-link useEffect in Leads.jsx does a full /api/leads fallback scan without pagination — fine for current volumes (<1000 leads) but scale with pagination if lead count grows."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration49_visit_window_and_deeplink.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Super admin admin@kmfoundation.online / Admin@786, Staff staff.blr@kmfoundation.online / Staff@123 (from /app/memory/test_credentials.md).",
+  "seed_data_creation": "Test suite creates IT49-prefixed leads via HTTP API and seeds `visit` sub-docs directly via pymongo (to control timestamps relative to datetime.now(timezone.utc)). All test leads deleted in teardown_module.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 49 validated end-to-end. Timestamps for /visits/today tests MUST be relative to datetime.now(timezone.utc) — do not hard-code dates. New file /app/backend/tests/test_iteration49_visit_window_and_deeplink.py covers shape (phase/live_count/preview_count), 12h-future/preview, yesterday-dep+today-arr/live, 3d-ago excluded, 48h-future excluded, only-departure edge, only-arrival edge, legacy 'admitted' normalized to 'admission_taken', and sort-order (live before preview). Iteration 48 tests unaffected — its test_super_shape_and_today_filter doesn't hard-check the visits[0].keys() set so adding `phase` is backward-compatible.",
+  "rca of the issue": "N/A — no bugs found."
+}

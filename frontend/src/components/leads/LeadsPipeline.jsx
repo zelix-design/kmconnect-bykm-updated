@@ -38,7 +38,7 @@ function StatTile({ icon: Icon, label, value, tone, testid }) {
 // Reusable lead pipeline (stats + filters + board/list + dialogs).
 // `campaignId` scopes everything to one campaign; `showActions` toggles the
 // Add lead / Upload CSV toolbar; `onChanged` fires after any mutation.
-export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged, allLeadsMode = false }) {
+export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged, allLeadsMode = false, refreshKey = 0 }) {
   const [params, setParams] = useSearchParams();
   const isStaff = user?.role === "staff";
   const editable = canEdit(user, "leads");
@@ -98,6 +98,15 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
+  // Parent (Leads.jsx) bumps refreshKey after the shared deep-link dialog
+  // mutates a lead — refetch so the pipeline reflects the change even when
+  // it was edited from a different tab (Overview).
+  useEffect(() => {
+    if (refreshKey === 0) return;
+    fetchLeads();
+    fetchStats();
+  }, [refreshKey, fetchLeads, fetchStats]);
+
   useEffect(() => {
     if (isStaff) return;
     api.get("/users/assignable").then(({ data }) => setAssignable(data)).catch(() => {});
@@ -116,38 +125,6 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       setParams(params, { replace: true });
     }
   }, [params, editable, setParams, showActions, campaignId]);
-
-  // Deep-link: `?lead=<id>` (used by notifications) fetches and opens the
-  // detail dialog for that lead. Falls back silently if the lead isn't in
-  // the current caller's scope.
-  const leadParam = params.get("lead");
-  useEffect(() => {
-    if (!leadParam) return;
-    let cancelled = false;
-    api.get(`/leads`, { params: { q: leadParam } })
-      .then(({ data }) => {
-        if (cancelled) return;
-        const hit = (data || []).find((l) => l.id === leadParam);
-        if (hit) setDetailLead(hit);
-        else {
-          api.get(`/leads`).then(({ data: all }) => {
-            if (cancelled) return;
-            const h = (all || []).find((l) => l.id === leadParam);
-            if (h) setDetailLead(h);
-          }).catch(() => {});
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (cancelled) return;
-        setParams((prev) => {
-          const next = new URLSearchParams(prev);
-          next.delete("lead");
-          return next;
-        }, { replace: true });
-      });
-    return () => { cancelled = true; };
-  }, [leadParam, setParams]);
 
   const afterChange = () => { fetchLeads(); fetchStats(); onChanged?.(); };
 
