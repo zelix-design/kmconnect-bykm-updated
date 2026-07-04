@@ -33,10 +33,21 @@ export default function TodayVisitsPanel({ user }) {
   }, []);
 
   useEffect(() => { fetchVisits(); }, [fetchVisits]);
-  // Auto-refresh every 60s so the "Live" label stays honest.
+  // Auto-refresh every 60s so the "Live" label stays honest — but pause
+  // while the tab is hidden to avoid needless background traffic.
   useEffect(() => {
-    const t = setInterval(fetchVisits, 60_000);
-    return () => clearInterval(t);
+    let t = null;
+    const start = () => {
+      if (!t) t = setInterval(fetchVisits, 60_000);
+    };
+    const stop = () => { if (t) { clearInterval(t); t = null; } };
+    const onVis = () => (document.visibilityState === "visible" ? start() : stop());
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [fetchVisits]);
 
   const openLead = (id) => nav(`/leads?lead=${encodeURIComponent(id)}`);

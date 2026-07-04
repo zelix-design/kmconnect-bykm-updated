@@ -994,3 +994,26 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Per-source session flag** — separate `finflow_splash_seen_portal` / `finflow_splash_seen_apply` keys so switching between the two surfaces still plays the correct intro once per session (previously a single flag suppressed both).
 - [x] **Mobile-only behavior preserved** — the splash still skips desktops (`window.innerWidth >= 768`) to avoid disrupting long-session admin work.
 - [x] **Verified via Playwright at 400×800 viewport** — portal loads `/splash.mp4`, `/apply` loads `/splash-apply.mp4`. Auto-dismiss + 6.5s safety timeout intact.
+
+## Implementation status — 2026-07-04 (iteration 48: Notification deep-link + Live Today's Visits + auto-status on application + WA status in Journey)
+
+**Feature 1 — Notification click → open specific lead**
+- [x] Backend `_notify_visit_admins` now writes `link=f"/leads?lead={lead_id}"` on every campus_visit push (interested + schedule-visit paths).
+- [x] Frontend `LeadsPipeline.jsx` picks up the `?lead=<id>` search param, fetches the lead (via list search, with fallback to unfiltered list) and pops open `LeadDetailDialog`. `Leads.jsx` auto-switches admins to the "All leads" tab first.
+
+**Feature 2 — Live "Today's Campus Visits" widget on CRM Overview**
+- [x] Backend `GET /api/leads/visits/today` — scope-aware (super/office/staff/user via role gate), filters by `visit.departure_at` OR `visit.arrival_at` === today UTC, sorted ascending. On-read normalization of legacy `admitted`/`completed` visit statuses (`VISIT_STATUS_LEGACY`).
+- [x] Extended `VISIT_STATUSES` to 9 stages: `scheduled → assigned → picked_up → ongoing → confused → admission_taken → fees_paid → admission_letter_taken → lost`. Legacy `admitted → admission_taken` and `completed → admission_letter_taken` migrated at boot in `seed.py` (also run once against production data).
+- [x] Convenience auto-bump — assigning `attending_admin_id` while visit is still `scheduled` now flips it to `assigned`.
+- [x] Frontend `TodayVisitsPanel.jsx` — new component, mounted at top of CRM Overview (super/office admin) and top of staff `/leads`. Polls every 60s while tab visible, pauses when hidden. Renders one card per visit with lead name, course, institution, dep/arr timestamps, attending admin, phone, and a color-coded stage chip. Click deep-links to the lead detail dialog.
+
+**Feature 3 — Auto-advance lead status on application submission**
+- [x] `bump_lead_on_application(...)` helper in `leads.py`: match by last-10-digit phone via `_normalize_phone`, cascade `converted → application_submitted` (always) → `fee_paid` (only if `registration_amount > 0`). Two separate `status_history` entries so the Journey shows the full path. Actor recorded as "System · Application submitted". Best-effort — never crashes the /apply endpoint.
+- [x] `POST /api/public/applications` hooks the helper after student insert. Passes registration_amount and applicant name for the note. Sets `lead.application_student_id` cross-reference.
+
+**Feature 4 — WhatsApp send status in Lead Journey + Resend button**
+- [x] Backend `_status_event(metadata=None)` now accepts arbitrary metadata; the convert flow captures the WA send result up front and stores it as `metadata.whatsapp = {ok, message_id?, detail}` on the "converted" status_history entry.
+- [x] New `POST /api/leads/{id}/resend-application-link` endpoint — super/office admin only, re-uses same referral link, appends a same-status ("converted"→"converted") event with the retry result + note.
+- [x] Frontend `LeadJourney.jsx` renders a `WhatsappChip` (green Sent · <msgid> or rose Failed · <detail>) on any status event carrying WA metadata. `LeadDetailDialog` wires an `onResendLink` handler; the Resend button surfaces only on the LATEST failed converted event and only for admins with permission.
+
+**Testing (iteration_48.json)** — 18/18 new backend tests + 30/30 iteration 45+46 regression PASS. Frontend Playwright: TodayVisitsPanel renders on Overview & staff view; card click deep-links + auto-switches tabs + opens dialog. 9 visit-stage chips + 11 lead-status chips + Journey with 11 events verified. Staff correctly denied resend-link. No defects — 100% pass on both backend and frontend.
