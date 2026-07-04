@@ -1017,3 +1017,21 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Frontend `LeadJourney.jsx` renders a `WhatsappChip` (green Sent · <msgid> or rose Failed · <detail>) on any status event carrying WA metadata. `LeadDetailDialog` wires an `onResendLink` handler; the Resend button surfaces only on the LATEST failed converted event and only for admins with permission.
 
 **Testing (iteration_48.json)** — 18/18 new backend tests + 30/30 iteration 45+46 regression PASS. Frontend Playwright: TodayVisitsPanel renders on Overview & staff view; card click deep-links + auto-switches tabs + opens dialog. 9 visit-stage chips + 11 lead-status chips + Journey with 11 events verified. Staff correctly denied resend-link. No defects — 100% pass on both backend and frontend.
+
+## Implementation status — 2026-07-04 (iteration 49: Visit time-window preview + in-place deep-link)
+
+**Feature 1 — Live Today's Campus Visits: 24h preview + full-day-live + auto-disappear**
+- [x] Backend `visits_today` rewritten with a time-window filter instead of a date-equality filter:
+    - **Card appears** at `anchor - 24h` (anchor = departure_at ?? arrival_at) — phase=`preview`, tagged "Tomorrow Visit" on the frontend.
+    - **Card is Live** from the anchor onwards — phase=`live`.
+    - **Card auto-hides** at end-of-UTC-day of arrival_at (fallback: anchor + 1 day) so the full visit day stays visible.
+- [x] Response gained `phase` per visit + top-level `live_count` and `preview_count`. Sort: live-first, then preview, both by departure asc.
+- [x] Frontend `TodayVisitsPanel.jsx` renders an amber "Tomorrow Visit" pill (Clock icon) on `phase=preview` cards, with a subtle amber-tinted border to differentiate. Live cards keep the neutral card border.
+
+**Feature 2 — Notification deep-link opens dialog IN-PLACE (no tab switch)**
+- [x] Moved the `?lead=<id>` handler from `LeadsPipeline.jsx` (which was only mounted on the "All leads" tab) to `Leads.jsx` (page level). The shared `<LeadDetailDialog>` now renders above whatever tab the user is currently on — Overview, Campaigns, or All leads.
+- [x] Removed the `useEffect` that force-switched to "All leads" when the URL had `?lead=`. Users clicking a Today's Visits card or a notification now stay on their current tab.
+- [x] On dialog close, the `?lead=` param is stripped from `location.search` (via `setParams`) so the URL stays clean.
+- [x] Added `refreshKey` prop threaded from `Leads.jsx` → `LeadsPipeline.jsx`: whenever the shared dialog mutates a lead (via `onChanged`), `Leads.jsx` bumps the key and `LeadsPipeline.jsx` refetches — so a status change made from the shared dialog is reflected in the pipeline list without a manual refresh.
+
+**Testing (iteration_49.json)** — 10/10 new backend tests + 48/48 iteration 45+46+48 regression PASS. Frontend Playwright confirmed: deep-link keeps Overview and Campaigns tabs active; dialog opens in-place; TodayVisitsPanel still rendered behind; Escape strips ?lead= from URL; Tomorrow Visit pill appears on preview cards; staff view (no tabs) also opens dialog above TodayVisitsPanel. Zero defects — 100% pass on both.
