@@ -62,7 +62,13 @@
              Renders BEFORE React mounts so first-load feels instant.
              Hides automatically once the video ends, when the app
              dispatches the `finflow-ready` event, or after a 6.5s timeout.
-             Only shown once per browser session (sessionStorage flag). -->
+             Only shown once per browser session (sessionStorage flag).
+             The video source is chosen at runtime:
+               - `/splash.mp4`         → portal (Super/Office Admin, User, Staff)
+               - `/splash-apply.mp4`   → public Student Application form (/apply
+                                          on this host, or the public-apply
+                                          hostname REACT_APP_PUBLIC_APPLY_HOSTS).
+             -->
         <div
             id="finflow-splash"
             aria-hidden="true"
@@ -94,7 +100,7 @@
                     background: #ffffff;
                 "
             >
-                <source src="%PUBLIC_URL%/splash.mp4" type="video/mp4" />
+                <!-- src is injected by the script below based on the pathname -->
             </video>
         </div>
         <script>
@@ -102,10 +108,32 @@
                 var splash = document.getElementById("finflow-splash");
                 var video = document.getElementById("finflow-splash-video");
                 if (!splash) return;
+
+                // Pick the right splash asset. The Student Application form keeps
+                // its original clip; every other route (portal) uses the new one.
+                var path = (window.location.pathname || "").toLowerCase();
+                var host = (window.location.hostname || "").toLowerCase();
+                // Read the public-apply host list injected by CRA (safe fallback: "").
+                var applyHostsRaw = "%REACT_APP_PUBLIC_APPLY_HOSTS%";
+                // If CRA didn't substitute the token (e.g. served directly), fall back to empty.
+                if (applyHostsRaw.indexOf("%") === 0) applyHostsRaw = "";
+                var applyHosts = applyHostsRaw
+                    .split(",")
+                    .map(function (h) { return h.trim().toLowerCase(); })
+                    .filter(Boolean);
+                var isApplySurface =
+                    path === "/apply" ||
+                    path.indexOf("/apply/") === 0 ||
+                    applyHosts.indexOf(host) !== -1;
+                var src = isApplySurface ? "/splash-apply.mp4" : "/splash.mp4";
+                // Use a session flag per source so switching hosts still plays
+                // the corresponding intro once.
+                var seenKey = "finflow_splash_seen_" + (isApplySurface ? "apply" : "portal");
+
                 // Skip the splash if we've shown it once already this session
                 // (so route changes / reloads after the first visit don't replay it).
                 try {
-                    if (sessionStorage.getItem("finflow_splash_seen")) {
+                    if (sessionStorage.getItem(seenKey)) {
                         splash.remove();
                         return;
                     }
@@ -116,11 +144,19 @@
                     }
                 } catch (_) { /* sessionStorage disabled — keep playing */ }
 
+                if (video) {
+                    var sourceEl = document.createElement("source");
+                    sourceEl.src = src;
+                    sourceEl.type = "video/mp4";
+                    video.appendChild(sourceEl);
+                    video.load();
+                }
+
                 var dismissed = false;
                 function dismiss() {
                     if (dismissed) return;
                     dismissed = true;
-                    try { sessionStorage.setItem("finflow_splash_seen", "1"); } catch (_) {}
+                    try { sessionStorage.setItem(seenKey, "1"); } catch (_) {}
                     splash.style.opacity = "0";
                     setTimeout(function () { splash.remove(); }, 360);
                 }

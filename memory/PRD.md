@@ -984,3 +984,13 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] **Filter chip row + Add-lead status dropdown + follow-up status Select** — all auto-derive from `LEAD_STATUSES`, so no extra changes needed there.
 - [x] **Widened `LeadDetailDialog` to `max-w-xl`** to accommodate the journey timeline. Delete-confirm copy updated ("journey history" instead of "follow-up history").
 - [x] **Testing (iteration_46.json)** — 16/16 new backend tests + 14/14 iteration-45 regression pass. Frontend: 13 filter chips, 11 board cols, 11 detail-dialog chips, LeadJourney with journey-event-* entries, 11 CrmAnalytics snap rows, Staff scope intact. `main_agent_can_self_test: true`.
+
+## Implementation status — 2026-07-04 (iteration 48: Portal-specific splash screen)
+- [x] **New portal splash video** (KM Foundation logo + animated "CONNECT | MANAGE | GROW" tagline, ~6s) deployed at `/splash.mp4` (52 KB, replaces the old 28 KB intro).
+- [x] **Old splash preserved** at `/splash-apply.mp4` (28 KB) — kept exactly as-is for the public Student Application Form.
+- [x] **Runtime source selection in `public/index.html`** — the inline pre-React splash script now inspects `window.location.pathname` + `window.location.hostname` and picks:
+    - `/splash-apply.mp4` for `/apply` (or any path prefixed `/apply/`) and for any host in `REACT_APP_PUBLIC_APPLY_HOSTS` (currently `apply.kmfoundation.co.in`)
+    - `/splash.mp4` for every other route (Super/Office Admin, User, Staff portals)
+- [x] **Per-source session flag** — separate `finflow_splash_seen_portal` / `finflow_splash_seen_apply` keys so switching between the two surfaces still plays the correct intro once per session (previously a single flag suppressed both).
+- [x] **Mobile-only behavior preserved** — the splash still skips desktops (`window.innerWidth >= 768`) to avoid disrupting long-session admin work.
+- [x] **Verified via Playwright at 400×800 viewport** — portal loads `/splash.mp4`, `/apply` loads `/splash-apply.mp4`. Auto-dismiss + 6.5s safety timeout intact.
