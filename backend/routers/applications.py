@@ -23,6 +23,7 @@ from lib.email_notifier import send_email, application_email_html
 
 # Re-use the notifier so super-admins get pinged in real time.
 from routers.notifications import notify_super_admins
+from routers.leads import bump_lead_on_application
 
 log = logging.getLogger("finflow.applications")
 
@@ -244,6 +245,19 @@ async def submit_application(payload: ApplicationIn) -> dict:
                 payload.reference.name = ru.get("name")
     doc = _build_student_doc(payload, owner_id, referrer_user_id=referrer_user_id)
     await db.students.insert_one(doc)
+    # Auto-advance the matching CRM lead: converted → application_submitted,
+    # cascading to fee_paid when a registration amount is present. Best-effort.
+    try:
+        reg_amt = float(payload.payment.registration_amount or 0)
+        await bump_lead_on_application(
+            student_id=doc["id"],
+            phone=payload.basic_info.mobile_number,
+            applicant_name=payload.basic_info.student_full_name,
+            has_registration_payment=reg_amt > 0,
+            registration_amount=reg_amt,
+        )
+    except Exception as exc:  # pragma: no cover — best-effort
+        log.warning("[applications] lead auto-bump failed: %s", exc)
     # Fire-and-forget notification to all super admins.
     try:
         await notify_super_admins(

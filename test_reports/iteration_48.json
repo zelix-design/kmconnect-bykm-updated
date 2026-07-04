@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 48 (CRM Today's Visits panel, 9 visit stages, resend WA link, auto-bump on public application, notification deep-link) — Backend: 18/18 new tests + 30/30 regression (it45+it46) PASS. Frontend: TodayVisitsPanel renders on CRM Overview for super admin & at top for staff; card click deep-links via /leads?lead=<id>, auto-switches to 'All leads' tab, and opens the lead detail dialog. All 9 visit-status chips render inside the dialog. Staff deep-link works, staff correctly has no crm-tabs and no resend-link button.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48_visits_and_deeplink.py",
+    "/app/test_reports/pytest/iteration48.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Note: LeadsPipeline strips the `?lead=<id>` param from the URL after opening the dialog (line 143-147 in LeadsPipeline.jsx) — this is intentional but means users can't share the deep-link URL later. Consider preserving the param.",
+    "TodayVisitsPanel polls every 60s — fine for a single tab, but consider stopping the interval when the tab is hidden (document.visibilityState) to save requests."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration48_visits_and_deeplink.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Super admin/Office/Staff from /app/memory/test_credentials.md. Created ephemeral user-role account per test run (cleaned up in teardown).",
+  "seed_data_creation": "Test suite creates ephemeral leads/students/user with 'IT48' prefix and cleans them up in teardown_module.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 48 fully validated. New file /app/backend/tests/test_iteration48_visits_and_deeplink.py covers: GET /visits/today (role scoping incl. user 403), PATCH /visit (9 statuses + legacy admitted/completed rejected + auto-bump to assigned), POST /resend-application-link (super/office allowed, staff 403, 400s), POST /public/applications auto-bump (cascade to fee_paid with reg_amount>0, only application_submitted with reg_amount=0, no side effect on phone mismatch), convert status_history.metadata.whatsapp presence, and campus_visit notification link contains ?lead=<id>. Frontend deep-link + 9 stage chips + staff scoping verified via Playwright.",
+  "rca of the issue": "N/A — no bugs found."
+}

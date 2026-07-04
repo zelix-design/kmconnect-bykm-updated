@@ -1,13 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import CrmAnalytics from "@/components/office-dashboard/CrmAnalytics";
 import CampaignsPanel from "@/components/leads/CampaignsPanel";
 import LeadsPipeline from "@/components/leads/LeadsPipeline";
+import TodayVisitsPanel from "@/components/leads/TodayVisitsPanel";
 
 export default function Leads() {
   const { user } = useAuth();
   const isStaff = user?.role === "staff";
+  const [params] = useSearchParams();
   const [crmTab, setCrmTab] = useState("overview"); // overview | campaigns (admins)
+
+  // Notifications + Today's Visit cards deep-link with `?lead=<id>` — force
+  // the "All leads" tab where LeadsPipeline can pick up the query param and
+  // pop open the detail dialog.
+  useEffect(() => {
+    if (params.get("lead") && !isStaff) setCrmTab("all");
+  }, [params, isStaff]);
 
   return (
     <div className="space-y-6" data-testid="leads-page">
@@ -21,7 +31,10 @@ export default function Leads() {
       </div>
 
       {isStaff ? (
-        <LeadsPipeline user={user} />
+        <>
+          <TodayVisitsPanel user={user} />
+          <LeadsPipeline user={user} />
+        </>
       ) : (
         <>
           {/* CRM tabs */}
@@ -42,7 +55,8 @@ export default function Leads() {
           </div>
 
           {crmTab === "overview" ? (
-            <div data-testid="crm-overview">
+            <div className="space-y-5" data-testid="crm-overview">
+              <TodayVisitsPanel user={user} />
               <CrmAnalytics />
             </div>
           ) : crmTab === "campaigns" ? (

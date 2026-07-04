@@ -178,7 +178,11 @@ class TestVisitPatch:
         assert v["attending_admin_name"] is None
 
     def test_status_transitions(self, super_s, lead_with_visit):
-        for st in ("confused", "admitted", "lost", "scheduled"):
+        # Full 9-stage visit vocabulary (iteration 47) — cycle through the
+        # outcome stages, then back to scheduled.
+        for st in ("assigned", "picked_up", "ongoing", "confused",
+                   "admission_taken", "fees_paid", "admission_letter_taken",
+                   "lost", "scheduled"):
             r = super_s.patch(f"{BASE_URL}/api/leads/{lead_with_visit}/visit",
                               json={"status": st})
             assert r.status_code == 200
@@ -192,7 +196,7 @@ class TestVisitPatch:
     def test_staff_forbidden(self, staff_s, lead_with_visit):
         # Staff might get 403 (role) or 404 (scope) — either is acceptable "denied"
         r = staff_s.patch(f"{BASE_URL}/api/leads/{lead_with_visit}/visit",
-                         json={"status": "admitted"})
+                         json={"status": "admission_taken"})
         assert r.status_code in (403, 404)
 
 

@@ -36,7 +36,12 @@ LEAD_STATUSES = (
 )
 LEAD_SOURCES = ("walk_in", "referral", "social", "website", "csv", "other")
 OPEN_STATUSES = ("new", "not_connected", "interested", "follow_up")
-VISIT_STATUSES = ("scheduled", "completed", "confused", "admitted", "lost")
+VISIT_STATUSES = (
+    "scheduled", "assigned", "picked_up", "ongoing", "confused",
+    "admission_taken", "fees_paid", "admission_letter_taken", "lost",
+)
+# Legacy → new stage mapping applied on read + at migration time.
+VISIT_STATUS_LEGACY = {"admitted": "admission_taken", "completed": "admission_letter_taken"}
 CONVERTED_STATUSES = ("converted", "application_submitted", "admission_confirmed", "fee_paid", "completed")
 
 LeadStatus = str
@@ -148,6 +153,85 @@ async def _validate_assignee(assignee_id: str, office: Optional[str], require_of
     return assignee
 
 
+def _normalize_phone(raw: Optional[str]) -> str:
+    """Keep only digits, drop leading country code (91 for India) so a lead
+    stored as '9876543210' still matches an application submitted as '+91
+    98765 43210'. Returns the last 10 digits (India assumption)."""
+    if not raw:
+        return ""
+    digits = "".join(ch for ch in str(raw) if ch.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
+async def bump_lead_on_application(
+    *,
+    student_id: str,
+    phone: Optional[str],
+    applicant_name: Optional[str],
+    has_registration_payment: bool,
+    registration_amount: float = 0.0,
+    system_user: Optional[dict] = None,
+) -> Optional[dict]:
+    """Auto-advance a matching converted lead when its student submits the
+    online application form (POST /api/public/applications).
+
+    Match strategy: converted lead whose phone (last 10 digits) equals the
+    applicant's mobile number, hasn't already progressed past converted.
+    Transitions applied — always ``converted → application_submitted``; when
+    the submission carries a registration payment, cascade one more step to
+    ``fee_paid`` so the Journey shows the full path.
+
+    Best-effort: never raises. Returns the updated lead or ``None`` if no
+    match / no update.
+    """
+    key = _normalize_phone(phone)
+    if not key:
+        return None
+    # Find converted leads whose stored phone shares the same 10-digit tail.
+    # We compare via a $expr regex-free scan to be forgiving of stored formats.
+    candidates = await db.leads.find(
+        {"status": {"$in": ["converted", "application_submitted"]}},
+        {"_id": 0, "id": 1, "phone": 1, "status": 1, "name": 1},
+    ).to_list(2000)
+    matched = None
+    for c in candidates:
+        if _normalize_phone(c.get("phone")) == key:
+            matched = c
+            break
+    if not matched:
+        return None
+    actor = system_user or {"id": "system", "name": "System · Application submitted"}
+    now = now_iso()
+    events: list[dict] = []
+    sets: dict = {"updated_at": now, "application_student_id": student_id}
+    current = matched.get("status") or "converted"
+
+    if current == "converted":
+        events.append(_status_event(
+            "converted", "application_submitted", actor,
+            note=f"Application submitted by {applicant_name}" if applicant_name else "",
+            metadata={"student_id": student_id},
+        ))
+        sets["status"] = "application_submitted"
+        current = "application_submitted"
+
+    if has_registration_payment and current == "application_submitted":
+        events.append(_status_event(
+            "application_submitted", "fee_paid", actor,
+            note=f"Registration paid · ₹{registration_amount:,.0f}" if registration_amount else "Registration payment",
+            metadata={"student_id": student_id, "amount": registration_amount},
+        ))
+        sets["status"] = "fee_paid"
+
+    if not events:
+        return None
+    await db.leads.update_one(
+        {"id": matched["id"]},
+        {"$set": sets, "$push": {"status_history": {"$each": events}}},
+    )
+    return await db.leads.find_one({"id": matched["id"]}, {"_id": 0})
+
+
 def _public(lead: dict) -> dict:
     lead.pop("_id", None)
     return lead
@@ -158,9 +242,14 @@ def _referral_link(ref: str) -> str:
     return f"{base}/ref={ref}" if base else f"/apply?ref={ref}"
 
 
-def _status_event(from_status, to_status, user: dict, note: str = "") -> dict:
-    """One entry in a lead's status_history journey log."""
-    return {
+def _status_event(from_status, to_status, user: dict, note: str = "", metadata: Optional[dict] = None) -> dict:
+    """One entry in a lead's status_history journey log.
+
+    ``metadata`` (optional) carries structured side-effect results — e.g.
+    ``{"whatsapp": {"ok": True, "message_id": "..."}}`` — surfaced in the UI's
+    Lead Journey timeline.
+    """
+    doc = {
         "id": gen_id(),
         "at": now_iso(),
         "from": from_status,
@@ -169,14 +258,22 @@ def _status_event(from_status, to_status, user: dict, note: str = "") -> dict:
         "by_name": user.get("name"),
         "note": note,
     }
+    if metadata:
+        doc["metadata"] = metadata
+    return doc
 
 
 async def _notify_visit_admins(lead: dict, title: str, message: str, actor_id: str) -> None:
-    """Best-effort notification to super admins + the lead office's admins."""
+    """Best-effort notification to super admins + the lead office's admins.
+
+    The notification link deep-links straight into the lead detail dialog via
+    the ``?lead=<id>`` query param so recipients can jump to it in one click.
+    """
+    link = f"/leads?lead={lead.get('id')}"
     try:
         await notify_super_admins(
             type="campus_visit", title=title, message=message,
-            link="/leads", actor_user_id=actor_id,
+            link=link, actor_user_id=actor_id,
         )
         q: dict = {"role": "office_admin", "approval_status": "approved"}
         if lead.get("office"):
@@ -186,7 +283,7 @@ async def _notify_visit_admins(lead: dict, title: str, message: str, actor_id: s
             await notify_users(
                 [o["id"] for o in offs],
                 type="campus_visit", title=title, message=message,
-                link="/leads", actor_user_id=actor_id,
+                link=link, actor_user_id=actor_id,
             )
     except Exception:
         pass
@@ -639,18 +736,10 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
         "lead_id": lead_id,
     }
     await db.students.insert_one(student_doc)
-    lead_patch = {"status": "converted", "converted_student_id": student_id, "updated_at": now}
-    if payload and (payload.city or payload.course or payload.college):
-        lead_patch["conversion_details"] = {
-            "city": payload.city or "",
-            "course": payload.course or "",
-            "college": payload.college or "",
-        }
-    await db.leads.update_one({"id": lead_id}, {
-        "$set": lead_patch,
-        "$push": {"status_history": _status_event(lead.get("status"), "converted", user)},
-    })
 
+    # Send the referral application link via WhatsApp FIRST so the result can be
+    # embedded in the status_history "converted" event (surfaced in the UI's
+    # Lead Journey timeline as "WA Sent · <message_id>" or "WA Failed · <detail>").
     wa_link = None
     if payload and payload.send_link and lead.get("phone"):
         wa_link = await send_application_link(
@@ -661,6 +750,28 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
             city=payload.city or "",
             link=_referral_link(referrer_user_id),
         )
+
+    lead_patch = {"status": "converted", "converted_student_id": student_id, "updated_at": now}
+    if payload and (payload.city or payload.course or payload.college):
+        lead_patch["conversion_details"] = {
+            "city": payload.city or "",
+            "course": payload.course or "",
+            "college": payload.college or "",
+        }
+    if wa_link is not None:
+        lead_patch["application_wa"] = wa_link  # latest send result (for Resend UI)
+    convert_meta: Optional[dict] = None
+    if wa_link is not None:
+        convert_meta = {"whatsapp": wa_link}
+    await db.leads.update_one({"id": lead_id}, {
+        "$set": lead_patch,
+        "$push": {"status_history": _status_event(
+            lead.get("status"), "converted", user,
+            note="application link sent" if wa_link and wa_link.get("ok") else "",
+            metadata=convert_meta,
+        )},
+    })
+
     wa_visit = None
     if payload and payload.campus_visit_interested and payload.visit and (
         payload.visit.departure_at or payload.visit.arrival_at
@@ -677,6 +788,98 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
     except Exception:
         pass
     return {"ok": True, "student_id": student_id, "whatsapp": wa_link, "visit_whatsapp": wa_visit}
+
+
+@router.post("/{lead_id}/resend-application-link")
+async def resend_application_link(lead_id: str, user: dict = Depends(require_edit("leads"))):
+    """Retry the WhatsApp application link for an already-converted lead.
+
+    Uses the same referral link resolution as the initial convert flow. The
+    latest result is persisted in ``lead.application_wa`` and pushed onto
+    ``status_history`` (as a same-status event) so the Journey timeline shows
+    each retry attempt inline.
+    """
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only super or office admins can resend the link")
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if not lead.get("converted_student_id"):
+        raise HTTPException(400, "Lead is not converted yet")
+    if not lead.get("phone"):
+        raise HTTPException(400, "No phone number on this lead")
+
+    referrer_user_id = lead.get("assigned_to_user_id") or user["id"]
+    cd = lead.get("conversion_details") or {}
+    wa_link = await send_application_link(
+        name=lead.get("name") or "",
+        phone=lead["phone"],
+        course=cd.get("course") or lead.get("course") or "",
+        college=cd.get("college") or "",
+        city=cd.get("city") or "",
+        link=_referral_link(referrer_user_id),
+    )
+    now = now_iso()
+    await db.leads.update_one(
+        {"id": lead_id},
+        {
+            "$set": {"application_wa": wa_link, "updated_at": now},
+            "$push": {"status_history": _status_event(
+                "converted", "converted", user,
+                note="application link resent" if wa_link.get("ok") else "resend failed",
+                metadata={"whatsapp": wa_link},
+            )},
+        },
+    )
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    return {"ok": bool(wa_link.get("ok")), "whatsapp": wa_link, "lead": fresh}
+
+
+@router.get("/visits/today")
+async def visits_today(user: dict = Depends(get_current_user)):
+    """Live 'today's campus visits' board for the CRM Overview.
+
+    Returns every lead scoped to the caller with a ``visit`` whose departure or
+    arrival timestamp falls on today's date (server time, UTC). Sorted by
+    departure time ascending, so the earliest visit is on top.
+
+    Staff see only visits on leads assigned to them. Office admins see their
+    office. Super admins see everything.
+    """
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    now = datetime.now(timezone.utc)
+    today_iso = now.date().isoformat()
+    scope = _scope_filter(user)
+    scope["visit"] = {"$ne": None}
+    docs = await db.leads.find(
+        scope,
+        {
+            "_id": 0, "id": 1, "name": 1, "phone": 1, "course": 1, "office": 1,
+            "assigned_to_user_id": 1, "visit": 1, "status": 1,
+        },
+    ).to_list(500)
+    out: list[dict] = []
+    for d in docs:
+        v = d.get("visit") or {}
+        # Normalize legacy visit statuses on the fly (untouched at rest).
+        v["status"] = VISIT_STATUS_LEGACY.get(v.get("status"), v.get("status"))
+        dep = (v.get("departure_at") or "")[:10]
+        arr = (v.get("arrival_at") or "")[:10]
+        if dep != today_iso and arr != today_iso:
+            continue
+        out.append({
+            "id": d["id"],
+            "name": d.get("name"),
+            "phone": d.get("phone"),
+            "course": d.get("course"),
+            "office": d.get("office"),
+            "assigned_to_user_id": d.get("assigned_to_user_id"),
+            "status": d.get("status"),
+            "visit": v,
+        })
+    out.sort(key=lambda r: (r["visit"].get("departure_at") or "9999", r["visit"].get("arrival_at") or "9999"))
+    return {"date": today_iso, "count": len(out), "visits": out}
 
 
 # ---------- interested + campus visit ----------
@@ -747,6 +950,14 @@ async def update_visit(lead_id: str, payload: VisitUpdate, user: dict = Depends(
         if payload.status not in VISIT_STATUSES:
             raise HTTPException(400, "Invalid visit status")
         sets["visit.status"] = payload.status
+    # Convenience: assigning an attending admin while the visit is still
+    # "scheduled" auto-bumps the stage to "assigned" so the timeline reflects
+    # the assignment without a second click.
+    elif (
+        notify_attending
+        and (lead.get("visit") or {}).get("status") == "scheduled"
+    ):
+        sets["visit.status"] = "assigned"
     if not sets:
         raise HTTPException(400, "Nothing to update")
     sets["visit.updated_at"] = now_iso()

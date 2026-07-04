@@ -39,6 +39,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [interestedOpen, setInterestedOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
   const [admins, setAdmins] = useState([]);
+  const [resending, setResending] = useState(false);
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
 
@@ -142,6 +143,21 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Delete failed");
     } finally { setBusy(false); setConfirmDelete(false); }
+  };
+
+  const resendApplicationLink = async () => {
+    if (resending) return;
+    setResending(true);
+    try {
+      const { data } = await api.post(`/leads/${local.id}/resend-application-link`);
+      refresh(data.lead);
+      if (data.ok) toast.success("Application link resent on WhatsApp");
+      else toast.warning(`WhatsApp send failed: ${data.whatsapp?.detail || "unknown"}`);
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Could not resend link");
+    } finally {
+      setResending(false);
+    }
   };
 
   return (
@@ -315,7 +331,12 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
           )}
 
           {/* Journey timeline (status transitions, follow-ups, visit, created) */}
-          <LeadJourney lead={local} />
+          <LeadJourney
+            lead={local}
+            canResend={editable && isAdmin && !!local.converted_student_id && !!local.phone}
+            onResendLink={resendApplicationLink}
+            resending={resending}
+          />
 
           {editable && (
             <div className="flex items-center justify-between pt-1">

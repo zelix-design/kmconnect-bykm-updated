@@ -133,6 +133,19 @@ async def seed_admin_and_backfill() -> None:
     except Exception:
         pass
 
+    # One-time migration: rename campus-visit statuses to the extended
+    # 9-stage vocabulary (Scheduled → Assigned → Picked Up → Ongoing →
+    # Confused → Admission Taken → Fees Paid → Admission Letter Taken → Lost).
+    try:
+        await db.leads.update_many(
+            {"visit.status": "admitted"}, {"$set": {"visit.status": "admission_taken"}}
+        )
+        await db.leads.update_many(
+            {"visit.status": "completed"}, {"$set": {"visit.status": "admission_letter_taken"}}
+        )
+    except Exception:
+        pass
+
     # Backfill missing default categories for existing users (idempotent)
     async for u in db.users.find({}, {"id": 1, "_id": 0}):
         existing_cats = await db.categories.find(

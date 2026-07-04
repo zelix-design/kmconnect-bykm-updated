@@ -117,6 +117,38 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     }
   }, [params, editable, setParams, showActions, campaignId]);
 
+  // Deep-link: `?lead=<id>` (used by notifications) fetches and opens the
+  // detail dialog for that lead. Falls back silently if the lead isn't in
+  // the current caller's scope.
+  const leadParam = params.get("lead");
+  useEffect(() => {
+    if (!leadParam) return;
+    let cancelled = false;
+    api.get(`/leads`, { params: { q: leadParam } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const hit = (data || []).find((l) => l.id === leadParam);
+        if (hit) setDetailLead(hit);
+        else {
+          api.get(`/leads`).then(({ data: all }) => {
+            if (cancelled) return;
+            const h = (all || []).find((l) => l.id === leadParam);
+            if (h) setDetailLead(h);
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (cancelled) return;
+        setParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("lead");
+          return next;
+        }, { replace: true });
+      });
+    return () => { cancelled = true; };
+  }, [leadParam, setParams]);
+
   const afterChange = () => { fetchLeads(); fetchStats(); onChanged?.(); };
 
   const handleBoardStatus = async (lead, status) => {

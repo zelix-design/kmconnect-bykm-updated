@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import {
   Sparkle, ArrowRight, ChatCircleDots, Bus, GraduationCap, PhoneCall,
+  WhatsappLogo, CheckCircle, XCircle, ArrowClockwise,
 } from "@phosphor-icons/react";
 import { fmtDateTime, statusLabel, LEAD_STATUS_META } from "./constants";
 
@@ -10,10 +11,9 @@ import { fmtDateTime, statusLabel, LEAD_STATUS_META } from "./constants";
  *
  * Backend fields consumed:
  *   - lead.created_at
- *   - lead.status_history[]  ({id, at, from, to, by_name, note})
+ *   - lead.status_history[]  ({id, at, from, to, by_name, note, metadata?})
  *   - lead.follow_ups[]      ({id, at, note, created_by_name, created_at})
  *   - lead.visit             ({created_at, institution, ...})
- *   - lead.converted_student_id / lead.conversion_details
  */
 function buildEvents(lead) {
   if (!lead) return [];
@@ -33,6 +33,7 @@ function buildEvents(lead) {
       to: h.to,
       who: h.by_name,
       note: h.note,
+      metadata: h.metadata,
       id: h.id,
     });
   });
@@ -58,7 +59,6 @@ function buildEvents(lead) {
     });
   }
 
-  // Sort chronologically (oldest first)
   return events
     .filter((e) => e.at)
     .sort((a, b) => new Date(a.at) - new Date(b.at));
@@ -94,9 +94,43 @@ function StatusPill({ status }) {
   );
 }
 
-function EventRow({ ev }) {
+/** WhatsApp send-result chip surfaced on status_history metadata.whatsapp. */
+function WhatsappChip({ wa, testid }) {
+  if (!wa) return null;
+  const ok = !!wa.ok;
+  const short = wa.message_id ? String(wa.message_id).slice(0, 10) : "";
+  const detail = ok
+    ? (short ? `Sent · ${short}` : "Sent")
+    : (wa.detail || "Failed");
+  return (
+    <span
+      data-testid={testid}
+      title={ok ? wa.message_id : (wa.detail || "")}
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+        ok
+          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+          : "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/30"
+      }`}
+    >
+      <WhatsappLogo size={11} weight="fill" />
+      {ok ? <CheckCircle size={10} weight="fill" /> : <XCircle size={10} weight="fill" />}
+      WA · {detail}
+    </span>
+  );
+}
+
+function EventRow({ ev, canResend, onResendLink, resending }) {
   const timestamp = fmtDateTime(ev.at);
   const who = ev.who ? ` · ${ev.who}` : "";
+  const wa = ev.metadata?.whatsapp;
+  // Only show Resend on a converted-related event when WA failed AND the caller
+  // has permission. The Resend button targets the LATEST such row implicitly —
+  // parent controls whether to render it via canResend.
+  const showResendBtn =
+    canResend &&
+    ev.kind === "status" &&
+    (ev.to === "converted" || (ev.from === "converted" && ev.to === "converted")) &&
+    wa && !wa.ok;
 
   const contentByKind = {
     created: (
@@ -113,6 +147,22 @@ function EventRow({ ev }) {
           <StatusPill status={ev.to} />
           {ev.note && <span className="text-xs text-muted-foreground italic">· {ev.note}</span>}
         </div>
+        {wa && (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <WhatsappChip wa={wa} testid={`journey-wa-${ev.id || "status"}`} />
+            {showResendBtn && (
+              <button
+                type="button"
+                disabled={resending}
+                onClick={onResendLink}
+                data-testid="journey-resend-link-btn"
+                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-orange-500/40 text-orange-700 dark:text-orange-300 hover:bg-orange-500/10 disabled:opacity-50"
+              >
+                <ArrowClockwise size={11} weight="bold" /> {resending ? "Sending…" : "Resend link"}
+              </button>
+            )}
+          </div>
+        )}
         <p className="text-[11px] text-muted-foreground">{timestamp}{who}</p>
       </>
     ),
@@ -159,10 +209,25 @@ function EventRow({ ev }) {
 /**
  * Journey timeline shown inside the Lead Detail dialog. Renders each event
  * with an icon dot on a vertical connector, oldest → newest.
+ *
+ * Props:
+ *   - lead: the lead doc
+ *   - canResend (bool): whether the Resend button should surface on failed WA
+ *   - onResendLink (fn): callback invoked when the Resend button is clicked
+ *   - resending (bool): reflects in-flight request state
  */
-export default function LeadJourney({ lead }) {
+export default function LeadJourney({ lead, canResend = false, onResendLink, resending = false }) {
   const events = useMemo(() => buildEvents(lead), [lead]);
   if (!lead || events.length === 0) return null;
+
+  // The Resend chip should only render on the MOST RECENT converted event with
+  // a failed WA — attempts before that are historical.
+  let latestConvertedFail = null;
+  for (const e of events) {
+    if (e.kind === "status" && (e.to === "converted" || e.from === "converted") && e.metadata?.whatsapp && !e.metadata.whatsapp.ok) {
+      latestConvertedFail = e.id;
+    }
+  }
 
   return (
     <div className="rounded-lg border border-border p-3.5" data-testid="lead-journey">
@@ -175,12 +240,17 @@ export default function LeadJourney({ lead }) {
         </span>
       </div>
       <div className="relative space-y-3.5 pl-1">
-        {/* Vertical connector line */}
         {events.length > 1 && (
           <div className="absolute left-[14px] top-2 bottom-2 w-px bg-border" aria-hidden="true" />
         )}
         {events.map((ev, i) => (
-          <EventRow key={ev.id || `${ev.kind}-${i}`} ev={ev} />
+          <EventRow
+            key={ev.id || `${ev.kind}-${i}`}
+            ev={ev}
+            canResend={canResend && ev.id === latestConvertedFail}
+            onResendLink={onResendLink}
+            resending={resending}
+          />
         ))}
       </div>
     </div>
