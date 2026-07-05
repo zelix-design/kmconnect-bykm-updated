@@ -54,6 +54,25 @@ export default function PublicApplication() {
     const applyIcon = "/application-form-icon.png";
     if (iconEl) iconEl.setAttribute("href", applyIcon);
     if (appleEl) appleEl.setAttribute("href", applyIcon);
+    // Force light theme on the public /apply route regardless of the
+    // caller's stored preference or OS setting — an admin who left the
+    // portal in dark mode shouldn't leak that theme into a student's
+    // application form. Restore whatever theme was active on unmount.
+    // Because ThemeProvider (a parent) reapplies the class in its own
+    // effect after mount, we observe the root element and strip `dark`
+    // any time it's re-added while /apply is mounted.
+    const root = document.documentElement;
+    const wasDark = root.classList.contains("dark");
+    root.classList.remove("dark");
+    // Also override the browser-level color-scheme so native form controls
+    // (date pickers, scrollbars) render in light mode too.
+    const prevColorScheme = root.style.colorScheme;
+    root.style.colorScheme = "light";
+    const themeObserver = new MutationObserver(() => {
+      if (root.classList.contains("dark")) root.classList.remove("dark");
+      if (root.style.colorScheme !== "light") root.style.colorScheme = "light";
+    });
+    themeObserver.observe(root, { attributes: true, attributeFilter: ["class", "style"] });
     axios.get(`${API}/courses`)
       .then((r) => setCourses(r.data?.courses || []))
       .catch((err) => {
@@ -70,6 +89,9 @@ export default function PublicApplication() {
       document.title = prevTitle;
       if (iconEl && prevIcon) iconEl.setAttribute("href", prevIcon);
       if (appleEl && prevApple) appleEl.setAttribute("href", prevApple);
+      themeObserver.disconnect();
+      if (wasDark) root.classList.add("dark");
+      root.style.colorScheme = prevColorScheme;
     };
   }, []);
 
