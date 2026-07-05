@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 51 (Reference-name auto-map + seed backfill for missing referrer_user_id) — Backend: 9/9 new tests PASS in test_iteration51_reference_backfill.py covering (1) seed-boot backfill effectiveness (>=11 students now carry referrer_user_id+referrer_name; env shows 15), (2) BLAZE JOSEPH name→uid resolution, (3) POST /api/students auto-map, (4) case-insensitive + whitespace-collapsed match, (5) non-matching reference stays null (no false mapping), (6) PATCH /api/students/{id} auto-map when reference is updated, (7) empty-string PATCH does NOT clobber an existing referrer_user_id, (8) POST /api/public/applications fallback maps reference.name -> referrer_user_id when referrer_id is absent, (9) GET /api/students/me/referrals as the staff user includes the back-mapped students. Regression: all 67 iteration 44-49 tests still PASS. Frontend: super-admin /students page now renders 15 `data-testid=st-referrer-<id>` chips (up from 10 before the fix); named breakdown JISHNA=4, BLAZE=5, ADHISH=3, Fathima Telecaller entries also present. Meets the >=15 threshold in the review request.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration51_reference_backfill.py",
+    "/app/test_reports/pytest/iteration51.xml",
+    "/app/test_reports/pytest/iteration51_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "seed.py Case-2 backfill loops per-student with an individual update_one — fine for current data volume (~40 students) but consider bulk_write for scale.",
+    "routers/students.py update_student: when `reference` is in `payload.model_fields_set` and non-empty but the resolved name doesn't match any user, referrer_user_id is silently kept as the previous value. Behavior is intentional (preserve manual link) but not documented — consider a doc-comment for future readers.",
+    "routers/applications.py fallback uses a local import (`from routers.students import _resolve_referrer_by_name`) inside the handler — acceptable for avoiding circular imports but could be lifted to module scope."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration51_reference_backfill.py"],
+  "success_rate": {"backend": "100% (9/9 new + 67/67 regression)", "frontend": "100%"},
+  "test_credentials": "Super admin admin@kmfoundation.online / Admin@786 used for both backend REST + frontend Playwright login.",
+  "seed_data_creation": "Test suite creates an ephemeral staff user 'TESTREF Emp 51 <uid>' via POST /api/users and 6-8 TESTREF_-prefixed students via POST /api/students. All test resources are cleaned up in module/function teardown fixtures. Emails must use a real-looking domain (kmfoundation.co) — pydantic EmailStr rejects .test/.example TLDs.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 51 fix verified end-to-end. Note for future tests: pydantic EmailStr blocks reserved-name TLDs (.test/.example) — use @kmfoundation.co for ephemeral test emails. The seed backfill in /app/backend/seed.py runs on every backend boot (Case 2 block, lines ~176-204) — it's idempotent and only touches rows where referrer_user_id is null AND reference is non-empty. If you need to re-trigger backfill in tests, restart backend (sudo supervisorctl restart backend). No frontend code changes in this iteration; the chip rendering came from iteration 50 (StudentCard.jsx `st-referrer-<id>`).",
+  "rca of the issue": "Root cause: When admins typed a staff/office_admin name into the manual 'Reference' text field on a student (instead of using /apply?ref=<slug>), the `referrer_user_id` column was never populated. Staff dashboard endpoints (/api/students/me/referrals) filter strictly by `referrer_user_id == user.id`, so those name-only-referenced students were invisible on the employee's own dashboard. Fix (this iteration): (1) new helper `_resolve_referrer_by_name` in routers/students.py does case-insensitive whitespace-tolerant lookup against users with role in (staff, office_admin, super_admin); (2) POST /api/students and PATCH /api/students/{id} auto-populate referrer_user_id + referrer_name from reference; (3) POST /api/public/applications falls back to name lookup when referrer_id is missing; (4) seed.py Case-2 backfill retroactively fixes existing rows on every boot."
+}

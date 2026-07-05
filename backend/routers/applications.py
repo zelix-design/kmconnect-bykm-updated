@@ -248,6 +248,14 @@ async def submit_application(payload: ApplicationIn) -> dict:
             referrer_name = ru.get("name")
             if not (payload.reference.name or "").strip():
                 payload.reference.name = ru.get("name")
+    # Fallback: applicant typed a reference name manually (no ?ref= link).
+    # If it matches a staff/admin, credit them as the referrer too.
+    if not referrer_user_id and (payload.reference.name or "").strip():
+        from routers.students import _resolve_referrer_by_name
+        ru2 = await _resolve_referrer_by_name(payload.reference.name)
+        if ru2:
+            referrer_user_id = ru2["id"]
+            referrer_name = ru2.get("name")
     doc = _build_student_doc(payload, owner_id, referrer_user_id=referrer_user_id, referrer_name=referrer_name)
     await db.students.insert_one(doc)
     # Auto-advance the matching CRM lead: converted → application_submitted,

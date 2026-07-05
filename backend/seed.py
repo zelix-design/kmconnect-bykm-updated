@@ -147,9 +147,13 @@ async def seed_admin_and_backfill() -> None:
         pass
 
     # Backfill: denormalize `referrer_name` on students that carry a
-    # ``referrer_user_id`` but no name yet. Runs on every boot but only
-    # touches rows that still need the fix, so it's idempotent + cheap.
+    # ``referrer_user_id`` but no name yet. Also auto-map the manual
+    # `reference` name → referrer_user_id when the reference matches a
+    # staff/office_admin/super_admin (so legacy admin-added students
+    # surface on that employee's dashboard).
+    # Runs on every boot but only touches rows that still need the fix.
     try:
+        # Case 1: has referrer_user_id, missing referrer_name.
         pending = await db.students.find(
             {"referrer_user_id": {"$ne": None}, "referrer_name": {"$in": [None, ""]}},
             {"_id": 0, "id": 1, "referrer_user_id": 1},
@@ -165,6 +169,38 @@ async def seed_admin_and_backfill() -> None:
                 if name:
                     await db.students.update_one(
                         {"id": p["id"]}, {"$set": {"referrer_name": name}}
+                    )
+
+        # Case 2: has a `reference` name but NO referrer_user_id — try to
+        # resolve the name to a login user (case-insensitive, exact match).
+        orphaned = await db.students.find(
+            {
+                "referrer_user_id": {"$in": [None, ""]},
+                "reference": {"$nin": [None, ""]},
+            },
+            {"_id": 0, "id": 1, "reference": 1},
+        ).to_list(5000)
+        if orphaned:
+            # Build a case-insensitive lookup once for all staff/admin names.
+            users = await db.users.find(
+                {"role": {"$in": ["staff", "office_admin", "super_admin"]}, "name": {"$ne": None}},
+                {"_id": 0, "id": 1, "name": 1},
+            ).to_list(2000)
+            by_lower = {}
+            for u in users:
+                key = " ".join((u.get("name") or "").split()).strip().lower()
+                if key and key not in by_lower:
+                    by_lower[key] = {"id": u["id"], "name": u["name"]}
+            for s in orphaned:
+                key = " ".join((s.get("reference") or "").split()).strip().lower()
+                hit = by_lower.get(key)
+                if hit:
+                    await db.students.update_one(
+                        {"id": s["id"]},
+                        {"$set": {
+                            "referrer_user_id": hit["id"],
+                            "referrer_name": hit["name"],
+                        }},
                     )
     except Exception:
         pass

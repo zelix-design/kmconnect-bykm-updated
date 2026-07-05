@@ -197,6 +197,36 @@ def _summarize(s: dict) -> dict:
     return s
 
 
+async def _resolve_referrer_by_name(name: Optional[str]) -> Optional[dict]:
+    """Look up a staff / office_admin / super_admin whose name matches the
+    given reference string. Used to auto-map the manual "Reference" text
+    field on a student doc → ``referrer_user_id`` so referred students
+    surface on the referrer's own dashboard even when the admin typed the
+    name manually instead of using a `/apply?ref=<slug>` link.
+
+    Match is case-insensitive with whitespace collapsed. Returns
+    ``{"id": ..., "name": ...}`` or ``None`` when nothing matches / the
+    input is empty.
+    """
+    if not name:
+        return None
+    cleaned = " ".join(str(name).split()).strip()
+    if not cleaned:
+        return None
+    # Escape regex specials, then anchor with case-insensitive full match on
+    # the normalized value. Whitespace inside the name is preserved.
+    import re as _re
+    pattern = f"^{_re.escape(cleaned)}$"
+    hit = await db.users.find_one(
+        {
+            "name": {"$regex": pattern, "$options": "i"},
+            "role": {"$in": ["staff", "office_admin", "super_admin"]},
+        },
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    return hit
+
+
 # Auto-generate schedule rows from a fees_plan. Returns list of {label, amount, year_key}.
 _YEAR_FIELDS = [
     ("1st Year", "year_1"),
@@ -709,12 +739,17 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
         data["home_office"] = user.get("office")
     fees_plan = data.get("fees_plan")
     schedules = _merge_fees_plan_schedules([], fees_plan, set()) if fees_plan else []
+    # Auto-map the manual "Reference" name → referrer_user_id so admin-added
+    # students still surface on the referred staff/office admin's dashboard.
+    ru = await _resolve_referrer_by_name(data.get("reference"))
     doc = {
         "id": gen_id(),
         "user_id": user["id"],
         "created_at": now_iso(),
         "schedules": schedules,
         "payments": [],
+        "referrer_user_id": ru["id"] if ru else None,
+        "referrer_name": ru["name"] if ru else None,
         **data,
     }
     await db.students.insert_one(doc)
@@ -952,6 +987,19 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
         existing.get("schedules") or [], fees_plan, referenced_ids
     )
     data["schedules"] = new_schedules
+
+    # Re-map referrer whenever the reference name changes on update. This
+    # keeps the "Referred by" chip + staff dashboard in sync when an admin
+    # edits the reference field after enrollment. When the manual reference
+    # field goes empty we DON'T auto-clear an existing referrer_user_id
+    # (link may have been set via /apply?ref=<slug> — preserve it).
+    if "reference" in payload.model_fields_set:
+        new_ref = data.get("reference")
+        if new_ref:
+            ru = await _resolve_referrer_by_name(new_ref)
+            if ru:
+                data["referrer_user_id"] = ru["id"]
+                data["referrer_name"] = ru["name"]
 
     await db.students.update_one(
         _student_filter(student_id, user),
