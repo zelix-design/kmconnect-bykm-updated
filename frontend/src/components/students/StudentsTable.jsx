@@ -205,7 +205,18 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
                     <td className="px-3 py-2">{s.college || "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">{cityOfStudent(s) || "—"}</td>
                     <td className="px-3 py-2 text-muted-foreground">{hometownOf(s) || "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{s.reference || "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      <div>{s.reference || "—"}</div>
+                      {s.referrer_name && (
+                        <div
+                          className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                          data-testid={`student-row-referrer-${s.id}`}
+                          title={`Referred by ${s.referrer_name}`}
+                        >
+                          ref · {s.referrer_name}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wider border ${tone}`}>
                         {s.status || "—"}

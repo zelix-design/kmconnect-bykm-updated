@@ -451,8 +451,15 @@ async def my_referred_students(user: dict = Depends(get_current_user)):
     items = await db.students.find(
         {"referrer_user_id": user["id"]},
         {"_id": 0, "id": 1, "name": 1, "course": 1, "college": 1, "status": 1,
-         "created_at": 1, "reference": 1},
+         "created_at": 1, "reference": 1, "referrer_user_id": 1, "referrer_name": 1},
     ).sort("created_at", -1).to_list(2000)
+    # For staff opening their own list, denormalize the referrer's own name
+    # onto rows that predated the schema addition, so the "Referred by" chip
+    # renders consistently everywhere.
+    caller_name = user.get("name")
+    for s in items:
+        if not s.get("referrer_name") and s.get("referrer_user_id") == user["id"]:
+            s["referrer_name"] = caller_name
     return items
 
 
@@ -482,6 +489,7 @@ async def staff_quick_add_student(payload: StaffQuickStudentIn, user: dict = Dep
         "college": (payload.college or "").strip(),
         "reference": user.get("name") or "",
         "referrer_user_id": user["id"],
+        "referrer_name": user.get("name"),
         "sc_out_fixed": 0.0,
         "status": payload.status,
         "enrollment_date": now[:10],
@@ -650,8 +658,10 @@ async def list_students(user: dict = Depends(get_current_user)):
         items = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
         if items:
             user_ids = list({s.get("user_id") for s in items if s.get("user_id")})
+            referrer_ids = list({s.get("referrer_user_id") for s in items if s.get("referrer_user_id")})
+            all_ids = list(set(user_ids) | set(referrer_ids))
             users = await db.users.find(
-                {"id": {"$in": user_ids}},
+                {"id": {"$in": all_ids}},
                 {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1},
             ).to_list(500)
             umap = {u["id"]: u for u in users}
@@ -662,13 +672,32 @@ async def list_students(user: dict = Depends(get_current_user)):
                 if u and u.get("role") == "office_admin":
                     summary["_creator_name"] = u.get("name")
                     summary["_creator_office"] = u.get("office")
+                # Denormalized referrer name (fills legacy rows on the fly).
+                if s.get("referrer_user_id") and not s.get("referrer_name"):
+                    ru = umap.get(s["referrer_user_id"])
+                    if ru:
+                        summary["referrer_name"] = ru.get("name")
                 out.append(summary)
             return out
         return []
     items = await db.students.find(
         _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
-    return [_summarize(s) for s in items]
+    # Populate referrer_name for legacy rows so the "Referred by" chip renders.
+    referrer_ids = list({s.get("referrer_user_id") for s in items if s.get("referrer_user_id") and not s.get("referrer_name")})
+    umap: dict = {}
+    if referrer_ids:
+        rus = await db.users.find(
+            {"id": {"$in": referrer_ids}}, {"_id": 0, "id": 1, "name": 1}
+        ).to_list(500)
+        umap = {u["id"]: u.get("name") for u in rus}
+    out = []
+    for s in items:
+        summary = _summarize(s)
+        if s.get("referrer_user_id") and not s.get("referrer_name"):
+            summary["referrer_name"] = umap.get(s["referrer_user_id"])
+        out.append(summary)
+    return out
 
 
 @router.post("")

@@ -166,13 +166,15 @@ async def _resolve_owner_user_id() -> str:
     raise HTTPException(503, "Admin account not provisioned yet")
 
 
-def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_form", referrer_user_id: Optional[str] = None) -> dict:
+def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_form", referrer_user_id: Optional[str] = None, referrer_name: Optional[str] = None) -> dict:
     """Translate the application payload → a row that fits the existing
     ``students`` schema, with the full application preserved on the side.
 
     ``source`` distinguishes between public form submissions (``public_form``)
     and admin-pasted entries (``admin_paste``) so the UI can badge them
-    appropriately.
+    appropriately. ``referrer_name`` is denormalized alongside
+    ``referrer_user_id`` so the Students list can display "Referred by X"
+    without a separate lookup per row.
     """
     payment_amt = float(app.payment.registration_amount or 0)
     payments_list: list[dict] = []
@@ -204,6 +206,7 @@ def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_
         "college": app.course.preferred_college or "",
         "reference": app.reference.name or "",
         "referrer_user_id": referrer_user_id,
+        "referrer_name": referrer_name,
         "sc_out_fixed": 0.0,
         "status": "inquiry",
         "enrollment_date": now_iso()[:10],
@@ -234,6 +237,7 @@ async def submit_application(payload: ApplicationIn) -> dict:
     owner_id = await _resolve_owner_user_id()
     # Resolve a staff/admin login referrer so the student is credited to them.
     referrer_user_id = None
+    referrer_name = None
     if payload.referrer_id:
         ru = await db.users.find_one(
             {"id": payload.referrer_id, "role": {"$in": ["staff", "office_admin", "super_admin"]}},
@@ -241,9 +245,10 @@ async def submit_application(payload: ApplicationIn) -> dict:
         )
         if ru:
             referrer_user_id = ru["id"]
+            referrer_name = ru.get("name")
             if not (payload.reference.name or "").strip():
                 payload.reference.name = ru.get("name")
-    doc = _build_student_doc(payload, owner_id, referrer_user_id=referrer_user_id)
+    doc = _build_student_doc(payload, owner_id, referrer_user_id=referrer_user_id, referrer_name=referrer_name)
     await db.students.insert_one(doc)
     # Auto-advance the matching CRM lead: converted → application_submitted,
     # cascading to fee_paid when a registration amount is present. Best-effort.

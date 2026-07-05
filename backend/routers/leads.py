@@ -746,6 +746,7 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
         "college": ((payload.college or "") if payload else ""),
         "reference": (referrer or {}).get("name") or "",
         "referrer_user_id": referrer_user_id,
+        "referrer_name": (referrer or {}).get("name"),
         "sc_out_fixed": 0.0,
         "status": "inquiry",
         "enrollment_date": now[:10],

@@ -146,6 +146,29 @@ async def seed_admin_and_backfill() -> None:
     except Exception:
         pass
 
+    # Backfill: denormalize `referrer_name` on students that carry a
+    # ``referrer_user_id`` but no name yet. Runs on every boot but only
+    # touches rows that still need the fix, so it's idempotent + cheap.
+    try:
+        pending = await db.students.find(
+            {"referrer_user_id": {"$ne": None}, "referrer_name": {"$in": [None, ""]}},
+            {"_id": 0, "id": 1, "referrer_user_id": 1},
+        ).to_list(5000)
+        if pending:
+            ref_ids = list({p["referrer_user_id"] for p in pending})
+            users = await db.users.find(
+                {"id": {"$in": ref_ids}}, {"_id": 0, "id": 1, "name": 1}
+            ).to_list(500)
+            umap = {u["id"]: u.get("name") for u in users if u.get("name")}
+            for p in pending:
+                name = umap.get(p["referrer_user_id"])
+                if name:
+                    await db.students.update_one(
+                        {"id": p["id"]}, {"$set": {"referrer_name": name}}
+                    )
+    except Exception:
+        pass
+
     # Backfill missing default categories for existing users (idempotent)
     async for u in db.users.find({}, {"id": 1, "_id": 0}):
         existing_cats = await db.categories.find(

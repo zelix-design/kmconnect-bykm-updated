@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
-import { ArrowRight, GraduationCap, Buildings, UserCircle } from "@phosphor-icons/react";
+import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 
 const STATUS_STYLES = {
@@ -53,6 +53,16 @@ export default function StudentCard({ s, currency, isSuper }) {
         {isSuper && s._creator_office && (
           <div className="mt-2.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400 self-start" data-testid={`st-creator-${s.id}`}>
             <Buildings size={11} weight="duotone" /> {s._creator_office.replace("KM_", "KM ")} · {s._creator_name}
+          </div>
+        )}
+
+        {s.referrer_name && (
+          <div
+            className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] uppercase tracking-wider bg-violet-100/60 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 self-start"
+            data-testid={`st-referrer-${s.id}`}
+            title={`Referred by ${s.referrer_name}`}
+          >
+            <IdentificationCard size={11} weight="duotone" /> Referred by · {s.referrer_name}
           </div>
         )}
 
