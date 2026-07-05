@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -237,8 +238,28 @@ def _public(lead: dict) -> dict:
     return lead
 
 
-def _referral_link(ref: str) -> str:
+async def _referral_link(referrer_user_id: str) -> str:
+    """Build the public application link for a referrer.
+
+    Emits a human-readable slug segment (``/ref=jishna-jeemon``) by resolving
+    the referrer's ``name`` and slugifying it. Falls back to the UUID if the
+    user has no name on record — the public ``/api/public/referrer/{slug}``
+    endpoint accepts both slug and UUID, so old links keep working.
+    """
     base = (os.environ.get("APPLY_PUBLIC_URL") or "").rstrip("/")
+    ref = referrer_user_id
+    if referrer_user_id:
+        try:
+            user = await db.users.find_one({"id": referrer_user_id}, {"_id": 0, "name": 1})
+            # Inline slugify — avoids circular import with routers.applications
+            # (which imports bump_lead_on_application from here). Matches the
+            # implementation in applications.py exactly.
+            name = ((user or {}).get("name") or "").strip().lower()
+            slug = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+            if slug:
+                ref = slug
+        except Exception:
+            pass  # keep UUID fallback
     return f"{base}/ref={ref}" if base else f"/apply?ref={ref}"
 
 
@@ -748,7 +769,7 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
             course=((payload.course or "") or lead.get("course") or ""),
             college=payload.college or "",
             city=payload.city or "",
-            link=_referral_link(referrer_user_id),
+            link=await _referral_link(referrer_user_id),
         )
 
     lead_patch = {"status": "converted", "converted_student_id": student_id, "updated_at": now}
@@ -817,7 +838,7 @@ async def resend_application_link(lead_id: str, user: dict = Depends(require_edi
         course=cd.get("course") or lead.get("course") or "",
         college=cd.get("college") or "",
         city=cd.get("city") or "",
-        link=_referral_link(referrer_user_id),
+        link=await _referral_link(referrer_user_id),
     )
     now = now_iso()
     await db.leads.update_one(
