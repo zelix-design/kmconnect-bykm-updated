@@ -1035,3 +1035,18 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - [x] Added `refreshKey` prop threaded from `Leads.jsx` → `LeadsPipeline.jsx`: whenever the shared dialog mutates a lead (via `onChanged`), `Leads.jsx` bumps the key and `LeadsPipeline.jsx` refetches — so a status change made from the shared dialog is reflected in the pipeline list without a manual refresh.
 
 **Testing (iteration_49.json)** — 10/10 new backend tests + 48/48 iteration 45+46+48 regression PASS. Frontend Playwright confirmed: deep-link keeps Overview and Campaigns tabs active; dialog opens in-place; TodayVisitsPanel still rendered behind; Escape strips ?lead= from URL; Tomorrow Visit pill appears on preview cards; staff view (no tabs) also opens dialog above TodayVisitsPanel. Zero defects — 100% pass on both.
+
+## Bug fix — 2026-07-05 (iteration 51: Legacy students referred-by-name now surface on employee dashboard)
+
+**Reported bug**: "The already added students not mapped to the employees dashboard (they referred)." — Admins had typed staff/office-admin names into the manual "Reference" field on 15+ existing students (e.g. `reference="JISHNA JEEMON"`), but `referrer_user_id` was never populated, so those students were invisible on the employee's own `/dashboard` and `/my-students`.
+
+**Fix**
+- New `_resolve_referrer_by_name(name)` helper in `routers/students.py` — case-insensitive, whitespace-collapsed exact match against users with role ∈ (staff, office_admin, super_admin).
+- `POST /api/students` and `PATCH /api/students/{id}` now auto-populate `referrer_user_id` + `referrer_name` from the `reference` text field.
+- `PATCH` is defensive: never clobbers an existing `referrer_user_id` link (e.g. one set via `/apply?ref=<slug>`) when the new reference doesn't match.
+- `POST /api/public/applications` falls back to the name-lookup when the `?ref=<slug>` URL wasn't used but the applicant manually typed a matching staff/admin name.
+- `seed.py` Case-2 backfill scans `{referrer_user_id: null, reference: non-empty}` on every boot and retroactively populates the mapping.
+
+**Result**: `referrer_user_id` count went from 10 → 15 legacy students, unlocking them on the corresponding employee's dashboard (BLAZE JOSEPH gained 5, ADHISH K JEES gained 3, JISHNA JEEMON and Fathima Telecaller unchanged since they were already `ref=` linked).
+
+**Testing** — 9/9 new iteration-51 tests + 67/67 iteration 44-49 regression PASS. Frontend Playwright confirmed the `st-referrer-<id>` chip count on `/students` jumped from 10 → 15 as expected.
