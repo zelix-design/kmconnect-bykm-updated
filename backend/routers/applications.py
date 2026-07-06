@@ -262,15 +262,25 @@ async def submit_application(payload: ApplicationIn) -> dict:
     # cascading to fee_paid when a registration amount is present. Best-effort.
     try:
         reg_amt = float(payload.payment.registration_amount or 0)
-        await bump_lead_on_application(
+        bump_result = await bump_lead_on_application(
             student_id=doc["id"],
             phone=payload.basic_info.mobile_number,
             applicant_name=payload.basic_info.student_full_name,
             has_registration_payment=reg_amt > 0,
             registration_amount=reg_amt,
         )
+        if bump_result:
+            log.info(
+                "[applications] auto-bumped lead %s -> %s (student=%s)",
+                bump_result.get("id"), bump_result.get("status"), doc["id"],
+            )
+        else:
+            log.info(
+                "[applications] no matching lead to auto-bump for phone=%s (student=%s)",
+                payload.basic_info.mobile_number, doc["id"],
+            )
     except Exception as exc:  # pragma: no cover — best-effort
-        log.warning("[applications] lead auto-bump failed: %s", exc)
+        log.warning("[applications] lead auto-bump failed: %s", exc, exc_info=True)
     # Fire-and-forget notification to all super admins.
     try:
         await notify_super_admins(

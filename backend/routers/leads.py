@@ -173,25 +173,37 @@ async def bump_lead_on_application(
     registration_amount: float = 0.0,
     system_user: Optional[dict] = None,
 ) -> Optional[dict]:
-    """Auto-advance a matching converted lead when its student submits the
+    """Auto-advance a matching CRM lead when its student submits the
     online application form (POST /api/public/applications).
 
-    Match strategy: converted lead whose phone (last 10 digits) equals the
-    applicant's mobile number, hasn't already progressed past converted.
-    Transitions applied — always ``converted → application_submitted``; when
-    the submission carries a registration payment, cascade one more step to
-    ``fee_paid`` so the Journey shows the full path.
+    **Match strategy** (relaxed 2026-07-06 based on user feedback that the
+    old "converted-only" gate silently dropped most real-world cases):
+      * Compare phone by last-10-digits via ``_normalize_phone`` so different
+        formats (`+91 …`, `-`, spaces) still map to the same lead.
+      * Match ANY lead in a *pre-application* stage — i.e. status IN
+        ``("new", "not_connected", "interested", "follow_up", "converted",
+        "application_submitted")``. Leads already past application (fee_paid,
+        completed, lost, not_turned, admission_confirmed) are LEFT ALONE.
 
-    Best-effort: never raises. Returns the updated lead or ``None`` if no
-    match / no update.
+    **Cascade**:
+      * → ``application_submitted`` (always — the app was actually submitted).
+      * → ``fee_paid`` (additionally, only if ``has_registration_payment`` and
+        the lead is now at ``application_submitted``).
+
+    ``status_history`` gains one entry per transition, actored as
+    "System · Application submitted" (or the caller-supplied ``system_user``).
+    Best-effort: never raises. Returns the updated lead or ``None`` if
+    nothing matched / nothing to do.
     """
     key = _normalize_phone(phone)
     if not key:
         return None
-    # Find converted leads whose stored phone shares the same 10-digit tail.
-    # We compare via a $expr regex-free scan to be forgiving of stored formats.
+    # Only auto-advance from pre-application statuses. Once a lead is at
+    # fee_paid/completed/admission_confirmed/lost/not_turned, a new /apply
+    # submission is treated as noise (probably a duplicate or resubmit).
+    pre_app = ("new", "not_connected", "interested", "follow_up", "converted", "application_submitted")
     candidates = await db.leads.find(
-        {"status": {"$in": ["converted", "application_submitted"]}},
+        {"status": {"$in": list(pre_app)}},
         {"_id": 0, "id": 1, "phone": 1, "status": 1, "name": 1},
     ).to_list(2000)
     matched = None
@@ -205,11 +217,11 @@ async def bump_lead_on_application(
     now = now_iso()
     events: list[dict] = []
     sets: dict = {"updated_at": now, "application_student_id": student_id}
-    current = matched.get("status") or "converted"
+    current = matched.get("status") or "new"
 
-    if current == "converted":
+    if current != "application_submitted":
         events.append(_status_event(
-            "converted", "application_submitted", actor,
+            current, "application_submitted", actor,
             note=f"Application submitted by {applicant_name}" if applicant_name else "",
             metadata={"student_id": student_id},
         ))

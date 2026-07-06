@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 54 RETEST — verified relaxed match set in bump_lead_on_application. Wrote /app/backend/tests/test_iteration54_bump_relaxed.py (14 tests, all pass) and re-ran iteration 48's TestAutoBump (3/3 pass, no regression). Structured logs confirmed. Frontend LeadJourney visual verification via /leads?lead=<id> shows both auto-bump entries (new→application_submitted, application_submitted→fee_paid, actored 'System · Application submitted') and the lead badge reads 'Fee Paid'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration54_bump_relaxed.py",
+    "/app/test_reports/pytest/iteration54.xml",
+    "/app/test_reports/pytest/iteration54_regression.xml"
+  ],
+  "test_coverage": {
+    "cascade_from_new": "PASS — new → application_submitted → fee_paid, 2 new history entries, actor 'System · Application submitted', application_student_id set",
+    "cascade_from_converted": "PASS (regression from iteration 48 TestAutoBump also PASS)",
+    "cascade_from_interested": "PASS — 'from' field reflects starting status",
+    "cascade_from_follow_up": "PASS",
+    "cascade_from_not_connected": "PASS (bonus coverage)",
+    "no_cascade_when_reg_zero": "PASS — only 1 new history entry (converted→application_submitted)",
+    "terminal_untouched": "PASS for fee_paid, completed, admission_confirmed, lost, not_turned (0 new history entries each)",
+    "phone_normalization_both_directions": "PASS — +91-<10> vs bare <10>, both directions",
+    "no_matching_phone": "PASS — /apply returns 201, no side effects",
+    "structured_logs": "VERIFIED in /var/log/supervisor/backend.err.log — '[applications] auto-bumped lead ... -> fee_paid' and '[applications] no matching lead to auto-bump for phone=' both present",
+    "frontend_leadjourney_screenshot": ".screenshots/it54_leadjourney.png — dialog shows Fee Paid badge and both transitions with correct actor"
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "bump_lead_on_application uses find(...).to_list(2000) then Python-side phone normalization — fine at current scale but O(N) per submission across the whole pre_app cohort. Consider storing a normalized phone (last-10) as an indexed field and matching directly. Not blocking.",
+    "The pre_app tuple in leads.py:204 is duplicated conceptually with OPEN_STATUSES + 'converted' + 'application_submitted'. Minor DRY note — could be derived to reduce drift risk."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration54_bump_relaxed.py (new)"
+  ],
+  "success_rate": {"backend": "100% (14/14 new + 3/3 regression)", "frontend": "100% (visual verification passed)"},
+  "test_credentials": "Super Admin admin@kmfoundation.online / Admin@786 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All test leads/students prefixed with 'IT54' and cleaned up in teardown_module. UI verification lead+student also deleted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 54 fix (broadened pre_app match set) is fully verified end-to-end. Regression on iteration 48 TestAutoBump also passes. Future related work should focus on the O(N) scan noted in code review comments if lead volume grows large.",
+  "rca_of_the_issue": "User reported: cascade converted→application_submitted→fee_paid was not firing. RCA: bump_lead_on_application filtered candidates by status IN ('converted','application_submitted') only, so real-world leads still sitting at 'new'/'interested'/'follow_up' never matched even when their phone matched an /apply submission. Fix (already applied by main agent): relaxed the $in list to also include 'new','not_connected','interested','follow_up'. Now every pre-application lead cascades correctly while terminal statuses (fee_paid, completed, admission_confirmed, lost, not_turned) remain untouched."
+}
