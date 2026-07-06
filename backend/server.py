@@ -99,12 +99,25 @@ async def healthz() -> dict:
 
 app.include_router(health)
 
+# CORS — the ``allow_origin_regex`` catches every browser origin, but we also
+# whitelist a few explicit non-browser schemes used by the Capacitor Android
+# app so its WebView (which does NOT send a standard http/https Origin) can
+# still complete cross-origin POSTs like /auth/login without tripping the
+# CORS layer.
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
+    allow_origins=[
+        "capacitor://localhost",
+        "http://localhost",
+        "https://localhost",
+        "ionic://localhost",
+    ],
     allow_origin_regex=".*",
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+    max_age=600,  # cache preflights for 10 min → far fewer OPTIONS on flaky mobile networks
 )
 
 logging.basicConfig(level=logging.INFO)

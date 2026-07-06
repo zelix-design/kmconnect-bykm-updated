@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 52 (Android login network-error fix) — Backend CORS validation PASSED completely (7/7 new tests + 76/76 regression). Frontend retry-once-on-network-error verified via Playwright page.route interception. Timeout=25s and 'no retry on 5xx' verified. HOWEVER a CRITICAL bug was found in the retry guard: on PERSISTENT network failure the retry fires more than once (observed 10 attempts against always-fail route). Root cause: the guard on line 115 of api.js checks `err.__retried` on the error OBJECT, but the flag is only set on the request CONFIG (line 135: `{ ...err.config, __retried: true }`). Each subsequent axios failure produces a fresh error object without __retried, so the guard never trips and retries loop until something (Playwright timeout / browser abort / user leaves page) breaks the chain. Because the loop never terminates cleanly on a truly-offline device, the user-friendly 'Can't reach the server' message ALSO never surfaces (button stays stuck on 'Please wait…'). Happy-path online login still works.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Login retry-once guard on persistent network failure",
+        "issue": "Infinite retry loop when network stays down. In /app/frontend/src/lib/api.js the `_shouldRetry` guard on line 115 tests `err.__retried` but the flag is set on `err.config.__retried` (line 135). Axios re-invokes the response interceptor with a NEW error object on each attempt, so the guard is always falsy and retries keep firing. Observed 10 attempts against an always-fail route (expected 2). Because the promise never settles quickly, the friendly 'Can't reach the server. Check your internet connection and try again.' toast from auth.jsx never appears while the user is offline.",
+        "affected_selectors": ["button[type='submit']", "form on /login"],
+        "priority": "HIGH",
+        "suggested_fix": "Change line 115 from `if (err.__retried) return false;` to `if (err?.config?.__retried) return false;` (and drop the now-redundant `err.__retried = true` on line 132). Alternatively check both flags: `if (err.__retried || err?.config?.__retried) return false;`"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration52_cors_and_retry.py",
+    "/app/test_reports/pytest/iteration52.xml",
+    "/app/test_reports/pytest/iteration52_regression.xml"
+  ],
+  "action_items": [
+    "Fix infinite-retry guard bug in /app/frontend/src/lib/api.js line 115 — use `err?.config?.__retried` instead of `err.__retried`.",
+    "After fix, re-run Playwright TEST4 (always-fail route) — attempt count MUST equal 2 exactly, and Login page MUST display the friendly 'Can't reach the server…' string within ~5s of clicking submit."
+  ],
+  "critical_code_review_comments": [
+    "api.js retry guard uses `err.__retried` (error object) but sets `__retried` on `err.config`. Axios generates a NEW Error per attempt so the guard is effectively dead code — retries loop on persistent transport failure. This directly regresses the goal of iteration 52 for the 'truly offline / dead-Wi-Fi Android carrier' case which is the exact scenario reported by the user.",
+    "server.py CORS middleware correctly whitelists Capacitor scheme origins AND preserves the `.*` regex fallback — verified via 5 preflight scenarios (capacitor / vercel / random / ionic / http-localhost). Access-Control-Max-Age=600 confirmed present, Allow-Credentials=true reflected instead of '*'.",
+    "The frontend `login()` friendly-message branch is correctly written but never runs when retries hang the promise — see infinite-retry bug above."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration52_cors_and_retry.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7 new CORS tests + 76/76 iteration 44-51 regression)",
+    "frontend": "80% — timeout=25s ✅, retry activates on ERR_NETWORK ✅, no retry on 5xx ✅, happy-path login ✅, but retry-only-ONCE guard ❌ (retries loop indefinitely, and consequently friendly-offline message never renders)"
+  },
+  "test_credentials": "Super Admin admin@kmfoundation.online / Admin@786 used for both backend curl login test and Playwright happy-path.",
+  "seed_data_creation": "None. All tests are read-only or use existing seeded admin.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The bug is a 3-character fix: change `err.__retried` to `err?.config?.__retried` in _shouldRetry. Re-run the Playwright script from iteration_52 report to verify. Backend CORS is fully validated — no need to re-hit unless server.py CORSMiddleware config changes. Note: backend must be hit at http://localhost:8001 DIRECTLY (not via preview ingress) to observe true CORS headers; ingress rewrites them.",
+  "rca of the issue": "Bug reproduction: `await page.route('**/api/auth/login', lambda r,q: r.abort('failed'))` then click login → observed 10 upstream attempts (should be 2). Root cause: `_shouldRetry` reads `err.__retried`, but the interceptor tags the config (`{...err.config, __retried: true}`), and axios manufactures a brand-new Error object on each failed attempt so the flag never appears on the error itself. Mitigation: check `err?.config?.__retried` (persisted across retries by axios) instead of the ephemeral error property. Impact: the user-facing symptom is 'Please wait…' button that never releases + friendly toast never shown for a genuinely offline Android device — exactly the scenario iteration 52 was meant to improve."
+}

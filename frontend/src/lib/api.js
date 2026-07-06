@@ -84,6 +84,10 @@ export const getStoredToken = () => {
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  // 25s is generous enough for slow mobile networks yet short enough that a
+  // truly-dropped request fails loud instead of hanging the login button
+  // forever. Android carriers occasionally stall TLS handshakes indefinitely.
+  timeout: 25_000,
 });
 
 // Attach Authorization: Bearer <token> to every request when we have a
@@ -101,15 +105,40 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// If the server tells us the token is invalid/expired we leave the stored
-// token alone. Previously we wiped it on every 401, but that caused mobile
-// users to be silently logged out whenever a transient /auth/me request
-// failed (e.g., iOS Safari ITP cookie blips, brief Wi-Fi/4G handovers).
-// The token is only cleared explicitly by `logout()` or by `fetchMe()` on
-// the *first* authentication check after page load — see auth.jsx.
+// Retry-once on transient network / timeout failures. Common on Android
+// carrier networks where the first TLS handshake races the DNS resolver and
+// axios sees "Network Error" before the browser has actually completed the
+// connect. A single retry with 400ms backoff turns a scary "network error"
+// toast into a successful login for the vast majority of users.
+function _shouldRetry(err) {
+  if (!err) return false;
+  if (err.__retried) return false;
+  // No response received → transport-layer failure.
+  if (!err.response && err.config) {
+    const msg = String(err.message || "").toLowerCase();
+    return (
+      err.code === "ECONNABORTED" ||
+      err.code === "ERR_NETWORK" ||
+      msg.includes("network error") ||
+      msg.includes("timeout")
+    );
+  }
+  return false;
+}
 api.interceptors.response.use(
   (resp) => resp,
-  (err) => Promise.reject(err),
+  async (err) => {
+    if (_shouldRetry(err)) {
+      err.__retried = true;
+      await new Promise((r) => setTimeout(r, 400));
+      try {
+        return await api.request({ ...err.config, __retried: true });
+      } catch (retryErr) {
+        return Promise.reject(retryErr);
+      }
+    }
+    return Promise.reject(err);
+  },
 );
 
 export function formatApiError(detail) {

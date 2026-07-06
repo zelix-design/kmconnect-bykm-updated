@@ -65,12 +65,24 @@ export function AuthProvider({ children }) {
       setUser(rest);
       return true;
     } catch (e) {
-      // Prefer the server-side error detail; fall through to the underlying
-      // axios/JS error message when there's no server response (network blip,
-      // CORS rejection, localStorage exception, etc.) so users see something
-      // actionable instead of the generic "Something went wrong".
+      // Prefer the server-side error detail; fall through to a friendlier
+      // message for the two commonest transport failures on mobile
+      // (blocked/dropped cross-origin request → "Network Error", stalled TLS
+      // handshake → "timeout of X ms exceeded"). Plain axios messages read
+      // like a stack trace to non-technical users.
       const serverDetail = e?.response?.data?.detail;
-      setError(serverDetail ? formatApiError(serverDetail) : (e?.message || formatApiError(null)));
+      if (serverDetail) {
+        setError(formatApiError(serverDetail));
+      } else {
+        const raw = String(e?.message || "").toLowerCase();
+        if (raw.includes("network error") || e?.code === "ERR_NETWORK") {
+          setError("Can't reach the server. Check your internet connection and try again.");
+        } else if (raw.includes("timeout") || e?.code === "ECONNABORTED") {
+          setError("The server took too long to respond. Please check your connection and retry.");
+        } else {
+          setError(e?.message || formatApiError(null));
+        }
+      }
       return false;
     }
   }, []);
