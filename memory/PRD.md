@@ -1050,3 +1050,19 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 **Result**: `referrer_user_id` count went from 10 → 15 legacy students, unlocking them on the corresponding employee's dashboard (BLAZE JOSEPH gained 5, ADHISH K JEES gained 3, JISHNA JEEMON and Fathima Telecaller unchanged since they were already `ref=` linked).
 
 **Testing** — 9/9 new iteration-51 tests + 67/67 iteration 44-49 regression PASS. Frontend Playwright confirmed the `st-referrer-<id>` chip count on `/students` jumped from 10 → 15 as expected.
+
+## Bug fix — 2026-07-06 (iteration 52+53: Android login network error)
+
+**Reported bug**: "In android phone can't login its showing network error." The Capacitor Android WebView (loading Vercel-hosted frontend, calling Railway-hosted backend cross-origin) hit a bare "Network Error" on login submission — no retry, no timeout, no friendly guidance.
+
+**Fixes applied**
+- **Backend (`server.py`)** — CORSMiddleware now also whitelists non-http Capacitor scheme origins (`capacitor://localhost`, `http://localhost`, `https://localhost`, `ionic://localhost`) alongside the existing regex, sets `max_age=600` (10-min preflight cache → far fewer OPTIONS on flaky mobile networks), and exposes `Content-Disposition`. Verified 5 preflight scenarios (capacitor / vercel / random / ionic / http-localhost) return the origin reflected + `Allow-Credentials: true`.
+- **Frontend (`src/lib/api.js`)** — Added axios `timeout: 25_000` (fast-fail instead of hanging), and a one-shot retry-with-400ms-backoff interceptor for transport-layer failures (ECONNABORTED / ERR_NETWORK / "Network Error" / "timeout"). Retry does NOT fire on 4xx or 5xx responses. Retry guard uses `err?.config?.__retried` (persisted by axios across attempts) — iteration 52 originally checked the ephemeral `err.__retried` which caused an infinite loop on persistent failure; iteration 53 patched to check `err.config.__retried`.
+- **Frontend (`src/lib/auth.jsx`)** — `login()` now emits actionable messages on transport failures: "Can't reach the server. Check your internet connection and try again." (network) and "The server took too long to respond. Please check your connection and retry." (timeout) instead of the raw axios `err.message`.
+
+**Verified via testing_agent (iteration_53.json — 100% pass)**
+- Persistent network abort: exactly 2 attempts (initial + 1 retry), elapsed 1.06s, friendly toast rendered
+- 500 server error: 1 attempt only (no retry)
+- 401 invalid credentials: 1 attempt only (no retry)
+- Happy-path login: redirects to home within 15s
+- Backend CORS: 7/7 iteration-52 tests + 76/76 iteration 44-51 regression PASS
