@@ -1066,3 +1066,20 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - 401 invalid credentials: 1 attempt only (no retry)
 - Happy-path login: redirects to home within 15s
 - Backend CORS: 7/7 iteration-52 tests + 76/76 iteration 44-51 regression PASS
+
+## Bug fix — 2026-07-06 (iteration 54: Auto-bump gate too narrow)
+
+**Reported bug**: "Auto-status on application submission → When a converted lead's phone matches a /apply submission, lead cascades converted → application_submitted → fee_paid. This not working."
+
+**Root cause**: `bump_lead_on_application` filtered candidate leads by `status IN ("converted", "application_submitted")` only. Real-world leads sitting at `new`/`interested`/`follow_up` never matched — most staff send the application link WhatsApp manually without clicking the CRM "Convert" button first, so the lead never reached `converted` before the /apply came in.
+
+**Fix**
+- Relaxed the match set to `("new", "not_connected", "interested", "follow_up", "converted", "application_submitted")` — any pre-application stage auto-bumps to `application_submitted` (+ optional `fee_paid`) on /apply submission.
+- The `from` field in the first `status_history` entry now reflects the ACTUAL current status (e.g. `new -> application_submitted`), not always `converted`.
+- Terminal statuses (`fee_paid`, `completed`, `admission_confirmed`, `lost`, `not_turned`) are LEFT ALONE — a duplicate /apply on a completed lead is treated as noise.
+- Added `log.info("[applications] auto-bumped lead ...")` and `log.info("[applications] no matching lead to auto-bump for phone=...")` so future "not working" reports can be diagnosed by tail-grepping the backend log.
+
+**Verified via testing_agent (iteration_54.json — 100% pass)**
+- 14/14 new backend tests (cascade from new/converted/interested/follow_up/not_connected, no-cascade when reg=0, terminal untouched, phone-normalization both directions, non-matching phone, structured logs)
+- 3/3 iteration-48 auto-bump regression tests still pass
+- Frontend LeadJourney panel confirmed showing both auto-bump entries with correct from/to and actor "System · Application submitted"
