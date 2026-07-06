@@ -112,7 +112,11 @@ api.interceptors.request.use((config) => {
 // toast into a successful login for the vast majority of users.
 function _shouldRetry(err) {
   if (!err) return false;
-  if (err.__retried) return false;
+  // Axios manufactures a fresh Error object on every attempt, so a flag on
+  // the error itself is invisible to the next call. The `config` object,
+  // however, is REUSED across retry attempts — that's where we mark the
+  // attempt and where we check it on subsequent failures.
+  if (err?.config?.__retried) return false;
   // No response received → transport-layer failure.
   if (!err.response && err.config) {
     const msg = String(err.message || "").toLowerCase();
@@ -129,9 +133,10 @@ api.interceptors.response.use(
   (resp) => resp,
   async (err) => {
     if (_shouldRetry(err)) {
-      err.__retried = true;
       await new Promise((r) => setTimeout(r, 400));
       try {
+        // Mark on the config (which axios preserves across attempts) so the
+        // next failure trips the guard and doesn't loop indefinitely.
         return await api.request({ ...err.config, __retried: true });
       } catch (retryErr) {
         return Promise.reject(retryErr);
