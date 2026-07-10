@@ -68,20 +68,27 @@ async def seed_admin_and_backfill() -> None:
     existing = await db.users.find_one({"email": admin_email})
 
     # One-time migration of the seeded admin email/password (idempotent: only
-    # runs when the new email isn't claimed yet AND the legacy one is present).
-    if existing is None and admin_email != "admin@finflow.com":
-        legacy = await db.users.find_one({"email": "admin@finflow.com"})
-        if legacy and legacy.get("role") == "super_admin":
-            await db.users.update_one(
-                {"id": legacy["id"]},
-                {"$set": {
-                    "email": admin_email,
-                    "password_hash": hash_password(admin_password),
-                    "approval_status": "approved",
-                    "role": "super_admin",
-                }},
-            )
-            existing = await db.users.find_one({"email": admin_email})
+    # runs when the new email isn't claimed yet AND a legacy super_admin row
+    # exists that we can safely rename). We try each legacy email in order
+    # and rename the first match — preserving the ``user_id`` so all linked
+    # data (students / invoices / accounts / referrer_user_id on leads and
+    # students) keeps pointing at the same row after the rename.
+    LEGACY_ADMIN_EMAILS = ["admin@finflow.com", "admin@kmfoundation.online"]
+    if existing is None and admin_email not in LEGACY_ADMIN_EMAILS:
+        for legacy_email in LEGACY_ADMIN_EMAILS:
+            legacy = await db.users.find_one({"email": legacy_email})
+            if legacy and legacy.get("role") == "super_admin":
+                await db.users.update_one(
+                    {"id": legacy["id"]},
+                    {"$set": {
+                        "email": admin_email,
+                        "password_hash": hash_password(admin_password),
+                        "approval_status": "approved",
+                        "role": "super_admin",
+                    }},
+                )
+                existing = await db.users.find_one({"email": admin_email})
+                break
 
     if existing is None:
         user_id = gen_id()
