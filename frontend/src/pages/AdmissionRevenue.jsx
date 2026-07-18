@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import {
   CurrencyInr, Lock, TrendUp, Coins, CheckCircle, Warning,
-  ArrowsClockwise, GraduationCap, Buildings, BookOpen,
+  ArrowsClockwise, GraduationCap, Buildings, Users,
 } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
@@ -80,10 +80,6 @@ function AdmissionRevenue() {
   const fmtInr = (n) => formatMoney(n || 0, "INR").replace(/^[₹$€£¥]\s?/, "");
 
   const tiers = data?.tiers || {};
-  const totalRows = useMemo(
-    () => (data?.by_college || []).reduce((a, r) => a + (r.count || 0), 0),
-    [data],
-  );
 
   if (!isSuper) {
     return (
@@ -227,17 +223,11 @@ function AdmissionRevenue() {
               keyField="college"
               rows={data.by_college || []}
               fmtInr={fmtInr}
-              totalCount={totalRows}
               testid="by-college"
             />
-            <BreakdownTable
-              title="By Course"
-              icon={BookOpen}
-              keyField="course"
-              rows={data.by_course || []}
+            <ClientOfficeTable
+              rows={data.by_client || []}
               fmtInr={fmtInr}
-              totalCount={totalRows}
-              testid="by-course"
             />
           </div>
 
@@ -390,6 +380,108 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid }) {
                       {fmtInr(r.sc_out)}
                     </td>
                     <td className={`text-right py-1.5 pr-1 tabular-nums font-medium ${netCls}`}>
+                      {fmtInr(netVal)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+
+/* ── By Client / Office table ────────────────────────────────────────────── */
+
+const OFFICE_LABEL = {
+  KM_BLR: "Bengaluru",
+  KM_TCR: "Thrissur",
+  KM_KMLY: "Kotamangalam",
+  ALL: "All offices",
+};
+const OFFICE_TONE = {
+  KM_BLR: "bg-orange-500/12 text-orange-800 dark:text-orange-300 border-orange-500/40",
+  KM_TCR: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300 border-emerald-500/40",
+  KM_KMLY: "bg-sky-500/12 text-sky-800 dark:text-sky-300 border-sky-500/40",
+  ALL: "bg-amber-500/12 text-amber-800 dark:text-amber-300 border-amber-500/40",
+};
+
+function OfficeBadge({ office }) {
+  const label = OFFICE_LABEL[office] || (office && office !== "—" ? office : "No office");
+  const tone = OFFICE_TONE[office] || "bg-muted text-muted-foreground border-border";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${tone}`}
+      data-testid={`office-badge-${office || "none"}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ClientOfficeTable({ rows, fmtInr }) {
+  return (
+    <Card
+      className="p-5 border border-border bg-card shadow-none"
+      data-testid="table-by-client"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+          <Users size={16} className="text-muted-foreground" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-display text-base font-semibold">By Client / Office</h3>
+          <p className="text-[11px] text-muted-foreground">
+            Revenue = In (from college) − Out (to sub-agent)
+          </p>
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          {rows.length} row{rows.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-6">No admissions yet.</p>
+      ) : (
+        <div className="max-h-[420px] overflow-y-auto -mx-1">
+          <table className="w-full text-sm">
+            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
+              <tr>
+                <th className="text-left py-1.5 pl-1 font-semibold">Client / Office</th>
+                <th className="text-right py-1.5 font-semibold w-12">Count</th>
+                <th className="text-right py-1.5 pr-1 font-semibold w-32">Revenue (₹)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {rows.map((r, idx) => {
+                const netVal = Number(r.net || 0);
+                const netCls = netVal > 0
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : netVal < 0
+                    ? "text-rose-700 dark:text-rose-400"
+                    : "text-muted-foreground";
+                return (
+                  <tr
+                    key={`${r.client}-${r.office}-${idx}`}
+                    className="hover:bg-muted/40 transition-colors"
+                    data-testid={`row-by-client-${idx}`}
+                  >
+                    <td className="py-2 pl-1">
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="truncate font-medium text-foreground" title={r.client}>
+                          {r.client}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <OfficeBadge office={r.office} />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-right py-2 tabular-nums text-muted-foreground">
+                      {r.count}
+                    </td>
+                    <td className={`text-right py-2 pr-1 tabular-nums font-semibold ${netCls}`}>
                       {fmtInr(netVal)}
                     </td>
                   </tr>

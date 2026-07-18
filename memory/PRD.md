@@ -1249,3 +1249,25 @@ admissions per year. It's confidential — only super admin can see it."
   - `/admission-revenue` shows PIN gate → enter 1234 → dashboard unlocks.
   - Navigate to `/` and back to `/admission-revenue` → **PIN gate re-appears** (confirmed via `gate_visible=1, revenue_leaked=0` assertion).
 
+
+## Follow-up — 2026-07-18 (By Course → By Client / Office)
+
+**Requested change (verbatim)**: "Change this By Course to By Client / Office : Count, Revenue"
+
+**What was built**
+- Backend `admission_revenue.py`:
+  - Replaced the `by_course` aggregation with `by_client`.
+  - Group key is a `(client_name.lower(), home_office)` tuple so a single sub-agent operating across offices shows up as one row per office.
+  - `client_name` resolution order: `referrer_name` → `reference` → `"Direct"`.
+  - Row payload: `{ client, office, count, amount, sc_out, net }`, sorted by `-net`, `-count`, `client`.
+- Frontend `pages/AdmissionRevenue.jsx`:
+  - New `ClientOfficeTable` + `OfficeBadge` components.
+  - Table shows exactly 3 columns as requested: **Client / Office** (name + coloured office chip), **Count**, **Revenue (₹)** (which is Net = In − Out, coloured green/red/muted).
+  - Subtitle under the table title explains the formula.
+  - Office labels: `KM_BLR → Bengaluru`, `KM_TCR → Thrissur`, `KM_KMLY → Kotamangalam`, `ALL → All offices`, else raw code, else "No office".
+  - Removed now-unused `by_course` code path and `totalRows` memo; kept the `by_college` table on the left.
+
+**Verified end-to-end**
+- ✅ Backend curl returns 13 client/office rows with correct amount/sc_out/net.
+- ✅ Playwright smoke: PIN unlock → dashboard renders → "By Client / Office" table shows 13 rows with green revenue on Muhammed Muneer (Bengaluru) ₹70k and JISHNA JEAMON (Bengaluru) ₹30k.
+

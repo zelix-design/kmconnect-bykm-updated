@@ -16,7 +16,7 @@ students, keyed off how "confirmed" the revenue is:
 
 Also returned:
   - by_college — [{college, count, amount}], top-first
-  - by_course  — [{course, count, amount}], top-first
+  - by_client   — [{client, office, count, amount, sc_out, net}], top-first
 
 **PIN gate (per super-admin, per user_id)**
 The page itself is protected by a 4-digit PIN each super admin sets once.
@@ -159,7 +159,7 @@ async def revenue_summary(
         "confirmed": {"count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
     }
     by_college: dict[str, dict] = {}
-    by_course: dict[str, dict] = {}
+    by_client: dict[tuple, dict] = {}
 
     for s in students:
         fy_date = _student_fy_date(s)
@@ -196,7 +196,15 @@ async def revenue_summary(
             t["net"] += net
 
         college_name = (s.get("college") or "—").strip() or "—"
-        course_name = (s.get("course") or "—").strip() or "—"
+        # Client / referrer name — falls back to the free-text `reference`,
+        # then to "Direct" when a student was enrolled without a sub-agent.
+        client_name = (
+            (s.get("referrer_name") or "").strip()
+            or (s.get("reference") or "").strip()
+            or "Direct"
+        )
+        office = (s.get("home_office") or "").strip() or "—"
+
         bc = by_college.setdefault(
             college_name,
             {"college": college_name, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
@@ -205,14 +213,16 @@ async def revenue_summary(
         bc["amount"] += amount
         bc["sc_out"] += sc_out
         bc["net"] += net
-        bcr = by_course.setdefault(
-            course_name,
-            {"course": course_name, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+
+        client_key = (client_name.lower(), office)
+        bcl = by_client.setdefault(
+            client_key,
+            {"client": client_name, "office": office, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
         )
-        bcr["count"] += 1
-        bcr["amount"] += amount
-        bcr["sc_out"] += sc_out
-        bcr["net"] += net
+        bcl["count"] += 1
+        bcl["amount"] += amount
+        bcl["sc_out"] += sc_out
+        bcl["net"] += net
 
     # Round outputs.
     for t in tiers.values():
@@ -226,12 +236,12 @@ async def revenue_summary(
         ),
         key=lambda r: (-r["net"], -r["amount"], r["college"]),
     )
-    by_course_list = sorted(
+    by_client_list = sorted(
         (
             {**v, "amount": round(v["amount"], 2), "sc_out": round(v["sc_out"], 2), "net": round(v["net"], 2)}
-            for v in by_course.values()
+            for v in by_client.values()
         ),
-        key=lambda r: (-r["net"], -r["amount"], r["course"]),
+        key=lambda r: (-r["net"], -r["count"], r["client"]),
     )
 
     return {
@@ -240,7 +250,7 @@ async def revenue_summary(
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "tiers": tiers,
         "by_college": by_college_list,
-        "by_course": by_course_list,
+        "by_client": by_client_list,
     }
 
 
