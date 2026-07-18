@@ -299,6 +299,8 @@ def _now_epoch() -> float:
     return time.time()
 
 
+# ── Pydantic models ─────────────────────────────────────────────────────────
+
 class PinSetIn(BaseModel):
     pin: str = Field(min_length=4, max_length=4)
     # When the user already has a PIN set, they must provide the current
@@ -308,6 +310,66 @@ class PinSetIn(BaseModel):
 
 class PinVerifyIn(BaseModel):
     pin: str = Field(min_length=4, max_length=4)
+
+
+class PinResetWithPasswordIn(BaseModel):
+    """Recover from a forgotten PIN by re-authenticating with the login
+    password. Also used to clear a lockout without waiting out the timer."""
+    password: str = Field(min_length=1)
+    new_pin: str = Field(min_length=4, max_length=4)
+
+
+# ── Endpoints ───────────────────────────────────────────────────────────────
+
+@router.post("/pin/reset-with-password")
+async def reset_pin_with_password(
+    payload: PinResetWithPasswordIn,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """Rotate the Admission Revenue PIN using the caller's login password.
+    Also clears any active lockout + fail counter."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    new_pin = _validate_pin_format(payload.new_pin)
+
+    row = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 1}) or {}
+    stored = row.get("password_hash")
+    if not stored or not verify_password(payload.password, stored):
+        raise HTTPException(401, "Wrong login password")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {PIN_HASH_FIELD: hash_password(new_pin), PIN_FAILS_FIELD: 0},
+            "$unset": {PIN_LOCK_UNTIL_FIELD: ""},
+        },
+    )
+    return {"ok": True}
+
+
+@router.post("/pin/remove")
+async def remove_pin(
+    payload: PinVerifyIn,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """Delete the caller's Admission Revenue PIN entirely. Requires the
+    current PIN so an unattended session can't silently disable the lock.
+    Next visit to the page will show the first-time setup screen again."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+
+    row = await db.users.find_one({"id": user["id"]}, {"_id": 0, PIN_HASH_FIELD: 1}) or {}
+    stored = row.get(PIN_HASH_FIELD)
+    if not stored:
+        raise HTTPException(400, "No PIN set")
+    if not verify_password(payload.pin, stored):
+        raise HTTPException(401, "Wrong PIN")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$unset": {PIN_HASH_FIELD: "", PIN_FAILS_FIELD: "", PIN_LOCK_UNTIL_FIELD: ""}},
+    )
+    return {"ok": True}
 
 
 @router.get("/pin-status")

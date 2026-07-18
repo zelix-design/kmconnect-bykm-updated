@@ -26,7 +26,6 @@ export default function AdmissionRevenueGate() {
       basePath="admission-revenue"
       title="Admission Revenue"
       subtitle="This page shows confidential per-college revenue. Enter your 4-digit PIN to unlock."
-      sessionKey="adm-rev-unlocked"
     >
       <AdmissionRevenue />
     </PinLock>

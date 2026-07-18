@@ -1208,3 +1208,44 @@ admissions per year. It's confidential — only super admin can see it."
 - ✅ Merged "LITTLE FLOWER GROUP OF INSTITUTIONS" appears as a single row (3 students, ₹1,20,000 in / ₹2,05,000 out / −₹85,000 net).
 - ✅ Tier cards show In / Out / Net with proper green/red coloring on Net.
 
+
+## Follow-up — 2026-07-18 (PIN: always re-lock + Settings PIN manager)
+
+**Requested changes (verbatim)**
+1. "Once unlocked the Admission Revenue page, in case we back the page — want to lock. Every time we open the revenue page it show the Enter Your 4-Digit Pin pop up."
+2. "Shall I add a Change / forgot PIN flow in Settings? … yes."
+
+**What was built**
+
+### Always re-lock on every navigation to the page
+- `frontend/src/components/PinLock.jsx`
+  - Removed `sessionStorage` persistence entirely.
+  - `unlocked` state now lives ONLY in local React state — the component unmounts the moment the user navigates away (Back, tab switch, refresh, or route change), so the next visit re-shows the PIN gate.
+- `pages/AdmissionRevenue.jsx` — dropped the `sessionKey` prop from the wrapper.
+
+### Settings → "Admission Revenue PIN" (super_admin only)
+- **New backend endpoints** on `routers/admission_revenue.py`:
+  - `POST /api/admission-revenue/pin/reset-with-password` — body `{password, new_pin}` — verifies the user's login password, rotates the PIN, clears lockout + fail counter. Recovery path for a forgotten PIN or self-lockout.
+  - `POST /api/admission-revenue/pin/remove` — body `{pin}` — requires the current PIN, deletes the PIN entirely, next visit will show first-time setup again.
+- **New frontend component** `components/settings/AdmissionRevenuePinSettings.jsx` — amber-bordered card with 4 dialogs:
+  - **Set PIN** (first-time — new + confirm)
+  - **Change PIN** (current + new + confirm)
+  - **Forgot PIN? Reset with password** (login password + new + confirm)
+  - **Remove PIN** (current PIN required)
+  - Status badge in 3 states: `is_set=false` (grey warning), `locked=true` (red with remaining seconds), `is_set=true, unlocked` (green).
+- Wired into `pages/Settings.jsx` conditionally on `user.role === "super_admin"`.
+
+**Verified end-to-end**
+- ✅ Backend curl (super admin token):
+  - Forgot-PIN with wrong password → 401 `Wrong login password`
+  - Forgot-PIN with correct password → new PIN active
+  - Verify new PIN → ok
+  - Change PIN with current → ok
+  - Remove PIN with wrong current → 401 `Wrong PIN`
+  - Remove PIN with correct → ok; status becomes `is_set=false`
+  - Re-set PIN → ok (restored to 1234 for continued testing)
+- ✅ Playwright smoke:
+  - `/settings` shows the amber "Admission Revenue PIN" card with all 3 action buttons (Change / Forgot / Remove) and green "PIN is set" badge.
+  - `/admission-revenue` shows PIN gate → enter 1234 → dashboard unlocks.
+  - Navigate to `/` and back to `/admission-revenue` → **PIN gate re-appears** (confirmed via `gate_visible=1, revenue_leaked=0` assertion).
+

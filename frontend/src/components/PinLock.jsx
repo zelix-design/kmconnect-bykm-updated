@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Lock, LockOpen, ShieldCheck, Warning, KeyReturn } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
-const SESSION_KEY = "adm-rev-unlocked";
 const DIGITS = 4;
 
 /**
- * Wraps a page/section with a 4-digit PIN lock. On first mount:
- *   - If unlocked in this tab session → render children.
- *   - Else, check /api/{basePath}/pin-status:
+ * Wraps a page/section with a 4-digit PIN lock. The unlocked state lives
+ * only in local React state — the moment the component unmounts (user
+ * navigates away, hits back, refreshes the tab) the page re-locks and the
+ * PIN must be entered again.
+ *
+ * On first mount:
+ *   - Check /api/{basePath}/pin-status:
  *       - is_set=false → "Set your 4-digit PIN" screen (first-time setup)
  *       - is_set=true, not locked → "Enter PIN" screen
  *       - is_set=true, locked     → "Locked, try again in Ns" screen
@@ -20,21 +23,18 @@ const DIGITS = 4;
  *   basePath  API prefix (default "admission-revenue")
  *   title     text shown on the lock screen
  *   subtitle  small paragraph under the title
- *   sessionKey  sessionStorage key that flags "unlocked in this tab"
  *   children  what to render once unlocked
  */
 export default function PinLock({
   basePath = "admission-revenue",
   title = "Confidential page",
   subtitle = "Enter your 4-digit PIN to unlock.",
-  sessionKey = SESSION_KEY,
   children,
 }) {
   const [status, setStatus] = useState(null); // null | {is_set, locked, seconds_remaining}
   const [mode, setMode] = useState("check"); // "check" | "setup" | "enter"
-  const [unlocked, setUnlocked] = useState(() => {
-    try { return sessionStorage.getItem(sessionKey) === "1"; } catch { return false; }
-  });
+  // Deliberately NOT persisted — re-locks on every navigation back to the page.
+  const [unlocked, setUnlocked] = useState(false);
 
   useEffect(() => {
     if (unlocked) return;
@@ -50,10 +50,7 @@ export default function PinLock({
     })();
   }, [basePath, unlocked]);
 
-  const doUnlock = () => {
-    try { sessionStorage.setItem(sessionKey, "1"); } catch (_) { /* ignore */ }
-    setUnlocked(true);
-  };
+  const doUnlock = () => setUnlocked(true);
 
   if (unlocked) return <>{children}</>;
   if (!status) {

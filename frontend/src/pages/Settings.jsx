@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import StaffProfile from "@/pages/StaffProfile";
+import AdmissionRevenuePinSettings from "@/components/settings/AdmissionRevenuePinSettings";
 
 export default function Settings() {
   const { user, updateProfile } = useAuth();
@@ -72,6 +73,10 @@ function WorkspaceSettings({ user, updateProfile }) {
           </Button>
         </form>
       </Card>
+
+      {user?.role === "super_admin" && (
+        <AdmissionRevenuePinSettings userEmail={user?.email} />
+      )}
     </div>
   );
 }
