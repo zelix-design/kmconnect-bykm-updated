@@ -139,6 +139,8 @@ export default function AdmissionRevenue() {
               accent="orange"
               count={tiers.committed?.count}
               amount={tiers.committed?.amount}
+              scOut={tiers.committed?.sc_out}
+              net={tiers.committed?.net}
               fmtInr={fmtInr}
             />
             <TierCard
@@ -149,6 +151,8 @@ export default function AdmissionRevenue() {
               accent="amber"
               count={tiers.accrued?.count}
               amount={tiers.accrued?.amount}
+              scOut={tiers.accrued?.sc_out}
+              net={tiers.accrued?.net}
               fmtInr={fmtInr}
             />
             <TierCard
@@ -159,8 +163,28 @@ export default function AdmissionRevenue() {
               accent="emerald"
               count={tiers.confirmed?.count}
               amount={tiers.confirmed?.amount}
+              scOut={tiers.confirmed?.sc_out}
+              net={tiers.confirmed?.net}
               fmtInr={fmtInr}
             />
+          </div>
+
+          {/* Formula legend */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground" data-testid="rev-formula-legend">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-500/70"></span>
+              <strong className="text-foreground">In</strong> = SC received from college
+            </span>
+            <span className="text-muted-foreground/40">−</span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-rose-500/70"></span>
+              <strong className="text-foreground">Out</strong> = SC Earned by sub-agent
+            </span>
+            <span className="text-muted-foreground/40">=</span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500/70"></span>
+              <strong className="text-foreground">Net revenue</strong>
+            </span>
           </div>
 
           {/* Zero-rate hint */}
@@ -229,8 +253,12 @@ const ACCENT_MAP = {
   },
 };
 
-function TierCard({ tier, label, hint, icon: Icon, accent, count, amount, fmtInr }) {
+function TierCard({ tier, label, hint, icon: Icon, accent, count, amount, scOut, net, fmtInr }) {
   const a = ACCENT_MAP[accent] || ACCENT_MAP.orange;
+  const netVal = Number(net || 0);
+  const netColor = netVal >= 0
+    ? "text-emerald-700 dark:text-emerald-400"
+    : "text-rose-700 dark:text-rose-400";
   return (
     <Card
       className={`p-5 border ${a.ring} shadow-none`}
@@ -244,13 +272,46 @@ function TierCard({ tier, label, hint, icon: Icon, accent, count, amount, fmtInr
           {label}
         </span>
       </div>
-      <div className="mt-4">
-        <div className="text-2xl sm:text-3xl font-display tabular-nums flex items-center gap-1" data-testid={`tier-${tier}-amount`}>
-          <CurrencyInr size={22} weight="regular" className="text-muted-foreground" />
-          {fmtInr(amount)}
+      <div className="mt-4 space-y-2.5">
+        {/* Gross in */}
+        <div>
+          <div
+            className="text-2xl sm:text-3xl font-display tabular-nums flex items-center gap-1"
+            data-testid={`tier-${tier}-amount`}
+          >
+            <CurrencyInr size={22} weight="regular" className="text-muted-foreground" />
+            {fmtInr(amount)}
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            <span className="tabular-nums font-medium text-foreground" data-testid={`tier-${tier}-count`}>{count || 0}</span> admission{(count || 0) === 1 ? "" : "s"} · {hint}
+          </div>
         </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          <span className="tabular-nums font-medium text-foreground" data-testid={`tier-${tier}-count`}>{count || 0}</span> admission{(count || 0) === 1 ? "" : "s"} · {hint}
+        {/* SC Out + Net */}
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              SC Out
+            </div>
+            <div
+              className="text-sm tabular-nums font-medium text-rose-700 dark:text-rose-400 flex items-center gap-0.5"
+              data-testid={`tier-${tier}-sc-out`}
+            >
+              <CurrencyInr size={11} />
+              {fmtInr(scOut)}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Net revenue
+            </div>
+            <div
+              className={`text-base tabular-nums font-semibold flex items-center justify-end gap-0.5 ${netColor}`}
+              data-testid={`tier-${tier}-net`}
+            >
+              <CurrencyInr size={12} weight="bold" />
+              {fmtInr(netVal)}
+            </div>
+          </div>
         </div>
       </div>
     </Card>
@@ -274,31 +335,47 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid }) {
       ) : (
         <div className="max-h-[420px] overflow-y-auto -mx-1">
           <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
               <tr>
                 <th className="text-left py-1.5 pl-1 font-semibold">{keyField}</th>
-                <th className="text-right py-1.5 font-semibold w-16">#</th>
-                <th className="text-right py-1.5 pr-1 font-semibold w-32">Amount (₹)</th>
+                <th className="text-right py-1.5 font-semibold w-10">#</th>
+                <th className="text-right py-1.5 font-semibold w-24">In (₹)</th>
+                <th className="text-right py-1.5 font-semibold w-24">Out (₹)</th>
+                <th className="text-right py-1.5 pr-1 font-semibold w-24">Net (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {rows.map((r, idx) => (
-                <tr
-                  key={`${r[keyField]}-${idx}`}
-                  data-testid={`row-${testid}-${idx}`}
-                  className="hover:bg-muted/40 transition-colors"
-                >
-                  <td className="py-1.5 pl-1 truncate max-w-[200px]" title={r[keyField]}>
-                    {r[keyField]}
-                  </td>
-                  <td className="text-right py-1.5 tabular-nums text-muted-foreground">
-                    {r.count}
-                  </td>
-                  <td className="text-right py-1.5 pr-1 tabular-nums font-medium">
-                    {fmtInr(r.amount)}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r, idx) => {
+                const netVal = Number(r.net || 0);
+                const netCls = netVal > 0
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : netVal < 0
+                    ? "text-rose-700 dark:text-rose-400"
+                    : "text-muted-foreground";
+                return (
+                  <tr
+                    key={`${r[keyField]}-${idx}`}
+                    data-testid={`row-${testid}-${idx}`}
+                    className="hover:bg-muted/40 transition-colors"
+                  >
+                    <td className="py-1.5 pl-1 truncate max-w-[180px]" title={r[keyField]}>
+                      {r[keyField]}
+                    </td>
+                    <td className="text-right py-1.5 tabular-nums text-muted-foreground">
+                      {r.count}
+                    </td>
+                    <td className="text-right py-1.5 tabular-nums">
+                      {fmtInr(r.amount)}
+                    </td>
+                    <td className="text-right py-1.5 tabular-nums text-rose-700/80 dark:text-rose-400/80">
+                      {fmtInr(r.sc_out)}
+                    </td>
+                    <td className={`text-right py-1.5 pr-1 tabular-nums font-medium ${netCls}`}>
+                      {fmtInr(netVal)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

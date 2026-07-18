@@ -146,9 +146,9 @@ async def revenue_summary(
     students = await cursor.to_list(10000)
 
     tiers = {
-        "committed": {"count": 0, "amount": 0.0},
-        "accrued":   {"count": 0, "amount": 0.0},
-        "confirmed": {"count": 0, "amount": 0.0},
+        "committed": {"count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+        "accrued":   {"count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+        "confirmed": {"count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
     }
     by_college: dict[str, dict] = {}
     by_course: dict[str, dict] = {}
@@ -159,39 +159,71 @@ async def revenue_summary(
             continue
 
         amount = _sc_for_student(s, college_rates)
+        # SC paid OUT to the referring sub-agent / consultant for this
+        # admission — comes from the canonical student_math summary.
+        try:
+            summary = compute_summary(s)
+        except Exception:
+            summary = {"sc_earned_effective": 0.0, "scheduled_total": 0.0, "collected_total": 0.0}
+        sc_out = float(summary.get("sc_earned_effective") or 0)
+        net = round(amount - sc_out, 2)
+
         has_payment = bool(s.get("payments"))
         is_completed = (s.get("status") or "").lower() == "completed"
-        fully_paid = is_completed or _is_fully_paid(s)
+        scheduled = float(summary.get("scheduled_total") or 0)
+        collected = float(summary.get("collected_total") or 0)
+        fully_paid = is_completed or (scheduled > 0 and collected + 0.5 >= scheduled)
 
-        # Committed = all enrolled (or completed) students in FY.
-        tiers["committed"]["count"] += 1
-        tiers["committed"]["amount"] += amount
-        if has_payment:
-            tiers["accrued"]["count"] += 1
-            tiers["accrued"]["amount"] += amount
-        if fully_paid:
-            tiers["confirmed"]["count"] += 1
-            tiers["confirmed"]["amount"] += amount
+        for tier_key, condition in (
+            ("committed", True),
+            ("accrued", has_payment),
+            ("confirmed", fully_paid),
+        ):
+            if not condition:
+                continue
+            t = tiers[tier_key]
+            t["count"] += 1
+            t["amount"] += amount
+            t["sc_out"] += sc_out
+            t["net"] += net
 
         college_name = (s.get("college") or "—").strip() or "—"
         course_name = (s.get("course") or "—").strip() or "—"
-        bc = by_college.setdefault(college_name, {"college": college_name, "count": 0, "amount": 0.0})
+        bc = by_college.setdefault(
+            college_name,
+            {"college": college_name, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+        )
         bc["count"] += 1
         bc["amount"] += amount
-        bcr = by_course.setdefault(course_name, {"course": course_name, "count": 0, "amount": 0.0})
+        bc["sc_out"] += sc_out
+        bc["net"] += net
+        bcr = by_course.setdefault(
+            course_name,
+            {"course": course_name, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+        )
         bcr["count"] += 1
         bcr["amount"] += amount
+        bcr["sc_out"] += sc_out
+        bcr["net"] += net
 
     # Round outputs.
     for t in tiers.values():
         t["amount"] = round(t["amount"], 2)
+        t["sc_out"] = round(t["sc_out"], 2)
+        t["net"] = round(t["net"], 2)
     by_college_list = sorted(
-        ({**v, "amount": round(v["amount"], 2)} for v in by_college.values()),
-        key=lambda r: (-r["amount"], -r["count"], r["college"]),
+        (
+            {**v, "amount": round(v["amount"], 2), "sc_out": round(v["sc_out"], 2), "net": round(v["net"], 2)}
+            for v in by_college.values()
+        ),
+        key=lambda r: (-r["net"], -r["amount"], r["college"]),
     )
     by_course_list = sorted(
-        ({**v, "amount": round(v["amount"], 2)} for v in by_course.values()),
-        key=lambda r: (-r["amount"], -r["count"], r["course"]),
+        (
+            {**v, "amount": round(v["amount"], 2), "sc_out": round(v["sc_out"], 2), "net": round(v["net"], 2)}
+            for v in by_course.values()
+        ),
+        key=lambda r: (-r["net"], -r["amount"], r["course"]),
     )
 
     return {
