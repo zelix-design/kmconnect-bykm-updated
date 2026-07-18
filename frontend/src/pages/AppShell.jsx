@@ -83,7 +83,7 @@ function initialsOf(name) {
 const GROUP_ROUTES = {
   accounts: ["/accounts", "/transactions", "/agents", "/invoices"],
   office: ["/office-overview", "/employees", "/leads", "/staff", "/leave"],
-  details: ["/colleges", "/categories", "/admission-revenue"],
+  details: ["/colleges", "/categories"],
 };
 
 function buildSections(navItems, role) {
@@ -94,7 +94,7 @@ function buildSections(navItems, role) {
     return [{ type: "items", label: "Workspace", items: navItems }];
   }
   return [
-    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry"]) },
+    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry", "/admission-revenue"]) },
     { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(GROUP_ROUTES.accounts) },
     { type: "items", items: pick(["/messages", "/clients", "/students"]) },
     { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(GROUP_ROUTES.office) },

@@ -1151,3 +1151,60 @@ admissions per year. It's confidential — only super admin can see it."
   - `/app/memory/test_credentials.md` updated.
 - **App icons refreshed**: user supplied a new **KM Connect** app icon set (Android mipmap-mdpi→xxxhdpi + iOS AppIcon.appiconset up to 1024×1024). Replaced portal favicon, apple-touch-icon, km-logo, km-mark, and all PWA icons in `/app/frontend/public`. The student application form's `application-form-icon.png` (KM Foundation admissions mark) is intentionally left untouched.
 - **Link preview meta tags** (`public/index.html`) rewritten from "Student Application Form — KM Foundation" to **"KM Connect — by KM Foundation"** with description "Connecting partners to monitor Real-time tracking" and image `https://kmconnect.co.in/pwa-icon-512.png`.
+
+## Follow-up — 2026-07-18 (Admission Revenue polish + Net + PIN lock)
+
+**Requested changes (verbatim)**
+1. "One more detail — after given to clients SC (SC EARNED) what is the revenue?"
+2. "Move the Admission Revenue page to below Quick Entry and want to lock the page — Once enter a 4-digit PIN to open the page."
+3. "Do it and make future creates case-insensitive-safe" (for duplicate college names).
+
+**What was built**
+
+### Net revenue on the dashboard
+- Backend `admission_revenue.py`
+  - Every tier now returns `amount` (in), `sc_out`, `net`.
+  - `by_college` and `by_course` rows include `sc_out` and `net`, sorted by `-net` first.
+  - `sc_out` comes from `student_math.compute_summary → sc_earned_effective`.
+- Frontend `AdmissionRevenue.jsx`
+  - Tier cards redesigned: top **In (₹)** + count + hint, bottom half split into **SC Out** (red) and **Net Revenue** (green if ≥0, red if <0).
+  - Breakdown tables show 4 amount columns: `#`, `In (₹)`, `Out (₹)`, `Net (₹)` — with green/red coloring on the Net column.
+  - Formula legend below the tiers: `In (SC from college) − Out (SC Earned by sub-agent) = Net revenue`.
+
+### Duplicate college merge
+- New script `backend/scripts/merge_duplicate_colleges.py` (idempotent):
+  1. Groups `colleges` by `strip().lower()` name.
+  2. Picks canonical (`sc_rates` set > most recently updated > most recently created).
+  3. Merges `courses[]` + `sc_rates` into the canonical row.
+  4. Repoints every `students.college` field pointing at a duplicate variant → canonical name.
+  5. Deletes duplicate college docs.
+  6. **Also normalizes** `students.college` case-insensitively to any catalogue canonical (fixes "Little Flower..." vs "LITTLE FLOWER..." students entered pre-catalogue).
+  7. Backfills `name_lower` on any legacy rows.
+- Ran on 2026-07-18 — normalized 3 student college fields; no dup college docs were present.
+- **Case-insensitive safety** confirmed on future creates: `routers/colleges.py` already blocks case-insensitive duplicates via `name_lower` index on both POST/PATCH and CSV bulk upload.
+
+### 4-digit PIN lock (per super admin)
+- Backend `admission_revenue.py` — new PIN endpoints (super_admin only):
+  - `GET  /api/admission-revenue/pin-status` → `{is_set, locked, seconds_remaining}`
+  - `POST /api/admission-revenue/pin/set`    → `{pin, current_pin?}` (current_pin required to rotate)
+  - `POST /api/admission-revenue/pin/verify` → `{pin}` (401 wrong, 429 after 5 wrong attempts → 5-min lockout)
+- PIN is stored as bcrypt hash on `users.admission_revenue_pin_hash`; brute-force state on `admission_revenue_pin_fails` + `admission_revenue_pin_lockout_until`.
+- New component `frontend/src/components/PinLock.jsx` — reusable gate:
+  - First-time setup screen (pick + confirm 4-digit PIN).
+  - Enter-PIN screen with 4 individual digit boxes, keyboard nav (backspace shifts focus, paste supported).
+  - Session unlock via `sessionStorage.setItem('adm-rev-unlocked', '1')` — cleared on tab close or logout.
+  - Server-side lockout countdown with auto-refresh when it hits 0.
+- `AdmissionRevenue.jsx` now wraps the dashboard with `<PinLock basePath="admission-revenue" sessionKey="adm-rev-unlocked">` — super admin only.
+
+### Sidebar reorder
+- `AppShell.jsx` — moved "Admission Revenue" out of the "Add details" group and into the top **Workspace** items (right after "Quick entry"). Super-admin only.
+
+**Verified end-to-end via curl + smoke screenshots**
+- ✅ Sidebar shows Admission Revenue directly below Quick Entry.
+- ✅ Non-super-admin gets HTTP 403 on all `/api/admission-revenue/pin-*` endpoints.
+- ✅ First-time set-PIN succeeds; re-set without `current_pin` returns 400; wrong `current_pin` returns 401.
+- ✅ Wrong PIN returns 401 with `"N attempt(s) left."` counter; 5 wrong triggers 5-min 429 lockout; correct PIN resets the counter.
+- ✅ PIN gate renders on `/admission-revenue`; correct PIN unlocks and reveals the dashboard.
+- ✅ Merged "LITTLE FLOWER GROUP OF INSTITUTIONS" appears as a single row (3 students, ₹1,20,000 in / ₹2,05,000 out / −₹85,000 net).
+- ✅ Tier cards show In / Out / Net with proper green/red coloring on Net.
+

@@ -17,16 +17,24 @@ students, keyed off how "confirmed" the revenue is:
 Also returned:
   - by_college — [{college, count, amount}], top-first
   - by_course  — [{course, count, amount}], top-first
+
+**PIN gate (per super-admin, per user_id)**
+The page itself is protected by a 4-digit PIN each super admin sets once.
+The PIN is stored as a bcrypt hash on the users doc (``admission_revenue_pin_hash``).
+Brute-force protection locks out for 5 minutes after 5 wrong attempts.
+Endpoints: ``/pin-status``, ``/pin/set``, ``/pin/verify``, ``/pin/change``.
 """
 from __future__ import annotations
 
+import time
 from datetime import date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from db import db
-from auth_lib import get_current_user
+from auth_lib import get_current_user, hash_password, verify_password
 from lib.student_math import compute_summary
 
 
@@ -266,3 +274,129 @@ async def fy_options(user: dict = Depends(get_current_user)) -> dict:
     years.add(cur_start)
     labels = [f"{y}-{str(y+1)[-2:]}" for y in sorted(years, reverse=True)]
     return {"options": labels, "current": cur}
+
+
+
+# ============================================================================
+# 4-digit PIN gate — protects the Admission Revenue page from shoulder-surfing.
+# ============================================================================
+
+PIN_LOCKOUT_SECONDS = 5 * 60          # 5-minute cool-down
+PIN_MAX_ATTEMPTS = 5                  # wrong-attempt threshold
+PIN_HASH_FIELD = "admission_revenue_pin_hash"
+PIN_FAILS_FIELD = "admission_revenue_pin_fails"
+PIN_LOCK_UNTIL_FIELD = "admission_revenue_pin_lockout_until"
+
+
+def _validate_pin_format(pin: str) -> str:
+    p = (pin or "").strip()
+    if len(p) != 4 or not p.isdigit():
+        raise HTTPException(400, "PIN must be exactly 4 digits")
+    return p
+
+
+def _now_epoch() -> float:
+    return time.time()
+
+
+class PinSetIn(BaseModel):
+    pin: str = Field(min_length=4, max_length=4)
+    # When the user already has a PIN set, they must provide the current
+    # one to change it. First-time set omits this.
+    current_pin: Optional[str] = None
+
+
+class PinVerifyIn(BaseModel):
+    pin: str = Field(min_length=4, max_length=4)
+
+
+@router.get("/pin-status")
+async def pin_status(user: dict = Depends(get_current_user)) -> dict:
+    """Whether the caller has an Admission Revenue PIN set, plus any active
+    lockout window. Super admin only."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    row = await db.users.find_one(
+        {"id": user["id"]},
+        {"_id": 0, PIN_HASH_FIELD: 1, PIN_LOCK_UNTIL_FIELD: 1},
+    ) or {}
+    lock_until = float(row.get(PIN_LOCK_UNTIL_FIELD) or 0)
+    now = _now_epoch()
+    locked = lock_until > now
+    return {
+        "is_set": bool(row.get(PIN_HASH_FIELD)),
+        "locked": locked,
+        "seconds_remaining": int(lock_until - now) if locked else 0,
+    }
+
+
+@router.post("/pin/set")
+async def set_pin(payload: PinSetIn, user: dict = Depends(get_current_user)) -> dict:
+    """Create or rotate the Admission Revenue PIN for the caller. When a PIN
+    already exists, ``current_pin`` is required (defense-in-depth against
+    someone hijacking a briefly-unlocked session)."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    new_pin = _validate_pin_format(payload.pin)
+
+    row = await db.users.find_one({"id": user["id"]}, {"_id": 0, PIN_HASH_FIELD: 1}) or {}
+    existing_hash = row.get(PIN_HASH_FIELD)
+    if existing_hash:
+        if not payload.current_pin:
+            raise HTTPException(400, "Current PIN is required to change the PIN")
+        if not verify_password(payload.current_pin, existing_hash):
+            raise HTTPException(401, "Current PIN is wrong")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {PIN_HASH_FIELD: hash_password(new_pin), PIN_FAILS_FIELD: 0},
+            "$unset": {PIN_LOCK_UNTIL_FIELD: ""},
+        },
+    )
+    return {"ok": True}
+
+
+@router.post("/pin/verify")
+async def verify_pin(payload: PinVerifyIn, user: dict = Depends(get_current_user)) -> dict:
+    """Verify the 4-digit PIN. On success returns ``{"ok": True}``; on 5+
+    wrong attempts locks the caller out for 5 minutes with HTTP 429."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+    row = await db.users.find_one(
+        {"id": user["id"]},
+        {"_id": 0, PIN_HASH_FIELD: 1, PIN_FAILS_FIELD: 1, PIN_LOCK_UNTIL_FIELD: 1},
+    ) or {}
+    stored = row.get(PIN_HASH_FIELD)
+    if not stored:
+        raise HTTPException(400, "No PIN set yet")
+
+    now = _now_epoch()
+    lock_until = float(row.get(PIN_LOCK_UNTIL_FIELD) or 0)
+    if lock_until > now:
+        raise HTTPException(
+            429,
+            f"Too many wrong attempts. Try again in {int(lock_until - now)}s",
+        )
+
+    if not verify_password(payload.pin, stored):
+        fails = int(row.get(PIN_FAILS_FIELD) or 0) + 1
+        update: dict = {PIN_FAILS_FIELD: fails}
+        if fails >= PIN_MAX_ATTEMPTS:
+            update[PIN_LOCK_UNTIL_FIELD] = now + PIN_LOCKOUT_SECONDS
+            update[PIN_FAILS_FIELD] = 0  # reset counter, lockout owns the state
+        await db.users.update_one({"id": user["id"]}, {"$set": update})
+        remaining = max(0, PIN_MAX_ATTEMPTS - fails)
+        if fails >= PIN_MAX_ATTEMPTS:
+            raise HTTPException(
+                429,
+                f"Too many wrong attempts. Locked for {PIN_LOCKOUT_SECONDS // 60} minutes.",
+            )
+        raise HTTPException(401, f"Wrong PIN. {remaining} attempt(s) left.")
+
+    # Success — reset counters and clear lockout.
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {PIN_FAILS_FIELD: 0}, "$unset": {PIN_LOCK_UNTIL_FIELD: ""}},
+    )
+    return {"ok": True}

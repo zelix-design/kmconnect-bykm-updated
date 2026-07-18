@@ -12,6 +12,26 @@ import {
 } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
+import PinLock from "@/components/PinLock";
+
+/** Wrapper: gate the whole dashboard behind a 4-digit PIN (per super admin,
+ * per browser-tab session). Non-super-admin fall-through renders the
+ * inner component which shows its own "no access" state. */
+export default function AdmissionRevenueGate() {
+  const { user } = useAuth();
+  const isSuper = user?.role === "super_admin";
+  if (!isSuper) return <AdmissionRevenue />;
+  return (
+    <PinLock
+      basePath="admission-revenue"
+      title="Admission Revenue"
+      subtitle="This page shows confidential per-college revenue. Enter your 4-digit PIN to unlock."
+      sessionKey="adm-rev-unlocked"
+    >
+      <AdmissionRevenue />
+    </PinLock>
+  );
+}
 
 /** Super-admin-only revenue dashboard. Aggregates college-side SC across
  * enrolled admissions for the selected Indian financial year (Apr → Mar).
@@ -20,7 +40,7 @@ import { toast } from "sonner";
  *   Accrued    → committed + at least 1 recorded payment
  *   Confirmed  → committed + fully paid OR status="completed"
  */
-export default function AdmissionRevenue() {
+function AdmissionRevenue() {
   const { user } = useAuth();
   const isSuper = user?.role === "super_admin";
   const currency = user?.currency || "INR";
