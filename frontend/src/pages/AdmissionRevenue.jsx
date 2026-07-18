@@ -13,6 +13,7 @@ import {
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 import PinLock from "@/components/PinLock";
+import CollegeCoursesDrilldown from "@/components/admission-revenue/CollegeCoursesDrilldown";
 
 /** Wrapper: gate the whole dashboard behind a 4-digit PIN (per super admin,
  * per browser-tab session). Non-super-admin fall-through renders the
@@ -47,6 +48,9 @@ function AdmissionRevenue() {
   const [fy, setFy] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Drill-down state — the college whose course-wise breakdown is currently
+  // being shown in the modal (null = closed).
+  const [drillCollege, setDrillCollege] = useState(null);
 
   useEffect(() => {
     if (!isSuper) return;
@@ -224,12 +228,19 @@ function AdmissionRevenue() {
               rows={data.by_college || []}
               fmtInr={fmtInr}
               testid="by-college"
+              onRowClick={(row) => setDrillCollege(row.college)}
             />
             <ClientOfficeTable
               rows={data.by_client || []}
               fmtInr={fmtInr}
             />
           </div>
+
+          <CollegeCoursesDrilldown
+            college={drillCollege}
+            fy={fy}
+            onClose={() => setDrillCollege(null)}
+          />
 
           <p className="text-[11px] text-muted-foreground text-right">
             Range · {data.range?.start} → {data.range?.end}. Only students with
@@ -327,15 +338,23 @@ function TierCard({ tier, label, hint, icon: Icon, accent, count, amount, scOut,
   );
 }
 
-function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid }) {
+function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid, onRowClick }) {
+  const clickable = typeof onRowClick === "function";
   return (
     <Card className="p-5 border border-border bg-card shadow-none" data-testid={`table-${testid}`}>
       <div className="flex items-center gap-2 mb-3">
         <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center">
           <Icon size={16} className="text-muted-foreground" />
         </div>
-        <h3 className="font-display text-base font-semibold">{title}</h3>
-        <span className="ml-auto text-[11px] text-muted-foreground">
+        <div className="flex-1">
+          <h3 className="font-display text-base font-semibold">{title}</h3>
+          {clickable && (
+            <p className="text-[11px] text-muted-foreground">
+              Click a row to see the course-wise breakdown.
+            </p>
+          )}
+        </div>
+        <span className="text-[11px] text-muted-foreground">
           {rows.length} row{rows.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -365,7 +384,24 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid }) {
                   <tr
                     key={`${r[keyField]}-${idx}`}
                     data-testid={`row-${testid}-${idx}`}
-                    className="hover:bg-muted/40 transition-colors"
+                    onClick={clickable ? () => onRowClick(r) : undefined}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onKeyDown={
+                      clickable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onRowClick(r);
+                            }
+                          }
+                        : undefined
+                    }
+                    className={`transition-colors ${
+                      clickable
+                        ? "hover:bg-amber-500/8 focus:bg-amber-500/10 focus:outline-none cursor-pointer"
+                        : "hover:bg-muted/40"
+                    }`}
                   >
                     <td className="py-1.5 pl-1 truncate max-w-[180px]" title={r[keyField]}>
                       {r[keyField]}
@@ -396,33 +432,83 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid }) {
 
 /* ── By Client / Office table ────────────────────────────────────────────── */
 
-const OFFICE_LABEL = {
-  KM_BLR: "Bengaluru",
-  KM_TCR: "Thrissur",
-  KM_KMLY: "Kotamangalam",
-  ALL: "All offices",
+// Short office label as user requested — "KM BLR OFFICE", etc.
+const OFFICE_HEADING = {
+  KM_BLR: "KM BLR OFFICE",
+  KM_TCR: "KM TCR OFFICE",
+  KM_KMLY: "KM KMLY OFFICE",
+  ALL: "ALL OFFICES",
 };
+function officeHeading(code) {
+  if (!code || code === "—") return "NO OFFICE";
+  return OFFICE_HEADING[code] || code;
+}
 const OFFICE_TONE = {
-  KM_BLR: "bg-orange-500/12 text-orange-800 dark:text-orange-300 border-orange-500/40",
-  KM_TCR: "bg-emerald-500/12 text-emerald-800 dark:text-emerald-300 border-emerald-500/40",
-  KM_KMLY: "bg-sky-500/12 text-sky-800 dark:text-sky-300 border-sky-500/40",
-  ALL: "bg-amber-500/12 text-amber-800 dark:text-amber-300 border-amber-500/40",
+  KM_BLR: "border-orange-500/40 bg-orange-500/5 text-orange-800 dark:text-orange-300",
+  KM_TCR: "border-emerald-500/40 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300",
+  KM_KMLY: "border-sky-500/40 bg-sky-500/5 text-sky-800 dark:text-sky-300",
+  ALL: "border-amber-500/40 bg-amber-500/5 text-amber-800 dark:text-amber-300",
 };
 
-function OfficeBadge({ office }) {
-  const label = OFFICE_LABEL[office] || (office && office !== "—" ? office : "No office");
-  const tone = OFFICE_TONE[office] || "bg-muted text-muted-foreground border-border";
+// Human-readable tag for the client_type column stored on clients docs.
+const CLIENT_TYPE_LABEL = {
+  associate_consultant: "Associate Consultant",
+  sub_agent_associate: "Sub / Associate",
+  staff: "Staff",
+  km_blr_office: "KM BLR Office",
+  km_tcr_office: "KM TCR Office",
+  km_kmly_office: "KM KMLY Office",
+};
+const CLIENT_TYPE_TONE = {
+  associate_consultant: "bg-amber-500/12 text-amber-800 dark:text-amber-300 border-amber-500/40",
+  sub_agent_associate: "bg-orange-500/12 text-orange-800 dark:text-orange-300 border-orange-500/40",
+  staff: "bg-sky-500/12 text-sky-800 dark:text-sky-300 border-sky-500/40",
+  km_blr_office: "bg-muted text-muted-foreground border-border",
+  km_tcr_office: "bg-muted text-muted-foreground border-border",
+  km_kmly_office: "bg-muted text-muted-foreground border-border",
+};
+
+function ClientTypeBadge({ type }) {
+  const label = CLIENT_TYPE_LABEL[type];
+  if (!label) return null;
+  const tone = CLIENT_TYPE_TONE[type] || "bg-muted text-muted-foreground border-border";
   return (
     <span
-      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${tone}`}
-      data-testid={`office-badge-${office || "none"}`}
+      className={`inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border ${tone}`}
+      data-testid={`client-type-${type}`}
     >
       {label}
     </span>
   );
 }
 
+/**
+ * Groups the by_client rows by office and renders a sectioned list. Each
+ * section shows the OFFICE label as a coloured heading, then the clients
+ * that belong to it with a client-type tag under the name.
+ */
 function ClientOfficeTable({ rows, fmtInr }) {
+  // Group rows by office → { office_code: [rows...] } preserving order.
+  const groups = React.useMemo(() => {
+    const map = new Map();
+    for (const r of rows || []) {
+      const key = r.office || "—";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(r);
+    }
+    // Sort each section by net desc (already sorted server-side, but a
+    // consistent re-sort per group is a defensive nicety).
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (b.net || 0) - (a.net || 0));
+    }
+    // Preserve office ordering by best group revenue.
+    return Array.from(map.entries()).sort((a, b) => {
+      const na = a[1].reduce((n, r) => n + (r.net || 0), 0);
+      const nb = b[1].reduce((n, r) => n + (r.net || 0), 0);
+      return nb - na;
+    });
+  }, [rows]);
+
   return (
     <Card
       className="p-5 border border-border bg-card shadow-none"
@@ -439,56 +525,82 @@ function ClientOfficeTable({ rows, fmtInr }) {
           </p>
         </div>
         <span className="text-[11px] text-muted-foreground">
-          {rows.length} row{rows.length === 1 ? "" : "s"}
+          {(rows || []).length} row{(rows || []).length === 1 ? "" : "s"}
         </span>
       </div>
-      {rows.length === 0 ? (
+
+      {(rows || []).length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-6">No admissions yet.</p>
       ) : (
-        <div className="max-h-[420px] overflow-y-auto -mx-1">
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-wider text-muted-foreground sticky top-0 bg-card">
-              <tr>
-                <th className="text-left py-1.5 pl-1 font-semibold">Client / Office</th>
-                <th className="text-right py-1.5 font-semibold w-12">Count</th>
-                <th className="text-right py-1.5 pr-1 font-semibold w-32">Revenue (₹)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {rows.map((r, idx) => {
-                const netVal = Number(r.net || 0);
-                const netCls = netVal > 0
-                  ? "text-emerald-700 dark:text-emerald-400"
-                  : netVal < 0
-                    ? "text-rose-700 dark:text-rose-400"
-                    : "text-muted-foreground";
-                return (
-                  <tr
-                    key={`${r.client}-${r.office}-${idx}`}
-                    className="hover:bg-muted/40 transition-colors"
-                    data-testid={`row-by-client-${idx}`}
-                  >
-                    <td className="py-2 pl-1">
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <span className="truncate font-medium text-foreground" title={r.client}>
-                          {r.client}
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <OfficeBadge office={r.office} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="text-right py-2 tabular-nums text-muted-foreground">
-                      {r.count}
-                    </td>
-                    <td className={`text-right py-2 pr-1 tabular-nums font-semibold ${netCls}`}>
-                      {fmtInr(netVal)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="max-h-[520px] overflow-y-auto -mx-1 pr-1 space-y-4">
+          {groups.map(([office, list]) => {
+            const groupNet = list.reduce((n, r) => n + (r.net || 0), 0);
+            const groupCount = list.reduce((n, r) => n + (r.count || 0), 0);
+            const tone = OFFICE_TONE[office] || "border-border bg-muted text-muted-foreground";
+            const groupNetCls = groupNet > 0
+              ? "text-emerald-700 dark:text-emerald-400"
+              : groupNet < 0
+                ? "text-rose-700 dark:text-rose-400"
+                : "text-muted-foreground";
+            return (
+              <section key={office} data-testid={`office-group-${office}`}>
+                <div
+                  className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded border ${tone}`}
+                >
+                  <span className="text-[10px] uppercase tracking-[0.08em] font-semibold">
+                    {officeHeading(office)}
+                  </span>
+                  <span className="text-[11px] tabular-nums">
+                    <span className="opacity-70 mr-2">{groupCount} · </span>
+                    <span className={`font-semibold ${groupNetCls}`}>₹ {fmtInr(groupNet)}</span>
+                  </span>
+                </div>
+                <table className="w-full text-sm mt-1.5">
+                  <tbody className="divide-y divide-border/60">
+                    {list.map((r, idx) => {
+                      const netVal = Number(r.net || 0);
+                      const netCls = netVal > 0
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : netVal < 0
+                          ? "text-rose-700 dark:text-rose-400"
+                          : "text-muted-foreground";
+                      return (
+                        <tr
+                          key={`${r.client}-${idx}`}
+                          className="hover:bg-muted/40 transition-colors"
+                          data-testid={`row-by-client-${office}-${idx}`}
+                        >
+                          <td className="py-2 pl-1">
+                            <div className="flex flex-col gap-1 min-w-0">
+                              <span
+                                className="truncate font-medium text-foreground"
+                                title={r.client}
+                              >
+                                {r.client}
+                              </span>
+                              {r.client_type && (
+                                <div className="flex">
+                                  <ClientTypeBadge type={r.client_type} />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="text-right py-2 tabular-nums text-muted-foreground w-12">
+                            {r.count}
+                          </td>
+                          <td
+                            className={`text-right py-2 pr-1 tabular-nums font-semibold w-32 ${netCls}`}
+                          >
+                            {fmtInr(netVal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </section>
+            );
+          })}
         </div>
       )}
     </Card>

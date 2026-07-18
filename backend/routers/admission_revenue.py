@@ -161,6 +161,21 @@ async def revenue_summary(
     by_college: dict[str, dict] = {}
     by_client: dict[tuple, dict] = {}
 
+    # Lookup of catalogue clients by lower-cased name — attaches `client_type`
+    # ("associate_consultant" / "sub_agent_associate" / "km_blr_office" / …)
+    # and optionally a canonical home_office so we can group cleanly by office.
+    clients = await db.clients.find(
+        {}, {"_id": 0, "name": 1, "client_type": 1, "home_office": 1}
+    ).to_list(5000)
+    client_meta: dict[str, dict] = {}
+    for c in clients:
+        key = (c.get("name") or "").strip().lower()
+        if key:
+            client_meta[key] = {
+                "client_type": c.get("client_type"),
+                "home_office": c.get("home_office"),
+            }
+
     for s in students:
         fy_date = _student_fy_date(s)
         if not fy_date or not (start_iso <= fy_date < end_iso):
@@ -203,7 +218,14 @@ async def revenue_summary(
             or (s.get("reference") or "").strip()
             or "Direct"
         )
-        office = (s.get("home_office") or "").strip() or "—"
+        # Prefer the student's home_office; when that's blank (many legacy
+        # rows), fall back to the client's catalogue-recorded office. That
+        # way rows still land under a real office group instead of "No office".
+        student_office = (s.get("home_office") or "").strip()
+        client_meta_row = client_meta.get(client_name.lower(), {})
+        client_type = client_meta_row.get("client_type")
+        client_home_office = (client_meta_row.get("home_office") or "").strip()
+        office = student_office or client_home_office or "—"
 
         bc = by_college.setdefault(
             college_name,
@@ -217,7 +239,15 @@ async def revenue_summary(
         client_key = (client_name.lower(), office)
         bcl = by_client.setdefault(
             client_key,
-            {"client": client_name, "office": office, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+            {
+                "client": client_name,
+                "office": office,
+                "client_type": client_type,
+                "count": 0,
+                "amount": 0.0,
+                "sc_out": 0.0,
+                "net": 0.0,
+            },
         )
         bcl["count"] += 1
         bcl["amount"] += amount
@@ -284,6 +314,95 @@ async def fy_options(user: dict = Depends(get_current_user)) -> dict:
     years.add(cur_start)
     labels = [f"{y}-{str(y+1)[-2:]}" for y in sorted(years, reverse=True)]
     return {"options": labels, "current": cur}
+
+
+
+@router.get("/college-courses")
+async def college_courses(
+    college: str = Query(..., description="Exact college name (case-insensitive)"),
+    fy: Optional[str] = Query(default=None),
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """Course-wise revenue drilldown for a single college in a given FY.
+    Super-admin only. Powers the click-through from the By-College table."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(403, "Super admin only")
+
+    fy_label = (fy or _current_fy_label()).strip()
+    start_iso, end_iso = _parse_fy(fy_label)
+    college_needle = (college or "").strip()
+    if not college_needle:
+        raise HTTPException(400, "college is required")
+
+    # Load ONLY the requested college's confidential rates.
+    col_doc = await db.colleges.find_one(
+        {"name_lower": college_needle.lower()},
+        {"_id": 0, "name": 1, "sc_rates": 1},
+    )
+    college_rates = {college_needle.lower(): (col_doc.get("sc_rates") or {})} if col_doc else {}
+    canonical_name = (col_doc.get("name") if col_doc else college_needle).strip()
+
+    # Load enrolled/completed students whose college matches — done in Python
+    # because case-insensitivity + a Mongo regex would need proper escaping.
+    students = await db.students.find(
+        {"status": {"$in": list(ENROLLED_STATUSES)}, "college": {"$nin": [None, ""]}},
+        {"_id": 0},
+    ).to_list(20000)
+
+    by_course: dict[str, dict] = {}
+    grand = {"count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0}
+
+    for s in students:
+        if (s.get("college") or "").strip().lower() != college_needle.lower():
+            continue
+        fy_date = _student_fy_date(s)
+        if not fy_date or not (start_iso <= fy_date < end_iso):
+            continue
+
+        amount = _sc_for_student(
+            {**s, "college": college_needle},  # ensure lookup uses the same key
+            college_rates,
+        )
+        try:
+            summary = compute_summary(s)
+        except Exception:
+            summary = {"sc_earned_effective": 0.0}
+        sc_out = float(summary.get("sc_earned_effective") or 0)
+        net = round(amount - sc_out, 2)
+
+        course = (s.get("course") or "—").strip() or "—"
+        row = by_course.setdefault(
+            course,
+            {"course": course, "count": 0, "amount": 0.0, "sc_out": 0.0, "net": 0.0},
+        )
+        row["count"] += 1
+        row["amount"] += amount
+        row["sc_out"] += sc_out
+        row["net"] += net
+
+        grand["count"] += 1
+        grand["amount"] += amount
+        grand["sc_out"] += sc_out
+        grand["net"] += net
+
+    courses_list = sorted(
+        (
+            {**v, "amount": round(v["amount"], 2), "sc_out": round(v["sc_out"], 2), "net": round(v["net"], 2)}
+            for v in by_course.values()
+        ),
+        key=lambda r: (-r["net"], -r["count"], r["course"]),
+    )
+    grand["amount"] = round(grand["amount"], 2)
+    grand["sc_out"] = round(grand["sc_out"], 2)
+    grand["net"] = round(grand["net"], 2)
+    return {
+        "college": canonical_name,
+        "fy": fy_label,
+        "range": {"start": start_iso, "end": end_iso},
+        "totals": grand,
+        "courses": courses_list,
+    }
+
 
 
 

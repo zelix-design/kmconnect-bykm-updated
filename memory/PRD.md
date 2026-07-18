@@ -1271,3 +1271,38 @@ admissions per year. It's confidential — only super admin can see it."
 - ✅ Backend curl returns 13 client/office rows with correct amount/sc_out/net.
 - ✅ Playwright smoke: PIN unlock → dashboard renders → "By Client / Office" table shows 13 rows with green revenue on Muhammed Muneer (Bengaluru) ₹70k and JISHNA JEAMON (Bengaluru) ₹30k.
 
+
+## Follow-up — 2026-07-18 (By College click-drilldown + By Client group-by-office + client-type tag)
+
+**Requested changes (verbatim)**
+1. "By College list → select the college to open the course wise details of revenue."
+2. "Group the staffs on their office name — Ex: KM BLR OFFICE, KM TCR OFFICE, etc. The clients name below tag shows its Associate Consultant or Sub/Associates."
+
+**What was built**
+
+### By College — click-to-drilldown
+- New backend endpoint `GET /api/admission-revenue/college-courses?college=&fy=` — super_admin only.
+  - Filters enrolled/completed students in the FY, matching the college case-insensitively.
+  - Returns `{college, fy, range, totals, courses: [{course, count, amount, sc_out, net}]}`, sorted by `-net`.
+  - Loads ONLY the requested college's confidential `sc_rates` (single-doc lookup).
+- New frontend component `components/admission-revenue/CollegeCoursesDrilldown.jsx` — modal dialog with:
+  - 3 mini-stats: Admissions / In / Net (green/red).
+  - Course breakdown table (Course · # · In · Out · Net) with the same colouring rules.
+- `pages/AdmissionRevenue.jsx`:
+  - `BreakdownTable` accepts an optional `onRowClick` prop; when provided, rows become a proper `role="button"` (Enter/Space activation, cursor-pointer, amber hover state) and the subtitle prompts "Click a row to see the course-wise breakdown."
+  - Wired to open the drilldown modal with the clicked college and current FY.
+
+### By Client / Office — group by office + client-type tag
+- Backend: enriched the `by_client` aggregation with `client_type` via a case-insensitive lookup against the `clients` catalogue. When `student.home_office` is blank, falls back to the client's own `home_office` so rows land in a real office group.
+- Row payload now: `{ client, office, client_type, count, amount, sc_out, net }`.
+- Frontend rewrite of `ClientOfficeTable`:
+  - Rows are now grouped by office; each group has a bold coloured heading (`KM BLR OFFICE`, `KM TCR OFFICE`, `KM KMLY OFFICE`, `ALL OFFICES`, `NO OFFICE`) with group totals (count + net) on the right.
+  - Group ordering: highest total net first.
+  - Each client shows the name on top, then a coloured tag below: **Associate Consultant** (amber), **Sub / Associate** (orange), **Staff** (sky), etc. Tag hidden when catalogue has no `client_type` for the name.
+
+**Verified end-to-end**
+- ✅ Backend curl on `/college-courses?college=Any%20partner%20college` returns 1-course drilldown.
+- ✅ Backend curl on `/summary` returns `by_client` rows with `client_type` populated for OG Academy (associate_consultant), SHAMILSHA (sub_agent_associate), etc.
+- ✅ Playwright smoke: PIN unlock → dashboard renders with 3 office groups on the right (`ALL OFFICES`, `NO OFFICE`, `KM BLR OFFICE`), each with client-type tags visible under names.
+- ✅ Playwright smoke: clicking the "Any partner college" row opens the drilldown modal with "B.Sc — Nursing · 1 · 0 / 50,000 / -50,000" course row.
+
