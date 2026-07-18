@@ -433,14 +433,19 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid, onR
 /* ── By Client / Office table ────────────────────────────────────────────── */
 
 // Short office label as user requested — "KM BLR OFFICE", etc.
+// Note: the "ALL" and "—" groups are semantic buckets rather than physical
+// offices — clients with `home_office=ALL` are typically Associate
+// Consultants operating across every office, and rows with no resolvable
+// office are almost always Sub / Associates. We surface those meanings in
+// the group header so the super admin can read the layout at a glance.
 const OFFICE_HEADING = {
   KM_BLR: "KM BLR OFFICE",
   KM_TCR: "KM TCR OFFICE",
   KM_KMLY: "KM KMLY OFFICE",
-  ALL: "ALL OFFICES",
+  ALL: "ASSOCIATE CONSULTANTS",
 };
 function officeHeading(code) {
-  if (!code || code === "—") return "NO OFFICE";
+  if (!code || code === "—") return "SUB / ASSOCIATES";
   return OFFICE_HEADING[code] || code;
 }
 const OFFICE_TONE = {
