@@ -53,6 +53,10 @@ class StudentIn(BaseModel):
     # Cross-user visibility (super_admin sets via UI; office_admin gets it
     # forced server-side to their own office).
     home_office: Optional[Literal["KM_BLR", "KM_TCR", "KM_KMLY", "ALL"]] = None
+    # Super-admin-only override: actual service charge received from the
+    # college for THIS admission. Overrides the college-level default rate
+    # when set. None means "fall back to the college-level rate".
+    sc_from_college_override: Optional[float] = None
 
 
 class ScheduleItemIn(BaseModel):
@@ -173,8 +177,13 @@ def _normalize_legacy_payment(p: dict) -> dict:
     return p
 
 
-def _summarize(s: dict) -> dict:
-    """Compute summary fields on a student doc (in-place)."""
+def _summarize(s: dict, user: Optional[dict] = None) -> dict:
+    """Compute summary fields on a student doc (in-place).
+
+    When ``user`` is provided and the caller is *not* super_admin, the
+    confidential ``sc_from_college_override`` field is stripped so lower-
+    privileged roles never see the college-side service-charge amount.
+    """
     from lib.student_math import compute_summary
 
     s["payments"] = [_normalize_legacy_payment(p) for p in (s.get("payments") or [])]
@@ -194,6 +203,10 @@ def _summarize(s: dict) -> dict:
         "balance_vs_scheduled", "balance_vs_sc",
     ):
         s[key] = summary[key]
+
+    # Mask super-admin-only fields from other roles.
+    if user is not None and (user or {}).get("role") != "super_admin":
+        s.pop("sc_from_college_override", None)
     return s
 
 
@@ -682,7 +695,7 @@ async def list_students(user: dict = Depends(get_current_user)):
             },
             {"_id": 0},
         ).sort("created_at", -1).to_list(2000)
-        return [_summarize(s) for s in items]
+        return [_summarize(s, user) for s in items]
 
     if user.get("role") == "super_admin":
         items = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
@@ -697,7 +710,7 @@ async def list_students(user: dict = Depends(get_current_user)):
             umap = {u["id"]: u for u in users}
             out = []
             for s in items:
-                summary = _summarize(s)
+                summary = _summarize(s, user)
                 u = umap.get(s.get("user_id"))
                 if u and u.get("role") == "office_admin":
                     summary["_creator_name"] = u.get("name")
@@ -723,7 +736,7 @@ async def list_students(user: dict = Depends(get_current_user)):
         umap = {u["id"]: u.get("name") for u in rus}
     out = []
     for s in items:
-        summary = _summarize(s)
+        summary = _summarize(s, user)
         if s.get("referrer_user_id") and not s.get("referrer_name"):
             summary["referrer_name"] = umap.get(s["referrer_user_id"])
         out.append(summary)
@@ -737,6 +750,10 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
     # admins in the same office (and super_admin) can see the record.
     if user.get("role") == "office_admin":
         data["home_office"] = user.get("office")
+    # Guard the confidential college-side SC override: only super_admin can
+    # set / read this field. Silently drop it for every other role.
+    if user.get("role") != "super_admin":
+        data.pop("sc_from_college_override", None)
     fees_plan = data.get("fees_plan")
     schedules = _merge_fees_plan_schedules([], fees_plan, set()) if fees_plan else []
     # Auto-map the manual "Reference" name → referrer_user_id so admin-added
@@ -774,7 +791,7 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
             actor_user_id=user["id"],
             metadata={"student_id": doc["id"], "reference": data.get("reference"), "college": data.get("college")},
         )
-    return _summarize(doc)
+    return _summarize(doc, user)
 
 
 _AGENT_TYPES = {"sub_agent", "associate", "km"}
@@ -950,7 +967,7 @@ async def get_student(student_id: str, user: dict = Depends(get_current_user)):
     s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})
     if not s:
         raise HTTPException(404, "Student not found")
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 @router.patch("/{student_id}")
@@ -977,6 +994,12 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
         )
         if existing is not None:
             data["home_office"] = existing.get("home_office")
+
+    # Guard the confidential college-side SC override on writes: only
+    # super_admin can set / clear this field. For lower roles we strip
+    # the key entirely so the PATCH doesn't touch its current value.
+    if user.get("role") != "super_admin":
+        data.pop("sc_from_college_override", None)
     fees_plan = data.get("fees_plan")
     # Reconcile fees_plan rows with existing schedules. Preserve manual ones,
     # and don't drop fee_plan rows that already have payments linked.
@@ -1033,7 +1056,7 @@ async def update_student(student_id: str, payload: StudentIn, user: dict = Depen
                     actor_user_id=user["id"],
                 )
 
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 @router.delete("/{student_id}")
@@ -1151,7 +1174,7 @@ async def add_schedule(student_id: str, payload: ScheduleItemIn, user: dict = De
         {"$push": {"schedules": item}},
     )
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 @router.patch("/{student_id}/schedules/{schedule_id}")
@@ -1164,7 +1187,7 @@ async def update_schedule(student_id: str, schedule_id: str, payload: ScheduleIt
     if res.matched_count == 0:
         raise HTTPException(404, "Schedule item not found")
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 @router.delete("/{student_id}/schedules/{schedule_id}")
@@ -1176,7 +1199,7 @@ async def delete_schedule(student_id: str, schedule_id: str, user: dict = Depend
     if res.matched_count == 0:
         raise HTTPException(404, "Student not found")
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 # ---------- Payments ----------
@@ -1203,7 +1226,7 @@ async def add_payment(student_id: str, payload: PaymentItemIn, user: dict = Depe
     # the cash lands on the office_admin's account/ledger.
     await _auto_log_payment_transaction(student["user_id"], student, item)
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
-    return _summarize(s)
+    return _summarize(s, user)
 
 
 @router.patch("/{student_id}/payments/{payment_id}")
@@ -1221,7 +1244,7 @@ async def update_payment(student_id: str, payment_id: str, payload: PaymentItemI
     updated_payment = next((p for p in student.get("payments") or [] if p["id"] == payment_id), None)
     if updated_payment:
         await _auto_log_payment_transaction(student["user_id"], student, updated_payment)
-    return _summarize(student)
+    return _summarize(student, user)
 
 
 @router.delete("/{student_id}/payments/{payment_id}")
@@ -1236,4 +1259,4 @@ async def delete_payment(student_id: str, payment_id: str, user: dict = Depends(
     # Cascade-clean the auto-logged transaction on the record OWNER's books.
     await _delete_payment_transaction(student["user_id"], payment_id)
     s = await db.students.find_one({"id": student_id}, {"_id": 0})
-    return _summarize(s)
+    return _summarize(s, user)

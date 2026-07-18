@@ -1083,3 +1083,71 @@ Adds @-mentions to the Messages module. Mentioned users get a stronger `mention`
 - 14/14 new backend tests (cascade from new/converted/interested/follow_up/not_connected, no-cascade when reg=0, terminal untouched, phone-normalization both directions, non-matching phone, structured logs)
 - 3/3 iteration-48 auto-bump regression tests still pass
 - Frontend LeadJourney panel confirmed showing both auto-bump entries with correct from/to and actor "System · Application submitted"
+
+
+## Feature — 2026-07-18 (Admission Revenue, confidential SC per college×course)
+
+**Requirement**: "Every college pays a service charge for admissions. It varies by
+college, course, city. I want one more detail so I can calculate revenue for all
+admissions per year. It's confidential — only super admin can see it."
+
+**User choices (verbatim)**
+1. `college × course` with per-student override
+2. Fixed INR amount per admission
+3. 3-tier breakdown (Committed / Accrued / Confirmed), enrolled students only
+4. Financial year (Apr → Mar, Indian)
+5. Both CRUD on Colleges page AND new dedicated `/admission-revenue` dashboard
+6. CSV bulk upload includes new `sc_rates` column
+7. Strictly super admin only
+
+**Data model**
+- `colleges.sc_rates: {course_name: INR_amount}` — confidential, server-side stripped from non-super-admin responses.
+- `students.sc_from_college_override: Optional[float]` — per-student override, super-admin write-and-read only.
+
+**Backend**
+- `routers/colleges.py`
+  - `CollegeIn.sc_rates: Optional[Dict[str, float]]` + `_normalize_sc_rates()`.
+  - `_strip_confidential(doc, user)` — removes `sc_rates` when caller.role != super_admin.
+  - CSV bulk upload: new `sc_rates` column, format `Course:Amount|Course:Amount`.
+  - CSV template extended with a sample row.
+  - Public `/api/public/colleges` never projects `sc_rates`.
+- `routers/students.py`
+  - `StudentIn.sc_from_college_override: Optional[float]`.
+  - `_summarize(s, user)` — strips override when caller.role != super_admin.
+  - `create_student` + `update_student` — drop `sc_from_college_override` from payload if caller.role != super_admin.
+- **New** `routers/admission_revenue.py` — super-admin-only:
+  - `GET /api/admission-revenue/summary?fy=YYYY-YY`
+  - `GET /api/admission-revenue/fy-options`
+  - Filters students `status IN {enrolled, completed}`, buckets by FY of `enrollment_date` (fallback `created_at`).
+  - `committed` = all enrolled/completed in FY.
+  - `accrued`   = above + ≥1 recorded payment.
+  - `confirmed` = above + fully paid (via `student_math.compute_summary`) or `status=completed`.
+  - Aggregates: tiers, by_college[], by_course[].
+
+**Frontend**
+- New `pages/AdmissionRevenue.jsx` — FY picker, 3 tier KPI cards (Committed/Accrued/Confirmed), by-college & by-course tables, zero-rate hint linking to `/colleges`, confidential eyebrow.
+- New `components/colleges/CollegeScRatesEditor.jsx` — live per-course INR editor inside the college dialog.
+- `CollegeFormDialog.jsx` — amber-bordered "SC received from college (per course)" section, "Super admin only" tag, live-parsed course list.
+- `CollegeCard.jsx` — collapsible "SC rates · N" section visible only when `role=super_admin` and rates exist.
+- `BulkUploadDialog.jsx` — description mentions the new `sc_rates` column.
+- `StudentDetail.jsx` + `HeaderCard.jsx` — per-student `sc_from_college_override` input (super admin only), amber-bordered.
+- `App.js` — new route `/admission-revenue` (SUPER_ADMIN_ONLY PermGate).
+- `AppShell.jsx` — new sidebar link "Admission Revenue" (Coins icon, grouped under "Add details"), super-admin only.
+
+**Verified end-to-end via curl**
+- ✅ Super admin sees `sc_rates` on `/api/colleges`.
+- ✅ Office admin does NOT see `sc_rates` on `/api/colleges` (masked server-side).
+- ✅ Public `/api/public/colleges` never leaks `sc_rates` (projection-based).
+- ✅ Office admin gets HTTP 403 on `/api/admission-revenue/*`.
+- ✅ Setting `sc_rates` on Prudence Group of Institutions (₹30,000/course) instantly reflects on the revenue summary (Committed & Accrued go from ₹0 → ₹30,000; Prudence tops the by-college table).
+- ✅ Live smoke screenshots confirm the confidential UI section on Colleges edit dialog and the full Admission Revenue dashboard for super admin.
+
+## Housekeeping — 2026-07-18
+
+- **Super admin credentials updated**: primary super admin is now `muneer@kmfoundation.co` / `kmf@0786`.
+  - Updated in `backend/.env` (`ADMIN_EMAIL`, `ADMIN_PASSWORD`).
+  - `seed.py` migration path extended: on fresh env, migrates `admin@finflow.com` OR `admin@kmfoundation.online` → new `ADMIN_EMAIL` (preserves user_id + all linked data).
+  - Legacy `admin@kmfoundation.online` still exists as a second super_admin (pending user decision).
+  - `/app/memory/test_credentials.md` updated.
+- **App icons refreshed**: user supplied a new **KM Connect** app icon set (Android mipmap-mdpi→xxxhdpi + iOS AppIcon.appiconset up to 1024×1024). Replaced portal favicon, apple-touch-icon, km-logo, km-mark, and all PWA icons in `/app/frontend/public`. The student application form's `application-form-icon.png` (KM Foundation admissions mark) is intentionally left untouched.
+- **Link preview meta tags** (`public/index.html`) rewritten from "Student Application Form — KM Foundation" to **"KM Connect — by KM Foundation"** with description "Connecting partners to monitor Real-time tracking" and image `https://kmconnect.co.in/pwa-icon-512.png`.

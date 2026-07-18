@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText, GraduationCap } from "@phosphor-icons/react";
+import { PencilSimple, Trash, Plus, FilePdf, FileText, ClipboardText, GraduationCap, Lock } from "@phosphor-icons/react";
 import { formatDate } from "@/lib/format";
 import FeesPlanFields, { emptyFeesPlan } from "@/components/FeesPlanFields";
 import CollegeSelect from "@/components/CollegeSelect";
@@ -78,6 +78,29 @@ export default function HeaderCard({
             </div>
             <div><Label>Enrollment Date</Label><Input type="date" value={header.enrollment_date} onChange={(e) => setHeader({ ...header, enrollment_date: e.target.value })} /></div>
           </div>
+          {isSuperAdmin && (
+            <div
+              className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-1.5"
+              data-testid="hdr-sc-college-row"
+            >
+              <Label className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 text-xs">
+                <Lock size={11} weight="fill" />
+                SC received from college (override) · <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-amber-500/20">Super admin only</span>
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={header.sc_from_college_override ?? ""}
+                onChange={(e) => setHeader({ ...header, sc_from_college_override: e.target.value })}
+                placeholder="Leave blank to use college default rate"
+                data-testid="hdr-sc-college-override"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Overrides the college-level SC rate on the Admission Revenue dashboard for this single admission.
+              </p>
+            </div>
+          )}
           {isSuperAdmin && (
             <div data-testid="hdr-home-office-row">
               <Label>Visible to office <span className="text-xs text-muted-foreground font-normal">(blank = private to me)</span></Label>

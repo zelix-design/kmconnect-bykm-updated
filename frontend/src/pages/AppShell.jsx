@@ -37,6 +37,7 @@ const ALL_NAV = [
   { to: "/staff", label: "Staff", icon: IdentificationBadge, tid: "nav-staff", roles: ["super_admin"] },
   { to: "/leave", label: "Leave", icon: CalendarCheck, tid: "nav-leave", roles: ["super_admin", "office_admin", "staff"], perm: "leave" },
   { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
+  { to: "/admission-revenue", label: "Admission Revenue", icon: Coins, tid: "nav-admission-revenue", roles: ["super_admin"] },
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
@@ -63,6 +64,7 @@ const PAGE_TITLES = {
   "/staff": "Staff",
   "/leave": "Leave",
   "/colleges": "Colleges",
+  "/admission-revenue": "Admission Revenue",
   "/agents": "Sub-agent Ledger",
   "/categories": "Categories",
   "/settings": "Settings",
@@ -81,7 +83,7 @@ function initialsOf(name) {
 const GROUP_ROUTES = {
   accounts: ["/accounts", "/transactions", "/agents", "/invoices"],
   office: ["/office-overview", "/employees", "/leads", "/staff", "/leave"],
-  details: ["/colleges", "/categories"],
+  details: ["/colleges", "/categories", "/admission-revenue"],
 };
 
 function buildSections(navItems, role) {

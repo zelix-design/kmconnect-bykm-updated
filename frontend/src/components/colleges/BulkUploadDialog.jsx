@@ -81,7 +81,13 @@ export default function BulkUploadDialog({ open, onOpenChange, onUploaded }) {
           <DialogDescription className="text-xs text-muted-foreground">
             Upload a CSV with columns <code className="px-1 py-0.5 rounded bg-muted text-foreground">name</code>,{" "}
             <code className="px-1 py-0.5 rounded bg-muted text-foreground">courses</code>,{" "}
-            <code className="px-1 py-0.5 rounded bg-muted text-foreground">place</code>. Duplicates are skipped automatically.
+            <code className="px-1 py-0.5 rounded bg-muted text-foreground">place</code>,{" "}
+            <code className="px-1 py-0.5 rounded bg-muted text-foreground">deal_with</code>,{" "}
+            <code className="px-1 py-0.5 rounded bg-muted text-foreground">sc_rates</code>.
+            Duplicates are skipped. <br />
+            <span className="text-[11px] text-amber-700 dark:text-amber-400">
+              <strong>sc_rates</strong> (optional, confidential): <code>Course:Amount|Course:Amount</code>
+            </span>
           </DialogDescription>
         </DialogHeader>
 

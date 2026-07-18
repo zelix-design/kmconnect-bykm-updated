@@ -51,6 +51,10 @@ export default function StudentDetail() {
         status: sr.data.status, enrollment_date: sr.data.enrollment_date || "", notes: sr.data.notes || "",
         fees_plan: feesPlanFromApi(sr.data.fees_plan),
         home_office: sr.data.home_office || "",
+        sc_from_college_override:
+          sr.data.sc_from_college_override === null || sr.data.sc_from_college_override === undefined
+            ? ""
+            : sr.data.sc_from_college_override,
       });
     } catch {
       toast.error("Could not load student"); nav("/students");
@@ -73,11 +77,17 @@ export default function StudentDetail() {
 
   const saveHeader = async () => {
     try {
+      const overrideRaw = header.sc_from_college_override;
+      const overrideNum = overrideRaw === "" || overrideRaw === undefined || overrideRaw === null
+        ? null
+        : Number(overrideRaw);
       const payload = {
         ...header,
         sc_out_fixed: parseFloat(header.sc_out_fixed) || 0,
         fees_plan: normalizeFeesPlanForApi(header.fees_plan),
         home_office: header.home_office || null,
+        sc_from_college_override:
+          overrideNum === null || Number.isNaN(overrideNum) ? null : overrideNum,
       };
       const { data } = await api.patch(`/students/${id}`, payload);
       setS(data); setEditHeader(false); toast.success("Saved");

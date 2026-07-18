@@ -1,6 +1,8 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
-import { PencilSimple, Trash, Buildings, User } from "@phosphor-icons/react";
+import { PencilSimple, Trash, Buildings, User, Lock, CurrencyInr } from "@phosphor-icons/react";
+import { useAuth } from "@/lib/auth";
+import { formatMoney } from "@/lib/format";
 
 const COLLAPSED_COUNT = 6;
 
@@ -8,10 +10,16 @@ const COLLAPSED_COUNT = 6;
  * + capped course chips (collapses past 6 with a "+ N more" toggle).
  */
 export default function CollegeCard({ c, onEdit, onDelete }) {
+  const { user } = useAuth();
+  const currency = user?.currency || "INR";
+  const isSuper = user?.role === "super_admin";
   const courses = c.courses || [];
   const [showAll, setShowAll] = React.useState(false);
+  const [showSc, setShowSc] = React.useState(false);
   const visible = showAll ? courses : courses.slice(0, COLLAPSED_COUNT);
   const hidden = Math.max(0, courses.length - visible.length);
+  const scRates = c.sc_rates && typeof c.sc_rates === "object" ? c.sc_rates : {};
+  const scCount = Object.keys(scRates).length;
 
   return (
     <Card
@@ -100,6 +108,45 @@ export default function CollegeCard({ c, onEdit, onDelete }) {
           </div>
         )}
       </div>
+
+      {/* Confidential SC rates — super admin only */}
+      {isSuper && scCount > 0 && (
+        <div className="mt-3 pt-3 border-t border-border" data-testid={`col-sc-${c.id}`}>
+          <button
+            type="button"
+            onClick={() => setShowSc((v) => !v)}
+            className="w-full flex items-center justify-between text-left group"
+            data-testid={`col-sc-toggle-${c.id}`}
+          >
+            <span className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-amber-800 dark:text-amber-400">
+              <Lock size={11} weight="fill" />
+              SC rates · {scCount}
+            </span>
+            <span className="text-[10px] text-muted-foreground group-hover:text-foreground">
+              {showSc ? "Hide" : "Show"}
+            </span>
+          </button>
+          {showSc && (
+            <div className="mt-2 space-y-1">
+              {Object.entries(scRates).map(([course, amount]) => (
+                <div
+                  key={course}
+                  className="flex items-center justify-between text-xs"
+                  data-testid={`col-sc-row-${c.id}-${course.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <span className="truncate text-foreground/80 mr-2" title={course}>
+                    {course}
+                  </span>
+                  <span className="flex items-center gap-0.5 font-medium tabular-nums text-amber-800 dark:text-amber-300">
+                    <CurrencyInr size={11} />
+                    {formatMoney(amount, currency).replace(/^[₹$€£¥]\s?/, "")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

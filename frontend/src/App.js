@@ -26,6 +26,7 @@ import Users from "@/pages/Users";
 import ExpenseRequests from "@/pages/ExpenseRequests";
 import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
+import AdmissionRevenue from "@/pages/AdmissionRevenue";
 import Leads from "@/pages/Leads";
 import StaffMembers from "@/pages/StaffMembers";
 import StaffStudents from "@/pages/StaffStudents";
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/my-students" element={<PermGate roles={STAFF_ONLY}><StaffStudents /></PermGate>} />
             <Route path="/students/:id" element={<PermGate page="students"><StudentDetail /></PermGate>} />
             <Route path="/colleges" element={<PermGate roles={SUPER_ADMIN_ONLY}><Colleges /></PermGate>} />
+            <Route path="/admission-revenue" element={<PermGate roles={SUPER_ADMIN_ONLY}><AdmissionRevenue /></PermGate>} />
             <Route path="/leads" element={<PermGate roles={LEADS_ROLES} page="leads"><Leads /></PermGate>} />
             <Route path="/staff" element={<PermGate roles={SUPER_ADMIN_ONLY}><StaffMembers /></PermGate>} />
             <Route path="/office-overview" element={<PermGate roles={SUPER_ADMIN_ONLY}><OfficeOverview /></PermGate>} />

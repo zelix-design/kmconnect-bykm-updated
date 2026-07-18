@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
+import { Lock } from "@phosphor-icons/react";
+import CollegeScRatesEditor from "./CollegeScRatesEditor";
 
 const emptyForm = { name: "", courses: "", place: "", deal_with: "" };
 
@@ -23,6 +25,7 @@ export default function CollegeFormDialog({ open, onOpenChange, editing, onSaved
   const [form, setForm] = useState(emptyForm);
   const [placeSelect, setPlaceSelect] = useState("");
   const [placeOtherText, setPlaceOtherText] = useState("");
+  const [scRates, setScRates] = useState({});
 
   // Re-seed the form whenever the dialog opens (with or without an existing college).
   useEffect(() => {
@@ -38,12 +41,21 @@ export default function CollegeFormDialog({ open, onOpenChange, editing, onSaved
       });
       setPlaceSelect(isCanonical ? norm : (norm ? "Other" : ""));
       setPlaceOtherText(isCanonical ? "" : norm);
+      setScRates(editing.sc_rates && typeof editing.sc_rates === "object" ? { ...editing.sc_rates } : {});
     } else {
       setForm(emptyForm);
       setPlaceSelect("");
       setPlaceOtherText("");
+      setScRates({});
     }
   }, [open, editing]);
+
+  // Live-parse the free-form courses textarea so the SC rates section can
+  // render one row per course as the user types.
+  const parsedCourses = useMemo(
+    () => form.courses.split(",").map((s) => s.trim()).filter(Boolean),
+    [form.courses],
+  );
 
   const submit = async (e) => {
     e.preventDefault();
@@ -52,11 +64,23 @@ export default function CollegeFormDialog({ open, onOpenChange, editing, onSaved
     const finalPlace = placeSelect === "Other"
       ? placeOtherText.trim()
       : (placeSelect || "");
+
+    // Drop rates for courses no longer in the list; coerce strings → numbers.
+    const courseSet = new Set(parsedCourses.map((c) => c.toLowerCase()));
+    const cleanedRates = {};
+    for (const [k, v] of Object.entries(scRates || {})) {
+      if (!courseSet.has(k.toLowerCase())) continue;
+      const num = parseFloat(v);
+      if (!Number.isFinite(num) || num < 0) continue;
+      cleanedRates[k] = num;
+    }
+
     const payload = {
       name,
-      courses: form.courses.split(",").map((s) => s.trim()).filter(Boolean),
+      courses: parsedCourses,
       place: finalPlace,
       deal_with: form.deal_with.trim(),
+      sc_rates: cleanedRates,
     };
     try {
       if (editing) {
@@ -76,7 +100,7 @@ export default function CollegeFormDialog({ open, onOpenChange, editing, onSaved
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card max-w-lg" data-testid="college-dialog">
+      <DialogContent className="bg-card max-w-lg max-h-[90vh] overflow-y-auto" data-testid="college-dialog">
         <DialogHeader>
           <DialogTitle className="font-display">
             {editing ? "Edit college" : "Add college"}
@@ -149,6 +173,32 @@ export default function CollegeFormDialog({ open, onOpenChange, editing, onSaved
               Optional — the contact you usually liaise with at this college.
             </p>
           </div>
+
+          {/* ---- Confidential: SC received from college per course ---- */}
+          <div
+            className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2"
+            data-testid="sc-rates-section"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <Label className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                <Lock size={13} weight="fill" />
+                SC received from college (per course)
+              </Label>
+              <span className="text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200">
+                Super admin only
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              INR paid by the college for every admission. Used to compute yearly
+              revenue on the Admission Revenue dashboard.
+            </p>
+            <CollegeScRatesEditor
+              courses={parsedCourses}
+              rates={scRates}
+              onChange={setScRates}
+            />
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" className="btn-amber border-0" data-testid="col-save-btn">
