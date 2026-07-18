@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/select";
 import {
   CurrencyInr, Lock, TrendUp, Coins, CheckCircle, Warning,
-  ArrowsClockwise, GraduationCap, Buildings, Users,
+  ArrowsClockwise, GraduationCap, Buildings, Users, CaretDown,
 } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
@@ -484,8 +484,9 @@ function ClientTypeBadge({ type }) {
 
 /**
  * Groups the by_client rows by office and renders a sectioned list. Each
- * section shows the OFFICE label as a coloured heading, then the clients
- * that belong to it with a client-type tag under the name.
+ * section is a collapsible header — click the chevron to expand and reveal
+ * the clients (with client-type tag). Default state = all collapsed so the
+ * super admin sees only the office totals at a glance.
  */
 function ClientOfficeTable({ rows, fmtInr }) {
   // Group rows by office → { office_code: [rows...] } preserving order.
@@ -509,6 +510,25 @@ function ClientOfficeTable({ rows, fmtInr }) {
     });
   }, [rows]);
 
+  // Which offices are expanded. Default: all collapsed.
+  const [expanded, setExpanded] = React.useState(() => new Set());
+  const toggle = (office) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(office)) next.delete(office);
+      else next.add(office);
+      return next;
+    });
+  };
+  const allExpanded = groups.length > 0 && groups.every(([o]) => expanded.has(o));
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpanded(new Set());
+    } else {
+      setExpanded(new Set(groups.map(([o]) => o)));
+    }
+  };
+
   return (
     <Card
       className="p-5 border border-border bg-card shadow-none"
@@ -521,10 +541,20 @@ function ClientOfficeTable({ rows, fmtInr }) {
         <div className="flex-1">
           <h3 className="font-display text-base font-semibold">By Client / Office</h3>
           <p className="text-[11px] text-muted-foreground">
-            Revenue = In (from college) − Out (to sub-agent)
+            Revenue = In (from college) − Out (to sub-agent). Tap an office to expand.
           </p>
         </div>
-        <span className="text-[11px] text-muted-foreground">
+        {groups.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+            data-testid="office-toggle-all"
+          >
+            {allExpanded ? "Collapse all" : "Expand all"}
+          </button>
+        )}
+        <span className="text-[11px] text-muted-foreground ml-2">
           {(rows || []).length} row{(rows || []).length === 1 ? "" : "s"}
         </span>
       </div>
@@ -532,7 +562,7 @@ function ClientOfficeTable({ rows, fmtInr }) {
       {(rows || []).length === 0 ? (
         <p className="text-xs text-muted-foreground text-center py-6">No admissions yet.</p>
       ) : (
-        <div className="max-h-[520px] overflow-y-auto -mx-1 pr-1 space-y-4">
+        <div className="max-h-[520px] overflow-y-auto -mx-1 pr-1 space-y-3">
           {groups.map(([office, list]) => {
             const groupNet = list.reduce((n, r) => n + (r.net || 0), 0);
             const groupCount = list.reduce((n, r) => n + (r.count || 0), 0);
@@ -542,62 +572,80 @@ function ClientOfficeTable({ rows, fmtInr }) {
               : groupNet < 0
                 ? "text-rose-700 dark:text-rose-400"
                 : "text-muted-foreground";
+            const isOpen = expanded.has(office);
             return (
               <section key={office} data-testid={`office-group-${office}`}>
-                <div
-                  className={`flex items-center justify-between gap-2 px-2 py-1.5 rounded border ${tone}`}
+                <button
+                  type="button"
+                  onClick={() => toggle(office)}
+                  aria-expanded={isOpen}
+                  aria-controls={`office-body-${office}`}
+                  className={`w-full flex items-center gap-2 px-2 py-2 rounded border ${tone} hover:brightness-95 focus:outline-none focus:ring-2 focus:ring-amber-500 transition`}
+                  data-testid={`office-toggle-${office}`}
                 >
+                  <CaretDown
+                    size={13}
+                    weight="bold"
+                    className={`shrink-0 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
+                    data-testid={`office-caret-${office}`}
+                  />
                   <span className="text-[10px] uppercase tracking-[0.08em] font-semibold">
                     {officeHeading(office)}
                   </span>
-                  <span className="text-[11px] tabular-nums">
+                  <span className="ml-auto text-[11px] tabular-nums">
                     <span className="opacity-70 mr-2">{groupCount} · </span>
                     <span className={`font-semibold ${groupNetCls}`}>₹ {fmtInr(groupNet)}</span>
                   </span>
-                </div>
-                <table className="w-full text-sm mt-1.5">
-                  <tbody className="divide-y divide-border/60">
-                    {list.map((r, idx) => {
-                      const netVal = Number(r.net || 0);
-                      const netCls = netVal > 0
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : netVal < 0
-                          ? "text-rose-700 dark:text-rose-400"
-                          : "text-muted-foreground";
-                      return (
-                        <tr
-                          key={`${r.client}-${idx}`}
-                          className="hover:bg-muted/40 transition-colors"
-                          data-testid={`row-by-client-${office}-${idx}`}
-                        >
-                          <td className="py-2 pl-1">
-                            <div className="flex flex-col gap-1 min-w-0">
-                              <span
-                                className="truncate font-medium text-foreground"
-                                title={r.client}
-                              >
-                                {r.client}
-                              </span>
-                              {r.client_type && (
-                                <div className="flex">
-                                  <ClientTypeBadge type={r.client_type} />
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="text-right py-2 tabular-nums text-muted-foreground w-12">
-                            {r.count}
-                          </td>
-                          <td
-                            className={`text-right py-2 pr-1 tabular-nums font-semibold w-32 ${netCls}`}
+                </button>
+                {isOpen && (
+                  <table
+                    id={`office-body-${office}`}
+                    className="w-full text-sm mt-1"
+                    data-testid={`office-body-${office}`}
+                  >
+                    <tbody className="divide-y divide-border/60">
+                      {list.map((r, idx) => {
+                        const netVal = Number(r.net || 0);
+                        const netCls = netVal > 0
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : netVal < 0
+                            ? "text-rose-700 dark:text-rose-400"
+                            : "text-muted-foreground";
+                        return (
+                          <tr
+                            key={`${r.client}-${idx}`}
+                            className="hover:bg-muted/40 transition-colors"
+                            data-testid={`row-by-client-${office}-${idx}`}
                           >
-                            {fmtInr(netVal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            <td className="py-2 pl-6">
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <span
+                                  className="truncate font-medium text-foreground"
+                                  title={r.client}
+                                >
+                                  {r.client}
+                                </span>
+                                {r.client_type && (
+                                  <div className="flex">
+                                    <ClientTypeBadge type={r.client_type} />
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="text-right py-2 tabular-nums text-muted-foreground w-12">
+                              {r.count}
+                            </td>
+                            <td
+                              className={`text-right py-2 pr-1 tabular-nums font-semibold w-32 ${netCls}`}
+                            >
+                              {fmtInr(netVal)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
               </section>
             );
           })}
