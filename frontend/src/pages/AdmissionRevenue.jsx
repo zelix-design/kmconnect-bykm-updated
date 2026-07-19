@@ -367,9 +367,9 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid, onR
               <tr>
                 <th className="text-left py-1.5 pl-1 font-semibold">{keyField}</th>
                 <th className="text-right py-1.5 font-semibold w-10">#</th>
-                <th className="text-right py-1.5 font-semibold w-24">In (₹)</th>
-                <th className="text-right py-1.5 font-semibold w-24">Out (₹)</th>
-                <th className="text-right py-1.5 pr-1 font-semibold w-24">Net (₹)</th>
+                <th className="text-right py-1.5 font-semibold whitespace-nowrap">In (₹)</th>
+                <th className="text-right py-1.5 font-semibold whitespace-nowrap">Out (₹)</th>
+                <th className="text-right py-1.5 pr-1 font-semibold whitespace-nowrap">Net (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
@@ -409,13 +409,13 @@ function BreakdownTable({ title, icon: Icon, keyField, rows, fmtInr, testid, onR
                     <td className="text-right py-1.5 tabular-nums text-muted-foreground">
                       {r.count}
                     </td>
-                    <td className="text-right py-1.5 tabular-nums">
+                    <td className="text-right py-1.5 tabular-nums whitespace-nowrap pl-3">
                       {fmtInr(r.amount)}
                     </td>
-                    <td className="text-right py-1.5 tabular-nums text-rose-700/80 dark:text-rose-400/80">
+                    <td className="text-right py-1.5 tabular-nums whitespace-nowrap text-rose-700/80 dark:text-rose-400/80 pl-3">
                       {fmtInr(r.sc_out)}
                     </td>
-                    <td className={`text-right py-1.5 pr-1 tabular-nums font-medium ${netCls}`}>
+                    <td className={`text-right py-1.5 pr-1 tabular-nums whitespace-nowrap font-medium pl-3 ${netCls}`}>
                       {fmtInr(netVal)}
                     </td>
                   </tr>
@@ -637,11 +637,11 @@ function ClientOfficeTable({ rows, fmtInr }) {
                                 )}
                               </div>
                             </td>
-                            <td className="text-right py-2 tabular-nums text-muted-foreground w-12">
+                            <td className="text-right py-2 tabular-nums text-muted-foreground w-12 whitespace-nowrap">
                               {r.count}
                             </td>
                             <td
-                              className={`text-right py-2 pr-1 tabular-nums font-semibold w-32 ${netCls}`}
+                              className={`text-right py-2 pr-1 tabular-nums font-semibold whitespace-nowrap pl-3 ${netCls}`}
                             >
                               {fmtInr(netVal)}
                             </td>
