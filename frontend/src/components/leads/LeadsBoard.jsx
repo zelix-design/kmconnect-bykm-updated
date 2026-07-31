@@ -27,14 +27,24 @@ export default function LeadsBoard({ leads, onCardClick, onStatusChange, editabl
             onDragLeave={() => setOverCol((c) => (c === s ? null : c))}
             onDrop={() => editable && handleDrop(s)}
             data-testid={`board-col-${s}`}
-            className={`w-72 shrink-0 rounded-xl border transition-colors ${overCol === s ? "border-orange-500/60 bg-orange-500/5" : "border-border bg-muted/30"} p-2`}
+            className={`w-72 shrink-0 flex flex-col rounded-xl border transition-colors ${overCol === s ? "border-orange-500/60 bg-orange-500/5" : "border-border bg-muted/30"} p-2 h-[calc(100vh-16rem)] min-h-[400px]`}
           >
-            <div className="flex items-center justify-between px-2 py-1.5 sticky top-0">
+            <div className="flex items-center justify-between px-2 py-1.5 shrink-0">
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">{byStatus[s].length}</span>
+              <span className="text-xs text-muted-foreground tabular-nums" data-testid={`board-col-count-${s}`}>
+                {byStatus[s].length}
+              </span>
             </div>
-            <div className="space-y-2 mt-1 min-h-[80px]">
-              {byStatus[s].map((l) => (
+            <div
+              className="space-y-2 mt-1 flex-1 overflow-y-auto pr-1 -mr-1"
+              data-testid={`board-col-scroll-${s}`}
+            >
+              {byStatus[s].length === 0 ? (
+                <p className="text-[11px] text-muted-foreground/70 text-center py-6 select-none">
+                  No leads
+                </p>
+              ) : (
+                byStatus[s].map((l) => (
                 <div
                   key={l.id}
                   draggable={editable}
@@ -52,7 +62,8 @@ export default function LeadsBoard({ leads, onCardClick, onStatusChange, editabl
                     {l.is_missed && <span className="text-rose-500 font-medium">Missed</span>}
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         );
