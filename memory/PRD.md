@@ -27,6 +27,24 @@
 - Multi-currency formatting (USD/INR) via Intl.NumberFormat
 - Default seed: 10 categories + 1 "Main Bank" account on user creation
 
+
+## 2026-02-04 — Security hardening + CRM bulk-select
+**Delivered:**
+- **SEC-001 (P0)** — CORS lockdown. Removed `allow_origin_regex=".*"`; now strict regex whitelist for `*.preview.emergentagent.com`, `*.emergent.host`, `*.kmfoundation.co/.co.in/.online`, localhost. Preserves Capacitor mobile app schemes in explicit `allow_origins`. Confirmed direct backend blocks `evil.example.com` (no ACAO header returned).
+- **SEC-003 (P1)** — Public `/api/public/applications` rate-limited per source IP: 5/hour + 30/day. New `lib/rate_limit.py` (Mongo-backed sliding window + TTL cleanup, fail-open on DB error). Registered TTL index at startup.
+- **SEC-004 (P1)** — `seed.py` no longer re-hashes admin password on every restart; genuine password rotations persist. Idempotent role/approval_status backfill kept.
+- **SEC-002 (P2)** — `mask_phone()` helper masks all but last 2 digits of applicant phone in server logs.
+- **Leads bulk-select** — `POST /api/leads/bulk-actions` supports `delete | assign | status | campaign` with scope filtering + activity log writes. UI: per-card + "select all" checkboxes, floating amber bulk bar with dedicated dialogs. Staff role sees no bulk actions.
+- **Campaigns bulk-select** — `POST /api/campaigns/bulk-delete` (staff blocked; leads detach cleanly on cascade). UI mirrors Leads pattern.
+- **Activity log wiring** — `lead.bulk_delete`, `lead.bulk_assign`, `lead.bulk_campaign`, `campaign.bulk_delete` events logged with actor + subject ids.
+
+**Testing** — testing_agent iteration_55: 13/13 backend pytest passed, both bulk-delete flows verified in Playwright. New pytest file at `/app/backend/tests/test_security_and_bulk.py`. Only observation is an infra-layer note (ingress rewrites ACAO to `*` on GET only — browsers still reject credentialed exploits, backend code is compliant).
+
+**Still pending / backlog:**
+- P0 Object/File storage integration (profile pictures) — needs `integration_playbook_expert_v2` first.
+- P2 Email-PDF fee statements, date-range Students XLSX export, one-click "Settle pending" ledger, recurring transactions, per-college seat tracking.
+- P3 Persist ARCHITECTURE.md, Team activity log surface.
+
 ## Implementation status — 2026-02-14 (MVP complete)
 - [x] Backend: full API surface (auth, accounts, clients, categories, transactions, invoices, dashboard)
 - [x] Admin seed user `admin@finflow.com / Admin@123`
