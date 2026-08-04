@@ -28,6 +28,23 @@
 - Default seed: 10 categories + 1 "Main Bank" account on user creation
 
 
+
+## 2026-02-04 — Object storage integration (profile pictures + lead documents)
+**Delivered:**
+- **Storage layer** — `lib/storage.py` already existed for JPEG-only profile pics; extended `routers/uploads.py` to broaden MIME support to jpg/jpeg/png/webp/gif for profile pictures (2MB cap) and to add a new `POST /api/uploads/document` accepting the same images + `application/pdf` (10MB cap, admin-only, with lead-scope enforcement).
+- **Lead attachments** — `POST /api/leads/{id}/attachments` (admin-only) and `DELETE /api/leads/{id}/attachments/{file_id}` (admin-only). Pushes `{file_id, path, url, original_filename, content_type, size, uploaded_by_user_id, uploaded_by_name, uploaded_at}` into `leads.attachments`; delete soft-deletes the underlying `db.files` row so serve returns 404.
+- **File CRUD** — `DELETE /api/files/id/{file_id}` for soft-delete by id (admin can delete any; owners can delete their own uploads; if the file was attached to a lead, the reference is `$pulled` cascade).
+- **Authed serving** — `GET /api/files/{path}` accepts both `Authorization: Bearer <t>` and `?auth=<t>` (needed for `<img>`/`<a download>`). Honors `is_deleted` flag.
+- **UI** — new `components/leads/LeadAttachments.jsx` panel embedded in the Lead detail dialog (below Journey). Upload button (admin-only), file thumbnails for images / PDF icon otherwise, size + uploader shown, per-item download + delete. Staff role sees the panel read-only.
+- **Legacy carry-through** — the existing StaffProfile / Clients staff photo uploaders now accept PNG/WebP/GIF too (their UI copy updated to "JPG, PNG, WebP or GIF · up to 2MB"). `photo_url` field shape unchanged so no data migration needed.
+
+**Testing** — testing_agent iteration_56: 15/15 backend pytest passed + Playwright E2E verified upload/list/download/delete happy path. Real Emergent object storage was exercised (not mocked). New test file at `/app/backend/tests/test_iteration56_attachments.py`.
+
+**Known minor items** (not launch blockers, from code review):
+- `attach_document` uses `require_edit("leads")` + `_require_admin` — small redundancy, works correctly.
+- `lib/storage.py` uses blocking `requests` (not `httpx`) — acceptable at current scale.
+- No `GET /api/leads/{id}` single-fetch endpoint yet (list-and-filter used everywhere).
+
 ## 2026-02-04 — Security hardening + CRM bulk-select
 **Delivered:**
 - **SEC-001 (P0)** — CORS lockdown. Removed `allow_origin_regex=".*"`; now strict regex whitelist for `*.preview.emergentagent.com`, `*.emergent.host`, `*.kmfoundation.co/.co.in/.online`, localhost. Preserves Capacitor mobile app schemes in explicit `allow_origins`. Confirmed direct backend blocks `evil.example.com` (no ACAO header returned).
