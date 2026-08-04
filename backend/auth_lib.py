@@ -127,6 +127,10 @@ async def get_current_user(request: Request) -> dict:
         )
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        if user.get("deleted_at"):
+            # Row was soft-deleted after this token was issued — force
+            # re-authentication instead of leaking access.
+            raise HTTPException(status_code=401, detail="Account has been removed")
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")

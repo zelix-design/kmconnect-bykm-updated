@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
-  Plus, Megaphone, ArrowLeft, UploadSimple, ShareNetwork, Trash, Target, UserCheck, UsersThree, CheckCircle,
+  Plus, Megaphone, ArrowLeft, UploadSimple, ShareNetwork, Trash, Target, UserCheck, UsersThree, CheckCircle, X,
 } from "@phosphor-icons/react";
 import CampaignFormDialog from "./CampaignFormDialog";
 import CampaignAddLeadsDialog from "./CampaignAddLeadsDialog";
@@ -39,6 +40,18 @@ export default function CampaignsPanel({ user }) {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [distOpen, setDistOpen] = useState(false);
   const [pipelineKey, setPipelineKey] = useState(0);
+  // Bulk selection state (list view only). Cleared when the list reloads
+  // or the user drills into a campaign.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleSelected = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -56,11 +69,37 @@ export default function CampaignsPanel({ user }) {
 
   useEffect(() => { loadList(); }, [loadList]);
   useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId, loadDetail]);
+  // Reset bulk selection whenever we leave the list view or the list refreshes.
+  useEffect(() => { setSelectedIds(new Set()); }, [selectedId, list.length]);
 
   const open = (id) => setSelectedId(id);
   const back = () => { setSelectedId(null); setDetail(null); loadList(); };
   const refreshDetail = () => loadDetail(selectedId);
   const refreshAll = () => { loadDetail(selectedId); setPipelineKey((k) => k + 1); };
+
+  const bulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} campaign(s)? Their leads stay in the pipeline (untagged).`)) return;
+    setBulkBusy(true);
+    try {
+      const { data } = await api.post("/campaigns/bulk-delete", { ids });
+      toast.success(`Deleted ${data.count} campaign(s)`);
+      clearSelection();
+      loadList();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Bulk delete failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const visibleIds = useMemo(() => list.map((c) => c.id), [list]);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = () => {
+    if (allSelected) clearSelection();
+    else setSelectedIds(new Set(visibleIds));
+  };
 
   const removeCampaign = async () => {
     if (!window.confirm("Delete this campaign? Its leads stay in the pipeline (untagged).")) return;
@@ -142,24 +181,76 @@ export default function CampaignsPanel({ user }) {
           <p className="text-sm text-muted-foreground mt-1">Create a campaign to batch-import and distribute leads.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="campaigns-grid">
-          {list.map((c) => (
-            <button key={c.id} type="button" onClick={() => open(c.id)} data-testid={`campaign-card-${c.id}`}
-              className="text-left rounded-xl border border-border bg-card p-4 hover:border-orange-500/40 hover:shadow-md transition-all">
-              <div className="flex items-start justify-between gap-2">
-                <p className="font-medium text-foreground truncate">{c.name}</p>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{OFFICE_LABEL[c.office] || c.office}</span>
-              </div>
-              {c.tag_type && <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{c.tag_type}: {c.tag_value}</span>}
-              {c.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{c.description}</p>}
-              <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span><strong className="text-foreground">{c.stats.total}</strong> leads</span>
-                <span><strong className="text-foreground">{c.stats.assigned}</strong> assigned</span>
-                <span><strong className="text-foreground">{c.stats.unassigned}</strong> unassigned</span>
-              </div>
-            </button>
-          ))}
-        </div>
+        <>
+          {selectedIds.size > 0 && (
+            <div
+              data-testid="campaigns-bulk-bar"
+              className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-50/90 dark:bg-amber-500/10 backdrop-blur px-3 py-2 shadow-md animate-fade-in"
+            >
+              <span className="text-sm font-medium text-amber-900 dark:text-amber-200" data-testid="campaigns-bulk-count">
+                {selectedIds.size} selected
+              </span>
+              <div className="flex-1" />
+              <Button size="sm" variant="outline" onClick={bulkDelete} disabled={bulkBusy}
+                className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/30"
+                data-testid="campaigns-bulk-delete-btn">
+                <Trash size={14} className="mr-1.5" /> Delete
+              </Button>
+              <button type="button" onClick={clearSelection} data-testid="campaigns-bulk-clear-btn"
+                className="h-8 w-8 rounded-md flex items-center justify-center text-amber-900/70 hover:bg-amber-500/15 dark:text-amber-200/80">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-xs text-muted-foreground select-none cursor-pointer" data-testid="campaigns-select-all-row">
+            <Checkbox
+              checked={allSelected}
+              onCheckedChange={toggleSelectAll}
+              data-testid="campaigns-select-all"
+              aria-label="Select all campaigns on this page"
+            />
+            {allSelected ? `All ${visibleIds.length} campaigns selected` : `Select all ${visibleIds.length} campaigns`}
+          </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="campaigns-grid">
+            {list.map((c) => {
+              const isChecked = selectedIds.has(c.id);
+              return (
+                <div
+                  key={c.id}
+                  data-testid={`campaign-card-${c.id}`}
+                  className={`relative rounded-xl border bg-card p-4 hover:border-orange-500/40 hover:shadow-md transition-all ${
+                    isChecked ? "border-amber-500/60 ring-1 ring-amber-500/40" : "border-border"
+                  }`}
+                >
+                  <div className="absolute top-3 left-3 z-10" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isChecked}
+                      onCheckedChange={() => toggleSelected(c.id)}
+                      data-testid={`campaign-checkbox-${c.id}`}
+                      aria-label={`Select campaign ${c.name}`}
+                    />
+                  </div>
+                  <button type="button" onClick={() => open(c.id)}
+                    className="w-full text-left pl-6"
+                    data-testid={`campaign-card-open-${c.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-foreground truncate">{c.name}</p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground shrink-0">{OFFICE_LABEL[c.office] || c.office}</span>
+                    </div>
+                    {c.tag_type && <span className="inline-block mt-1.5 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{c.tag_type}: {c.tag_value}</span>}
+                    {c.description && <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{c.description}</p>}
+                    <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+                      <span><strong className="text-foreground">{c.stats.total}</strong> leads</span>
+                      <span><strong className="text-foreground">{c.stats.assigned}</strong> assigned</span>
+                      <span><strong className="text-foreground">{c.stats.unassigned}</strong> unassigned</span>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <CampaignFormDialog open={createOpen} onOpenChange={setCreateOpen} user={user} onSaved={(c) => { loadList(); open(c.id); }} />

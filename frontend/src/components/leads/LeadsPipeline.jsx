@@ -5,6 +5,7 @@ import { canEdit } from "@/lib/perm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
@@ -16,6 +17,7 @@ import LeadFormDialog from "./LeadFormDialog";
 import LeadDetailDialog from "./LeadDetailDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import LeadsBoard from "./LeadsBoard";
+import LeadsBulkActionBar from "./LeadsBulkActionBar";
 
 function StatTile({ icon: Icon, label, value, tone, testid }) {
   const tones = {
@@ -60,6 +62,16 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const [bulkOpen, setBulkOpen] = useState(false);
   const [uncategorizedOnly, setUncategorizedOnly] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
+  // Multi-select state for bulk actions. Cleared when leads reload or filters change.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const toggleSelected = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
   const fetchLeads = useCallback(async () => {
     setLoading(true);
@@ -98,6 +110,10 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
+  // Reset the selection whenever the underlying lead list refreshes so
+  // stale ids don't linger (deleted leads etc.).
+  useEffect(() => { setSelectedIds(new Set()); }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, uncategorizedOnly]);
+
   // Parent (Leads.jsx) bumps refreshKey after the shared deep-link dialog
   // mutates a lead — refetch so the pipeline reflects the change even when
   // it was edited from a different tab (Overview).
@@ -113,9 +129,9 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   }, [isStaff]);
 
   useEffect(() => {
-    if (!allLeadsMode) return;
+    if (isStaff) return;
     api.get("/campaigns").then(({ data }) => setCampaigns(data)).catch(() => {});
-  }, [allLeadsMode]);
+  }, [isStaff, allLeadsMode]);
 
   useEffect(() => {
     if (showActions && !campaignId && params.get("new") === "1" && editable) {
@@ -127,6 +143,13 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   }, [params, editable, setParams, showActions, campaignId]);
 
   const afterChange = () => { fetchLeads(); fetchStats(); onChanged?.(); };
+
+  const visibleIds = useMemo(() => leads.map((l) => l.id), [leads]);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = () => {
+    if (allSelected) clearSelection();
+    else setSelectedIds(new Set(visibleIds));
+  };
 
   const handleBoardStatus = async (lead, status) => {
     // Interested & Converted require their capture forms — open the detail
@@ -246,42 +269,87 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="leads-grid">
-          {leads.map((l) => {
-            const meta = LEAD_STATUS_META[l.status] || LEAD_STATUS_META.new;
-            return (
-              <button
-                key={l.id}
-                type="button"
-                onClick={() => setDetailLead(l)}
-                data-testid={`lead-card-${l.id}`}
-                className="text-left rounded-xl border border-border bg-card p-4 hover:border-orange-500/40 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-foreground truncate">{l.name}</p>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${meta.cls}`}>{meta.label}</span>
-                </div>
-                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                  {l.course && <p className="flex items-center gap-1.5"><GraduationCap size={13} /> {l.course}{l.place ? ` · ${l.place}` : ""}</p>}
-                  {l.phone && <p className="flex items-center gap-1.5"><Phone size={13} /> {l.phone}</p>}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
-                  <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{sourceLabel(l.source)}</span>
-                  {l.assigned_to_name && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>}
-                  {allLeadsMode && (
-                    <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
-                      {l.campaign_id ? (campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
-                    </span>
+        <div className="space-y-3">
+          {editable && (
+            <>
+              <LeadsBulkActionBar
+                count={selectedIds.size}
+                selectedIds={Array.from(selectedIds)}
+                isStaff={isStaff}
+                assignable={assignable}
+                campaigns={campaigns}
+                onClear={clearSelection}
+                onDone={afterChange}
+              />
+              <label className="flex items-center gap-2 text-xs text-muted-foreground select-none cursor-pointer" data-testid="leads-select-all-row">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={toggleSelectAll}
+                  data-testid="leads-select-all"
+                  aria-label="Select all leads on this page"
+                />
+                {allSelected ? `All ${visibleIds.length} on this page selected` : `Select all ${visibleIds.length} on this page`}
+              </label>
+            </>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="leads-grid">
+            {leads.map((l) => {
+              const meta = LEAD_STATUS_META[l.status] || LEAD_STATUS_META.new;
+              const isChecked = selectedIds.has(l.id);
+              return (
+                <div
+                  key={l.id}
+                  data-testid={`lead-card-${l.id}`}
+                  className={`relative rounded-xl border bg-card p-4 hover:border-orange-500/40 hover:shadow-md transition-all ${
+                    isChecked ? "border-amber-500/60 ring-1 ring-amber-500/40" : "border-border"
+                  }`}
+                >
+                  {editable && (
+                    <div
+                      className="absolute top-3 left-3 z-10"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => toggleSelected(l.id)}
+                        data-testid={`lead-checkbox-${l.id}`}
+                        aria-label={`Select lead ${l.name}`}
+                      />
+                    </div>
                   )}
-                  {l.next_follow_up && (
-                    <span className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${l.is_missed ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`} data-testid={l.is_missed ? `lead-missed-${l.id}` : undefined}>
-                      <ClockCountdown size={11} /> {fmtDateTime(l.next_follow_up)}{l.is_missed ? " · Missed" : ""}
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDetailLead(l)}
+                    className={`w-full text-left ${editable ? "pl-6" : ""}`}
+                    data-testid={`lead-card-open-${l.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-medium text-foreground truncate">{l.name}</p>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${meta.cls}`}>{meta.label}</span>
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {l.course && <p className="flex items-center gap-1.5"><GraduationCap size={13} /> {l.course}{l.place ? ` · ${l.place}` : ""}</p>}
+                      {l.phone && <p className="flex items-center gap-1.5"><Phone size={13} /> {l.phone}</p>}
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{sourceLabel(l.source)}</span>
+                      {l.assigned_to_name && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>}
+                      {allLeadsMode && (
+                        <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
+                          {l.campaign_id ? (campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
+                        </span>
+                      )}
+                      {l.next_follow_up && (
+                        <span className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${l.is_missed ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`} data-testid={l.is_missed ? `lead-missed-${l.id}` : undefined}>
+                          <ClockCountdown size={11} /> {fmtDateTime(l.next_follow_up)}{l.is_missed ? " · Missed" : ""}
+                        </span>
+                      )}
+                    </div>
+                  </button>
                 </div>
-              </button>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -1,0 +1,41 @@
+{
+  "summary": "Backend + frontend regression tests passed for SEC-001/002/003/004 and the new Leads & Campaigns bulk-select features. 13/13 backend pytest cases green, both bulk-delete flows verified end-to-end in the browser.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "K8s ingress (not backend code)",
+        "issue": "The public preview ingress rewrites Access-Control-Allow-Origin to '*' on GET /api/* regardless of Origin header. FastAPI itself (localhost:8001) is correctly restricted by the SEC-001 allow-list, and preflight (OPTIONS) responses are correctly filtered even through the ingress. Because 'ACAO: *' combined with 'ACAC: true' is rejected by browsers, credentialed CORS abuse is still blocked at the browser level — but the '*' response is misleading and should be tightened at the ingress/proxy layer. Reproduce: curl -sI -H 'Origin: https://evil.example.com' <PUBLIC_URL>/api/  → shows ACAO=*. Same call to http://localhost:8001/api/ shows no ACAO header (correct)."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_security_and_bulk.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Track (or dismiss with docs) the ingress-layer CORS override that returns 'Access-Control-Allow-Origin: *' on the public URL. Backend code is compliant with SEC-001; this is an infra/proxy config issue and not blocking."
+  ],
+  "critical_code_review_comments": [
+    "seed.py SEC-004 fix is clean — the 'not verify_password ... hash_password' overwrite branch is gone; a clear inline comment explains why. Idempotent role/approval_status patch preserved.",
+    "lib/rate_limit.py mask_phone() keeps the last 2 digits — sufficient for triangulation without leaking full number. Fail-open behaviour on Mongo blip is documented.",
+    "applications.submit_application uses two-tier rate limit (5/hr + 30/day) — good defence-in-depth.",
+    "leads.bulk_actions_leads / campaigns.bulk_delete_campaigns correctly write to db.activity_log via lib/activity_log.log_event (field name is 'type' not 'event_type' — worth noting for future test scripts).",
+    "server.py CORS block combines allow_origins list (static/capacitor schemes) with allow_origin_regex for prod/preview/localhost — correct pattern to avoid the ACAO:'*' trap while keeping mobile schemes working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_security_and_bulk.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (bulk-select UI + bulk-delete flow verified for both Leads and Campaigns)"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co / kmf@0786 — worked as documented in /app/memory/test_credentials.md",
+  "seed_data_creation": "Tests create TEST_-prefixed leads and 'TEST Camp <hex>' campaigns and clean them up (deletes) as part of the test flow. One residual 'TEST Camp 7788c3' from an earlier partial run was cleaned up during the UI bulk-delete verification. db.rate_limits is cleaned before and after the run via an autouse fixture.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_security_and_bulk.py (pytest, 13 cases). Run: pytest /app/backend/tests/test_security_and_bulk.py -v. Notes: (1) The rate-limit test consumes the 5/hour budget for the caller IP, so the autouse fixture wipes db.rate_limits at start AND end of the session — do not remove that. (2) CORS tests hit http://localhost:8001 directly because the public ingress adds ACAO:'*' on GETs; test_preflight_evil_blocked stays on BASE_URL because OPTIONS is correctly handled by the ingress. (3) activity_log field is 'type' (NOT 'event_type'). (4) There is no GET /api/leads/{id} endpoint — use the list endpoint or the _lead_by_id helper in the test file. (5) Frontend bulk-delete confirmations use window.confirm() so Playwright must attach a `page.on('dialog', lambda d: d.accept())` handler.",
+  "rca of the issue": "No new bugs found. The only observation — ingress-layer ACAO:'*' — is an infra/config artifact, not an application-code issue; browsers will still reject credentialed cross-origin requests to an ACAO:'*' response, so SEC-001's threat model (credentialed data theft) is mitigated at the browser boundary."
+}

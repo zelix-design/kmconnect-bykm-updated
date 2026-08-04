@@ -2,7 +2,7 @@
 import os
 
 from db import db
-from auth_lib import hash_password, verify_password, gen_id, now_iso
+from auth_lib import hash_password, gen_id, now_iso
 
 
 DEFAULT_CATEGORIES = [
@@ -106,14 +106,18 @@ async def seed_admin_and_backfill() -> None:
         })
         await seed_user_defaults(user_id)
     else:
-        # Ensure role / approval_status are correct (idempotent backfill)
+        # Ensure role / approval_status are correct (idempotent backfill).
+        # SEC-004: do NOT overwrite the password on restart. If an admin
+        # has rotated their password via the UI/API, resetting it back to
+        # the seed value on every boot would silently undo that rotation
+        # (and any manual rotation would be reverted the next time the
+        # pod restarts). We only set the password on first seed (the
+        # ``insert_one`` branch above) — genuine rotations must survive.
         patch = {}
         if existing.get("role") != "super_admin":
             patch["role"] = "super_admin"
         if existing.get("approval_status") != "approved":
             patch["approval_status"] = "approved"
-        if not verify_password(admin_password, existing["password_hash"]):
-            patch["password_hash"] = hash_password(admin_password)
         if patch:
             await db.users.update_one({"email": admin_email}, {"$set": patch})
 

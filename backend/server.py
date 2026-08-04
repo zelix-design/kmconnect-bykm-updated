@@ -100,21 +100,43 @@ async def healthz() -> dict:
 
 app.include_router(health)
 
-# CORS — the ``allow_origin_regex`` catches every browser origin, but we also
-# whitelist a few explicit non-browser schemes used by the Capacitor Android
-# app so its WebView (which does NOT send a standard http/https Origin) can
-# still complete cross-origin POSTs like /auth/login without tripping the
-# CORS layer.
+# CORS — strict allow-list (SEC-001).
+# We combine an explicit ``allow_origins`` list (non-browser Capacitor/Ionic
+# schemes + optional extras from the ``CORS_ORIGINS`` env var) with an
+# ``allow_origin_regex`` that matches only the domains we actually serve:
+#   • *.preview.emergentagent.com   — Emergent preview builds
+#   • *.emergent.host               — Emergent deployed apps
+#   • *.kmfoundation.co / .co.in / .online   — production FinFlow domains
+#   • localhost / 127.0.0.1 (any port)       — local dev
+# Using ``.*`` here with ``allow_credentials=True`` would let ANY site issue
+# authenticated cross-origin requests and steal user data.
+_extra_origins = [
+    o.strip() for o in (os.environ.get("CORS_ORIGINS") or "").split(",")
+    if o.strip() and o.strip() != "*"
+]
+_static_origins = [
+    "capacitor://localhost",
+    "http://localhost",
+    "https://localhost",
+    "ionic://localhost",
+    *_extra_origins,
+]
+_ALLOW_ORIGIN_REGEX = (
+    r"^https?://("
+    r"localhost(:\d+)?|"
+    r"127\.0\.0\.1(:\d+)?|"
+    r"([a-z0-9-]+\.)*preview\.emergentagent\.com|"
+    r"([a-z0-9-]+\.)*emergent\.host|"
+    r"([a-z0-9-]+\.)*kmfoundation\.co|"
+    r"([a-z0-9-]+\.)*kmfoundation\.co\.in|"
+    r"([a-z0-9-]+\.)*kmfoundation\.online"
+    r")$"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=[
-        "capacitor://localhost",
-        "http://localhost",
-        "https://localhost",
-        "ionic://localhost",
-    ],
-    allow_origin_regex=".*",
+    allow_origins=_static_origins,
+    allow_origin_regex=_ALLOW_ORIGIN_REGEX,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
@@ -178,6 +200,12 @@ async def startup() -> None:
     await db.leave_requests.create_index([("requester_user_id", 1), ("created_at", -1)])
     await db.leave_requests.create_index([("requester_role", 1), ("office", 1), ("status", 1)])
     await _ensure_login_attempts_index()
+    # Rate-limit collection TTL index (SEC-003).
+    try:
+        from lib.rate_limit import ensure_indexes as _rl_indexes
+        await _rl_indexes()
+    except Exception:
+        logger.exception("[rate_limit] index setup failed")
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},

@@ -81,6 +81,14 @@ async def login(payload: LoginIn, response: Response):
         if not user or not verify_password(payload.password, user["password_hash"]):
             await record_failed_attempt(email)
             raise HTTPException(status_code=401, detail="Invalid email or password")
+        if user.get("deleted_at"):
+            # Soft-deleted account — never allow re-login. A super admin
+            # must explicitly reactivate the row (which preserves the same
+            # id and re-attaches all previously-owned leads/students).
+            raise HTTPException(
+                status_code=403,
+                detail="This account has been removed. Please contact the super admin.",
+            )
         status = user.get("approval_status", "approved")
         if status == "pending":
             raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")

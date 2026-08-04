@@ -13,13 +13,14 @@ import logging
 import os
 import re
 from typing import Optional, Literal
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, EmailStr, Field
 
 from db import db
 from auth_lib import gen_id, now_iso, get_current_user
 from lib.application_pdf import render_application_pdf
 from lib.email_notifier import send_email, application_email_html
+from lib.rate_limit import hit as rate_limit_hit, client_ip, mask_phone
 
 # Re-use the notifier so super-admins get pinged in real time.
 from routers.notifications import notify_super_admins
@@ -225,8 +226,14 @@ def _build_student_doc(app: ApplicationIn, owner_id: str, source: str = "public_
 # ---------- Routes ----------
 
 @router.post("/applications", status_code=201)
-async def submit_application(payload: ApplicationIn) -> dict:
+async def submit_application(payload: ApplicationIn, request: Request) -> dict:
     """Submit a new student application. Returns ``{id, reference_code}``."""
+    # SEC-003: Rate-limit public submissions per source IP.
+    # Two-tier: a burst limit (5/hour) plus a daily cap (30/day) to keep
+    # honest applicants unblocked while stopping form spam.
+    ip = client_ip(request)
+    await rate_limit_hit(bucket="apply-hour", key=ip, max_hits=5, window_seconds=3600)
+    await rate_limit_hit(bucket="apply-day", key=ip, max_hits=30, window_seconds=86400)
     # Enforce mandatory fields for public submissions. Admin paste/patch
     # endpoints don't go through here so they can still save partial data.
     twelfth_reg = (payload.academic.twelfth.register_number or "").strip()
@@ -277,7 +284,7 @@ async def submit_application(payload: ApplicationIn) -> dict:
         else:
             log.info(
                 "[applications] no matching lead to auto-bump for phone=%s (student=%s)",
-                payload.basic_info.mobile_number, doc["id"],
+                mask_phone(payload.basic_info.mobile_number), doc["id"],
             )
     except Exception as exc:  # pragma: no cover — best-effort
         log.warning("[applications] lead auto-bump failed: %s", exc, exc_info=True)

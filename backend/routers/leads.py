@@ -26,6 +26,7 @@ from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR, WORK_END_HOUR
 from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
+from lib.activity_log import log_event
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -74,6 +75,15 @@ class LeadUpdate(BaseModel):
     next_follow_up: Optional[str] = None
     notes: Optional[str] = None
     lost_reason: Optional[str] = None
+
+
+class BulkLeadActionIn(BaseModel):
+    """Payload for POST /api/leads/bulk-actions."""
+    ids: List[str] = Field(min_length=1)
+    action: str  # "delete" | "assign" | "status" | "campaign"
+    assigned_to_user_id: Optional[str] = None  # for action="assign"
+    status: Optional[str] = None               # for action="status"
+    campaign_id: Optional[str] = None          # for action="campaign" (null → detach)
 
 
 class FollowUpIn(BaseModel):
@@ -720,6 +730,127 @@ async def delete_lead(lead_id: str, user: dict = Depends(require_edit("leads")))
         raise HTTPException(404, "Lead not found")
     await db.leads.delete_one({"id": lead_id})
     return {"ok": True}
+
+
+@router.post("/bulk-actions")
+async def bulk_actions_leads(
+    payload: BulkLeadActionIn, user: dict = Depends(require_edit("leads"))
+) -> dict:
+    """Apply one action to many leads at once.
+
+    Actions:
+      * ``delete``   — remove the leads (staff blocked)
+      * ``assign``   — reassign to ``assigned_to_user_id`` (null → unassign; staff blocked)
+      * ``status``   — move all to a new pipeline stage (validated against LEAD_STATUSES)
+      * ``campaign`` — attach to ``campaign_id`` (null → detach; staff blocked)
+
+    Every affected lead is scoped through ``_scope_filter`` so office admins
+    can't touch other offices. Returns counts + the list of updated ids so
+    the UI can refresh precisely.
+    """
+    role = user.get("role")
+    scope = _scope_filter(user)
+    ids = list({i for i in payload.ids if i})
+    if not ids:
+        raise HTTPException(400, "No leads selected")
+    # Restrict the id set to leads the caller can actually see.
+    docs = await db.leads.find(
+        {**scope, "id": {"$in": ids}}, {"_id": 0, "id": 1, "status": 1, "assigned_to_user_id": 1, "office": 1}
+    ).to_list(len(ids))
+    if not docs:
+        raise HTTPException(404, "No matching leads in your scope")
+    visible_ids = [d["id"] for d in docs]
+    action = payload.action
+
+    if action == "delete":
+        if role == "staff":
+            raise HTTPException(403, "Staff cannot bulk delete leads")
+        res = await db.leads.delete_many({"id": {"$in": visible_ids}})
+        await log_event(
+            event_type="lead.bulk_delete", actor=user,
+            subject_type="lead", subject_id=None, subject_label=f"{res.deleted_count} leads",
+            note=f"Bulk deleted {res.deleted_count} leads",
+            extras={"lead_ids": visible_ids},
+        )
+        return {"ok": True, "action": action, "affected_ids": visible_ids, "count": res.deleted_count}
+
+    if action == "assign":
+        if role == "staff":
+            raise HTTPException(403, "Staff cannot reassign leads")
+        set_doc: dict = {"updated_at": now_iso()}
+        new_assignee = payload.assigned_to_user_id
+        if new_assignee:
+            require_office = role == "office_admin"
+            assignee = await _validate_assignee(new_assignee, user.get("office"), require_office)
+            set_doc["assigned_to_user_id"] = assignee["id"]
+            if role == "super_admin":
+                set_doc["office"] = assignee.get("office")
+        else:
+            set_doc["assigned_to_user_id"] = None
+        res = await db.leads.update_many({"id": {"$in": visible_ids}}, {"$set": set_doc})
+        # Best-effort assignee notification (one push per lead so their inbox
+        # links deep-link correctly).
+        if new_assignee:
+            for lid in visible_ids:
+                fresh = await db.leads.find_one({"id": lid}, {"_id": 0})
+                if fresh:
+                    await _notify_assignment(fresh, actor=user)
+        await log_event(
+            event_type="lead.bulk_assign", actor=user,
+            subject_type="lead", subject_label=f"{res.modified_count} leads",
+            after={"assigned_to_user_id": new_assignee},
+            note=(f"Bulk assigned to {new_assignee}" if new_assignee else "Bulk unassigned"),
+            extras={"lead_ids": visible_ids},
+        )
+        return {"ok": True, "action": action, "affected_ids": visible_ids, "count": res.modified_count}
+
+    if action == "status":
+        if not payload.status or payload.status not in LEAD_STATUSES:
+            raise HTTPException(400, "Invalid status")
+        # Push a status_history entry per doc so timelines stay accurate.
+        now = now_iso()
+        for d in docs:
+            if d.get("status") == payload.status:
+                continue
+            await db.leads.update_one(
+                {"id": d["id"]},
+                {
+                    "$set": {
+                        "status": payload.status,
+                        "lost_reason": "" if payload.status != "lost" else None,
+                        "updated_at": now,
+                    },
+                    "$push": {"status_history": _status_event(d.get("status"), payload.status, user, note="bulk update")},
+                },
+            )
+        return {"ok": True, "action": action, "affected_ids": visible_ids, "count": len(visible_ids)}
+
+    if action == "campaign":
+        if role == "staff":
+            raise HTTPException(403, "Staff cannot manage campaigns")
+        set_doc = {"updated_at": now_iso()}
+        if payload.campaign_id:
+            cscope = {} if role == "super_admin" else {"office": user.get("office")}
+            campaign = await db.campaigns.find_one(
+                {**cscope, "id": payload.campaign_id}, {"_id": 0, "id": 1, "office": 1}
+            )
+            if not campaign:
+                raise HTTPException(404, "Campaign not found")
+            set_doc["campaign_id"] = payload.campaign_id
+            set_doc["office"] = campaign["office"]
+        else:
+            set_doc["campaign_id"] = None
+        res = await db.leads.update_many({"id": {"$in": visible_ids}}, {"$set": set_doc})
+        await log_event(
+            event_type="lead.bulk_campaign", actor=user,
+            subject_type="lead", subject_label=f"{res.modified_count} leads",
+            after={"campaign_id": payload.campaign_id},
+            note=(f"Attached to campaign {payload.campaign_id}" if payload.campaign_id else "Detached from campaign"),
+            extras={"lead_ids": visible_ids},
+        )
+        return {"ok": True, "action": action, "affected_ids": visible_ids, "count": res.modified_count}
+
+    raise HTTPException(400, f"Unknown action: {action}")
 
 
 @router.post("/{lead_id}/convert", status_code=201)

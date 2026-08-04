@@ -20,6 +20,7 @@ from db import db
 from auth_lib import get_current_user, gen_id, now_iso
 from models import OfficeCode
 from lib.lead_distribution import distribute
+from lib.activity_log import log_event
 from routers.leads import LEAD_SOURCES
 from routers.notifications import notify_users
 
@@ -195,6 +196,38 @@ async def delete_campaign(campaign_id: str, user: dict = Depends(campaign_manage
     await db.leads.update_many({"campaign_id": campaign_id}, {"$set": {"campaign_id": None}})
     await db.campaigns.delete_one({"id": campaign_id})
     return {"ok": True}
+
+
+class BulkCampaignIdsIn(BaseModel):
+    ids: List[str] = Field(min_length=1)
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_campaigns(
+    payload: BulkCampaignIdsIn, user: dict = Depends(campaign_manager)
+) -> dict:
+    """Delete multiple campaigns in one shot. Leads keep their rows but their
+    ``campaign_id`` is cleared (identical semantics to single-delete).
+
+    Scope: super_admin (all offices) / office_admin (own office only)."""
+    ids = list({i for i in payload.ids if i})
+    if not ids:
+        raise HTTPException(400, "No campaigns selected")
+    visible = await db.campaigns.find(
+        {**_scope(user), "id": {"$in": ids}}, {"_id": 0, "id": 1}
+    ).to_list(len(ids))
+    if not visible:
+        raise HTTPException(404, "No matching campaigns in your scope")
+    visible_ids = [d["id"] for d in visible]
+    await db.leads.update_many({"campaign_id": {"$in": visible_ids}}, {"$set": {"campaign_id": None}})
+    res = await db.campaigns.delete_many({"id": {"$in": visible_ids}})
+    await log_event(
+        event_type="campaign.bulk_delete", actor=user,
+        subject_type="campaign", subject_label=f"{res.deleted_count} campaigns",
+        note=f"Bulk deleted {res.deleted_count} campaigns",
+        extras={"campaign_ids": visible_ids},
+    )
+    return {"ok": True, "affected_ids": visible_ids, "count": res.deleted_count}
 
 
 # ---------- populate ----------

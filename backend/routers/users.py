@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from db import db
 from auth_lib import get_current_user, hash_password, gen_id, now_iso
+from lib.activity_log import log_user_event
 from models import (
     UserApprovalUpdate, PermissionsUpdate, PERMISSION_PAGES, DEFAULT_PERMISSIONS,
     USER_DEFAULT_PERMISSIONS, STAFF_DEFAULT_PERMISSIONS,
@@ -19,12 +20,27 @@ def _require_super_admin(user: dict) -> None:
         raise HTTPException(status_code=403, detail="Super admin only")
 
 
+def _is_soft_deleted(u: Optional[dict]) -> bool:
+    return bool((u or {}).get("deleted_at"))
+
+
+def _active_filter() -> dict:
+    """Standard "not soft-deleted" clause to combine with other queries."""
+    return {"deleted_at": {"$in": [None, ""]}}
+
+
 @router.get("")
-async def list_users(user: dict = Depends(get_current_user), status: str | None = None):
+async def list_users(
+    user: dict = Depends(get_current_user),
+    status: str | None = None,
+    include_deleted: bool = False,
+):
     _require_super_admin(user)
     q: dict = {}
     if status:
         q["approval_status"] = status
+    if not include_deleted:
+        q.update(_active_filter())
     docs = await db.users.find(q, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(500)
     return docs
 
@@ -49,7 +65,7 @@ async def list_staff(user: dict = Depends(get_current_user)):
     only staff in their own office. Used by the Staff management page."""
     if user.get("role") not in ("super_admin", "office_admin"):
         raise HTTPException(403, "Not allowed")
-    q: dict = {"role": "staff"}
+    q: dict = {"role": "staff", **_active_filter()}
     if user.get("role") == "office_admin":
         q["office"] = user.get("office")
     docs = await db.users.find(
@@ -232,8 +248,9 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
 
     if payload.role in ("office_admin", "staff") and not payload.office:
         raise HTTPException(400, f"Office is required for {payload.role.replace('_', ' ')}")
-    existing = await db.users.find_one({"email": payload.email.lower()})
-    if existing:
+    email_lower = payload.email.lower()
+    existing = await db.users.find_one({"email": email_lower})
+    if existing and not _is_soft_deleted(existing):
         raise HTTPException(409, "A user with this email already exists")
 
     # Validate the linked client (only meaningful for role="user").
@@ -249,8 +266,13 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         if client.get("client_type") not in ("sub_agent_associate", "associate_consultant"):
             raise HTTPException(400, "Linked client must be a sub-agent or associate consultant")
         # One-to-one: a client can only back one login account at a time.
-        already = await db.users.find_one({"linked_client_id": payload.linked_client_id})
-        if already:
+        # Ignore any soft-deleted match — the row we're about to reactivate
+        # can legally re-claim its old linked client.
+        already = await db.users.find_one({
+            "linked_client_id": payload.linked_client_id,
+            **_active_filter(),
+        })
+        if already and (not existing or already.get("id") != existing.get("id")):
             raise HTTPException(
                 409,
                 f"This client is already linked to another user account ({already.get('email')}).",
@@ -258,9 +280,59 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
         linked_client_id = client["id"]
         linked_client_name = client["name"]
 
+    # ── Reactivation path: an existing soft-deleted row with the same email
+    # gets brought back to life. Keeping the SAME `id` is critical so all
+    # foreign keys (leads.assigned_to_user_id, students.referrer_user_id,
+    # messages.recipient_id, …) automatically snap back into place.
+    if existing and _is_soft_deleted(existing):
+        patch = {
+            "email": email_lower,
+            "password_hash": hash_password(payload.password),
+            "name": payload.name.strip(),
+            "business_name": payload.business_name or "",
+            "currency": payload.currency,
+            "role": payload.role,
+            "office": payload.office if payload.role in ("office_admin", "staff") else None,
+            "approval_status": "approved",
+            "reactivated_at": now_iso(),
+            "reactivated_by": user["id"],
+            # Clear all deletion metadata.
+            "deleted_at": None,
+            "deleted_by": None,
+        }
+        if linked_client_id:
+            patch["linked_client_id"] = linked_client_id
+            patch["linked_client_name"] = linked_client_name
+        else:
+            patch["linked_client_id"] = None
+            patch["linked_client_name"] = None
+        if payload.role == "office_admin":
+            patch["permissions"] = dict(DEFAULT_PERMISSIONS)
+        elif payload.role == "staff":
+            patch["permissions"] = dict(STAFF_DEFAULT_PERMISSIONS)
+        elif payload.role == "user":
+            perms = dict(USER_DEFAULT_PERMISSIONS)
+            if linked_client_id:
+                perms["students"] = "view"
+            patch["permissions"] = perms
+        await db.users.update_one({"id": existing["id"]}, {"$set": patch})
+        # Any lockout from before the delete would still be around — clear it.
+        await db.login_attempts.delete_one({"email": email_lower})
+        reactivated = await db.users.find_one({"id": existing["id"]}, {"_id": 0, "password_hash": 0})
+        await log_user_event(
+            actor=user,
+            event_type="user.reactivated",
+            target=reactivated,
+            before={"deleted_at": existing.get("deleted_at"), "role": existing.get("role")},
+            after={"role": reactivated.get("role"), "office": reactivated.get("office")},
+            note=f"Reactivated {reactivated.get('email')} (previously deleted)",
+            reversible=False,
+        )
+        return reactivated
+
     doc = {
         "id": gen_id(),
-        "email": str(payload.email).lower(),
+        "email": email_lower,
         "password_hash": hash_password(payload.password),
         "name": payload.name.strip(),
         "business_name": payload.business_name or "",
@@ -286,7 +358,15 @@ async def create_user(payload: CreateUserIn, user: dict = Depends(get_current_us
             perms["students"] = "view"
         doc["permissions"] = perms
     await db.users.insert_one(doc)
-    return await db.users.find_one({"id": doc["id"]}, {"_id": 0, "password_hash": 0})
+    created = await db.users.find_one({"id": doc["id"]}, {"_id": 0, "password_hash": 0})
+    await log_user_event(
+        actor=user,
+        event_type="user.created",
+        target=created,
+        after={"role": created.get("role"), "office": created.get("office")},
+        note=f"Created {created.get('email')} · {created.get('role')}",
+    )
+    return created
 
 
 @router.patch("/{user_id}/approval")
@@ -336,21 +416,87 @@ async def update_permissions(user_id: str, payload: PermissionsUpdate, user: dic
 
 @router.delete("/{user_id}")
 async def delete_user(user_id: str, user: dict = Depends(get_current_user)):
-    """Permanently delete a user row. Self-deletion is blocked. Super admins
-    can remove anyone (incl. other super admins). Office admins can only
-    remove **staff** accounts in their own office."""
+    """Soft-delete a user row (sets ``deleted_at``, blocks login, hides from
+    listings) — the ``id`` stays intact so ``leads.assigned_to_user_id``,
+    ``students.referrer_user_id`` and other foreign-key references remain
+    valid. Recreating an account with the same email later ``reactivates``
+    the same row so all their previously-owned data snaps back automatically.
+
+    Self-deletion is blocked. Super admins can remove anyone (incl. other
+    super admins). Office admins can only remove **staff** accounts in their
+    own office."""
     if user_id == user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if _is_soft_deleted(target):
+        raise HTTPException(status_code=400, detail="User is already deleted")
     if user.get("role") == "office_admin":
         if target.get("role") != "staff" or target.get("office") != user.get("office"):
             raise HTTPException(status_code=403, detail="You can only remove staff in your office")
     elif user.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Not allowed")
-    await db.users.delete_one({"id": user_id})
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "deleted_at": now_iso(),
+                "deleted_by": user["id"],
+                "approval_status": "deleted",
+            },
+        },
+    )
+    # Also revoke any active session lockouts so the row is fully quiesced.
+    await db.login_attempts.delete_one({"email": target.get("email")})
+    await log_user_event(
+        actor=user,
+        event_type="user.deleted",
+        target=target,
+        before={
+            "role": target.get("role"),
+            "email": target.get("email"),
+            "office": target.get("office"),
+        },
+        note=f"Deleted {target.get('email')} · {target.get('role')}",
+        reversible=True,
+    )
     return {"ok": True}
+
+
+@router.post("/{user_id}/reactivate")
+async def reactivate_user(user_id: str, user: dict = Depends(get_current_user)):
+    """Reactivate a previously soft-deleted user without changing their
+    password. Super admin only. Preserves the same ``id`` so all foreign
+    keys (leads / students / referrals) snap back automatically."""
+    _require_super_admin(user)
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not _is_soft_deleted(target):
+        raise HTTPException(status_code=400, detail="User is already active")
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "deleted_at": None,
+                "deleted_by": None,
+                "reactivated_at": now_iso(),
+                "reactivated_by": user["id"],
+                "approval_status": "approved",
+            },
+        },
+    )
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    await log_user_event(
+        actor=user,
+        event_type="user.reactivated",
+        target=fresh,
+        before={"deleted_at": target.get("deleted_at")},
+        after={"role": fresh.get("role")},
+        note=f"Reactivated {fresh.get('email')} · {fresh.get('role')}",
+    )
+    return {"ok": True, "user": fresh}
 
 
 class ResetPasswordIn(BaseModel):
