@@ -32,9 +32,11 @@ export default function CampaignDeleteDialog({
   const count = isBulk ? campaigns.length : 1;
   const title = isBulk
     ? `Delete ${count} campaign${count === 1 ? "" : "s"}?`
-    : `Delete campaign "${campaign?.name || ""}"?`;
+    : `Delete campaign${campaign?.name ? ` "${campaign.name}"` : ""}?`;
   const hint = leadCount > 0
-    ? `This campaign${isBulk ? "s" : ""} contains ${leadCount.toLocaleString()} lead${leadCount === 1 ? "" : "s"}.`
+    ? (isBulk
+      ? `${count === 1 ? "This campaign" : "These campaigns"} contain ${leadCount.toLocaleString()} lead${leadCount === 1 ? "" : "s"}.`
+      : `This campaign contains ${leadCount.toLocaleString()} lead${leadCount === 1 ? "" : "s"}.`)
     : "";
 
   return (
