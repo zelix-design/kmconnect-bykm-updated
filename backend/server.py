@@ -8,6 +8,7 @@ load_dotenv(ROOT_DIR / ".env")
 import logging
 import os
 import asyncio
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,10 @@ from starlette.middleware.cors import CORSMiddleware
 from db import client, db
 from seed import seed_admin_and_backfill
 from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns, admission_revenue
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(title="FinFlow API")
@@ -129,7 +134,11 @@ _ALLOW_ORIGIN_REGEX = (
     r"([a-z0-9-]+\.)*emergent\.host|"
     r"([a-z0-9-]+\.)*kmfoundation\.co|"
     r"([a-z0-9-]+\.)*kmfoundation\.co\.in|"
-    r"([a-z0-9-]+\.)*kmfoundation\.online"
+    r"([a-z0-9-]+\.)*kmfoundation\.online|"
+    r"([a-z0-9-]+\.)*kmconnect\.co|"
+    r"([a-z0-9-]+\.)*kmconnect\.co\.in|"
+    r"([a-z0-9-]+\.)*kmconnect\.in|"
+    r"([a-z0-9-]+\.)*kmconnect\.online"
     r")$"
 )
 app.add_middleware(
@@ -143,8 +152,23 @@ app.add_middleware(
     max_age=600,  # cache preflights for 10 min → far fewer OPTIONS on flaky mobile networks
 )
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
+# Diagnostic: log any request whose Origin was blocked by CORS so we notice
+# unknown-domain deployments quickly (production login-outage class of bugs).
+# Cheap check — we run the same regex Starlette used and only fire on
+# preflight OPTIONS to keep logs tidy.
+_cors_regex = re.compile(_ALLOW_ORIGIN_REGEX)
+
+
+@app.middleware("http")
+async def _log_blocked_cors(request, call_next):
+    origin = request.headers.get("origin")
+    if origin and request.method == "OPTIONS" and not _cors_regex.match(origin) and origin not in _static_origins:
+        logger.warning(
+            "[cors] blocked OPTIONS origin=%s path=%s — add it to CORS regex if legitimate",
+            origin, request.url.path,
+        )
+    return await call_next(request)
 
 
 async def _ensure_login_attempts_index() -> None:
