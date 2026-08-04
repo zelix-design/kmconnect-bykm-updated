@@ -1348,8 +1348,12 @@ async def delete_followup(
     remaining = [f for f in followups if f.get("id") != followup_id]
     set_ops: dict = {"follow_ups": remaining, "updated_at": now_iso()}
     if entry.get("at") == lead.get("next_follow_up"):
-        # Pick the next-most-recent future follow-up (if any) as the new surface value.
-        set_ops["next_follow_up"] = remaining[-1]["at"] if remaining else None
+        # Recompute the surface follow-up from whichever remaining entry has
+        # the latest scheduled time. Avoids relying on array insertion order
+        # (bulk imports may not be strictly chronological).
+        set_ops["next_follow_up"] = (
+            max((r["at"] for r in remaining if r.get("at")), default=None)
+        )
         set_ops["follow_up_reminded_for"] = None
     await db.leads.update_one({"id": lead_id}, {"$set": set_ops})
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
