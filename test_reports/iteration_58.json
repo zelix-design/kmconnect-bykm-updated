@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 58 tested new PATCH & DELETE /api/leads/{id}/followups/{fid} endpoints + auto-slot override UI + FollowUpEditDialog. All 15 backend tests passed (creator/admin edit+delete, staff 403, 404 unknown, 400 empty payload, next_follow_up move on latest, unchanged on older, edited_by fields set, assignee notification on reschedule, regressions for POST followup + next-followup-slot). Frontend end-to-end verified: (1) as staff with 2 booked follow-ups, opening a 3rd follow-up lead shows data-testid='followup-auto-slot' with the auto slot value + 'Change' button; clicking Change swaps to datetime input with 'Use auto-slot' revert, which restores the auto-slot pill. (2) LeadJourney edit chip data-testid='followup-edit-<id>' visible, opens dialog data-testid='followup-edit-dialog' with datetime input pre-filled, note textarea, save + delete buttons. Save with +2h → 'Follow-up updated' toast → journey refreshes. Delete → confirm → 'Follow-up deleted' toast → chip removed. All seeded test leads cleaned up via DELETE /api/leads/{id}.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration58_followup_edit.py",
+    "/app/test_reports/pytest/iteration58.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "delete_followup uses remaining[-1]['at'] to recompute next_follow_up. This assumes follow_ups is stored in chronological order, which is true if only appended. If any historical data ever inserts out-of-order (bulk import etc), the surface value could regress. Consider `max(r['at'] for r in remaining)` for defence in depth.",
+    "update_followup compares old_at == lead.next_follow_up to detect 'this is the latest one'. If two follow-ups happen to share the same `at` (rare but not enforced unique), editing an OLDER one that coincidentally equals next_follow_up would move next_follow_up incorrectly. Minor; unlikely in practice.",
+    "FollowUpEditDialog `toIso` uses `new Date(localValue).toISOString()` — correct, though a millisecond fractional part is included in the persisted ISO. Backend stores as-is; harmless."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration58_followup_edit.py"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100%"},
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786 (super_admin); staff.blr@kmfoundation.online / Staff@123 (staff, used to exercise auto-slot UI since super_admin cannot self-assign leads)",
+  "seed_data_creation": "Created transient TEST_ prefixed leads via API during runs; all cleaned up via DELETE /api/leads/{id} in test fixtures and browser cleanup step.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Follow-up edit/delete feature fully verified BE+FE. Note: super_admin cannot be an assignee (backend _validate_assignee restricts to staff/office_admin), so auto-slot UI tests must be run as staff or office_admin. FollowUpEditDialog uses <input type='datetime-local'> so datetime testing needs to fill YYYY-MM-DDTHH:MM (no offset). PATCH endpoint requires at least one of {at, note} — empty payload returns 400.",
+  "rca of the issue": "N/A — no issues found."
+}

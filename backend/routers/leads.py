@@ -92,6 +92,17 @@ class FollowUpIn(BaseModel):
     status: Optional[str] = None  # optionally move the lead's status
 
 
+class FollowUpUpdate(BaseModel):
+    """Update payload for an existing follow-up entry.
+
+    Only ``at`` and ``note`` are editable — the status transition that
+    happened alongside the original follow-up is kept in ``status_history``
+    for audit and can't be rewritten here (per product decision).
+    """
+    at: Optional[str] = None
+    note: Optional[str] = None
+
+
 class VisitIn(BaseModel):
     departure_at: Optional[str] = None  # ISO datetime (UTC)
     arrival_at: Optional[str] = None
@@ -1224,6 +1235,14 @@ async def add_followup(lead_id: str, payload: FollowUpIn, user: dict = Depends(r
     return fresh
 
 
+def _can_edit_followup(entry: dict, user: dict) -> bool:
+    """Follow-up edits allowed to (a) the creator or (b) any admin.
+    Staff cannot rewrite another teammate's follow-up (protects calendars)."""
+    if user.get("role") in ("super_admin", "office_admin"):
+        return True
+    return entry.get("created_by_user_id") == user.get("id")
+
+
 async def _notify_assignment(lead: dict, actor: dict) -> None:
     assignee_id = lead.get("assigned_to_user_id")
     if not assignee_id or assignee_id == actor.get("id"):
@@ -1237,6 +1256,104 @@ async def _notify_assignment(lead: dict, actor: dict) -> None:
         actor_user_id=actor.get("id"),
         metadata={"lead_id": lead.get("id")},
     )
+
+
+@router.patch("/{lead_id}/followups/{followup_id}")
+async def update_followup(
+    lead_id: str, followup_id: str, payload: FollowUpUpdate,
+    user: dict = Depends(require_edit("leads")),
+):
+    """Edit an existing follow-up — reschedule (``at``) and/or amend the
+    note. Status transitions attached at creation time are NOT rewritten
+    (they live in ``status_history`` for audit).
+
+    Permission: creator OR admin (see ``_can_edit_followup``).
+    """
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    followups = lead.get("follow_ups") or []
+    entry = next((f for f in followups if f.get("id") == followup_id), None)
+    if not entry:
+        raise HTTPException(404, "Follow-up not found")
+    if not _can_edit_followup(entry, user):
+        raise HTTPException(403, "You can only edit your own follow-ups")
+
+    data = payload.model_dump(exclude_unset=True)
+    if not data:
+        raise HTTPException(400, "Nothing to update")
+    new_at = data.get("at")
+    new_note = data.get("note")
+    old_at = entry.get("at")
+
+    # Apply changes to the specific array item using its id.
+    set_ops: dict = {"updated_at": now_iso()}
+    if new_at is not None:
+        set_ops["follow_ups.$.at"] = new_at
+    if new_note is not None:
+        set_ops["follow_ups.$.note"] = (new_note or "").strip()
+    set_ops["follow_ups.$.edited_at"] = now_iso()
+    set_ops["follow_ups.$.edited_by_user_id"] = user["id"]
+    set_ops["follow_ups.$.edited_by_name"] = user.get("name")
+
+    # If we're moving the LATEST follow-up (== next_follow_up), the surface
+    # field on the lead also has to move; otherwise older edits don't touch it.
+    if new_at is not None and old_at == lead.get("next_follow_up"):
+        set_ops["next_follow_up"] = new_at
+        set_ops["follow_up_reminded_for"] = None  # re-arm reminder for the new time
+
+    await db.leads.update_one(
+        {"id": lead_id, "follow_ups.id": followup_id},
+        {"$set": set_ops},
+    )
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+
+    # Notify the assignee if their follow-up moved and they weren't the editor.
+    if new_at is not None and new_at != old_at:
+        assignee_id = fresh.get("assigned_to_user_id")
+        if assignee_id and assignee_id != user["id"]:
+            await notify_users(
+                [assignee_id],
+                type="lead_followup",
+                title="Follow-up rescheduled",
+                message=f"{fresh.get('name')} · {new_at[:16].replace('T', ' ')}",
+                link=f"/leads?lead={lead_id}",
+                actor_user_id=user["id"],
+                metadata={"lead_id": lead_id},
+            )
+    return fresh
+
+
+@router.delete("/{lead_id}/followups/{followup_id}")
+async def delete_followup(
+    lead_id: str, followup_id: str,
+    user: dict = Depends(require_edit("leads")),
+):
+    """Remove a follow-up entry. Same auth rules as PATCH.
+
+    If the deleted follow-up was the *latest* one (i.e. the one surfaced as
+    ``next_follow_up``), we recompute ``next_follow_up`` from the remaining
+    future entries so reminders don't fire on a stale timestamp.
+    """
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    followups = lead.get("follow_ups") or []
+    entry = next((f for f in followups if f.get("id") == followup_id), None)
+    if not entry:
+        raise HTTPException(404, "Follow-up not found")
+    if not _can_edit_followup(entry, user):
+        raise HTTPException(403, "You can only delete your own follow-ups")
+
+    remaining = [f for f in followups if f.get("id") != followup_id]
+    set_ops: dict = {"follow_ups": remaining, "updated_at": now_iso()}
+    if entry.get("at") == lead.get("next_follow_up"):
+        # Pick the next-most-recent future follow-up (if any) as the new surface value.
+        set_ops["next_follow_up"] = remaining[-1]["at"] if remaining else None
+        set_ops["follow_up_reminded_for"] = None
+    await db.leads.update_one({"id": lead_id}, {"$set": set_ops})
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    return fresh
 
 
 # ---------- Attachments (admin-only) ----------

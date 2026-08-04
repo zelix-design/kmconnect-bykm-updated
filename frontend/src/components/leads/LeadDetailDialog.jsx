@@ -34,6 +34,9 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [fuAt, setFuAt] = useState("");
   const [fuNote, setFuNote] = useState("");
   const [fuStatus, setFuStatus] = useState("");
+  // "Change time" override: when true, user is picking a custom time even
+  // though an auto-slot is available. Reset on lead change / after save.
+  const [fuOverride, setFuOverride] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [slot, setSlot] = useState(null);
@@ -44,7 +47,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
 
-  useEffect(() => { setLocal(lead); setFuAt(""); setFuNote(""); setFuStatus(""); }, [lead]);
+  useEffect(() => { setLocal(lead); setFuAt(""); setFuNote(""); setFuStatus(""); setFuOverride(false); }, [lead]);
 
   const loadSlot = useCallback(async () => {
     if (!lead?.id) return;
@@ -106,7 +109,10 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   };
 
   const addFollowup = async () => {
-    const at = slot && !slot.is_first ? slot.slot : fromLocalInput(fuAt);
+    // If auto-slot is available and user hasn't overridden it, use the slot.
+    // Otherwise use whatever they typed in the datetime input.
+    const useAutoSlot = slot && !slot.is_first && !fuOverride;
+    const at = useAutoSlot ? slot.slot : fromLocalInput(fuAt);
     if (!at) { toast.error("Pick a follow-up date & time"); return; }
     setBusy(true);
     try {
@@ -114,7 +120,7 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
       if (fuStatus) body.status = fuStatus;
       const { data } = await api.post(`/leads/${local.id}/followups`, body);
       refresh(data);
-      setFuNote(""); setFuStatus("");
+      setFuNote(""); setFuStatus(""); setFuOverride(false);
       toast.success("Follow-up logged");
       loadSlot();
     } catch (err) {
@@ -303,13 +309,34 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             <div className="rounded-lg border border-border p-3 space-y-2.5" data-testid="followup-form">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><CalendarPlus size={14} /> Log a follow-up</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {slot && !slot.is_first ? (
-                  <div className="flex flex-col justify-center rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2" data-testid="followup-auto-slot">
+                {slot && !slot.is_first && !fuOverride ? (
+                  <div className="flex flex-col justify-center rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 relative" data-testid="followup-auto-slot">
                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1"><ClockCountdown size={11} /> Auto-assigned slot</span>
                     <span className="text-sm font-medium text-foreground" data-testid="followup-auto-slot-value">{fmtDateTime(slot.slot)}</span>
+                    <button
+                      type="button"
+                      onClick={() => { setFuOverride(true); setFuAt(toLocalInput(slot.slot)); }}
+                      className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-md text-blue-700 dark:text-blue-300 hover:bg-blue-500/15 flex items-center gap-1 transition-colors"
+                      data-testid="followup-override-btn"
+                      aria-label="Change time"
+                    >
+                      <PencilSimple size={11} /> Change
+                    </button>
                   </div>
                 ) : (
-                  <Input type="datetime-local" value={fuAt} onChange={(e) => setFuAt(e.target.value)} data-testid="followup-at-input" />
+                  <div className="relative">
+                    <Input type="datetime-local" value={fuAt} onChange={(e) => setFuAt(e.target.value)} data-testid="followup-at-input" />
+                    {slot && !slot.is_first && fuOverride && (
+                      <button
+                        type="button"
+                        onClick={() => { setFuOverride(false); setFuAt(""); }}
+                        className="absolute -top-1 right-0 text-[10px] px-1.5 py-0.5 rounded-md text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10 transition-colors"
+                        data-testid="followup-use-slot-btn"
+                      >
+                        Use auto-slot
+                      </button>
+                    )}
+                  </div>
                 )}
                 <Select value={fuStatus || "keep"} onValueChange={(v) => setFuStatus(v === "keep" ? "" : v)}>
                   <SelectTrigger data-testid="followup-status-select" className="bg-card"><SelectValue placeholder="Keep status" /></SelectTrigger>
@@ -323,7 +350,9 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
                 <p className="text-[11px] text-muted-foreground" data-testid="followup-slot-hint">
                   {slot.is_first
                     ? "First follow-up — pick any time. The next ones auto-fill your next free 5-min slot (10:00–19:00)."
-                    : "Time auto-assigned to your next free 5-min slot (10:00–19:00)."}
+                    : (fuOverride
+                        ? "You're picking a custom time. Save when ready, or use the auto-slot again above."
+                        : "Auto-assigned to your next free 5-min slot. Tap “Change” if the customer requested another time.")}
                 </p>
               )}
               <Textarea value={fuNote} onChange={(e) => setFuNote(e.target.value)} placeholder="Outcome / note" rows={2} data-testid="followup-note-input" />
@@ -337,6 +366,10 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             canResend={editable && isAdmin && !!local.converted_student_id && !!local.phone}
             onResendLink={resendApplicationLink}
             resending={resending}
+            editable={editable}
+            viewerUserId={user?.id}
+            viewerIsAdmin={isAdmin}
+            onLeadChanged={(fresh) => refresh(fresh)}
           />
 
           {/* Attachments — admin-only edit; view for everyone */}

@@ -1,9 +1,10 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Sparkle, ArrowRight, ChatCircleDots, Bus, GraduationCap, PhoneCall,
-  WhatsappLogo, CheckCircle, XCircle, ArrowClockwise,
+  WhatsappLogo, CheckCircle, XCircle, ArrowClockwise, PencilSimple,
 } from "@phosphor-icons/react";
 import { fmtDateTime, statusLabel, LEAD_STATUS_META } from "./constants";
+import FollowUpEditDialog from "./FollowUpEditDialog";
 
 /**
  * Merges the lead's status transitions, follow-ups, visit schedule and
@@ -46,6 +47,8 @@ function buildEvents(lead) {
       note: f.note,
       who: f.created_by_name,
       id: f.id,
+      createdByUserId: f.created_by_user_id,
+      raw: f, // full row so the edit dialog can pre-fill without another fetch
     });
   });
 
@@ -119,7 +122,7 @@ function WhatsappChip({ wa, testid }) {
   );
 }
 
-function EventRow({ ev, canResend, onResendLink, resending }) {
+function EventRow({ ev, canResend, onResendLink, resending, canEditFollowup, onEditFollowup }) {
   const timestamp = fmtDateTime(ev.at);
   const who = ev.who ? ` · ${ev.who}` : "";
   const wa = ev.metadata?.whatsapp;
@@ -168,9 +171,22 @@ function EventRow({ ev, canResend, onResendLink, resending }) {
     ),
     followup: (
       <>
-        <p className="text-sm text-foreground">
-          Follow-up scheduled for <span className="font-medium">{fmtDateTime(ev.scheduledAt)}</span>
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm text-foreground">
+            Follow-up scheduled for <span className="font-medium">{fmtDateTime(ev.scheduledAt)}</span>
+          </p>
+          {canEditFollowup && (
+            <button
+              type="button"
+              onClick={onEditFollowup}
+              className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-md text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-colors flex items-center gap-1"
+              data-testid={`followup-edit-${ev.id}`}
+              aria-label="Edit follow-up"
+            >
+              <PencilSimple size={11} /> Edit
+            </button>
+          )}
+        </div>
         {ev.note && <p className="text-sm text-muted-foreground mt-0.5">{ev.note}</p>}
         <p className="text-[11px] text-muted-foreground">{timestamp}{who}</p>
       </>
@@ -215,9 +231,23 @@ function EventRow({ ev, canResend, onResendLink, resending }) {
  *   - canResend (bool): whether the Resend button should surface on failed WA
  *   - onResendLink (fn): callback invoked when the Resend button is clicked
  *   - resending (bool): reflects in-flight request state
+ *   - viewerUserId (str): current user's id — needed to decide who can edit a follow-up
+ *   - viewerIsAdmin (bool): super_admin/office_admin can edit any follow-up
+ *   - editable (bool): master switch — if false, no edit chips render
+ *   - onLeadChanged (fn): called with the fresh lead after any follow-up edit/delete
  */
-export default function LeadJourney({ lead, canResend = false, onResendLink, resending = false }) {
+export default function LeadJourney({
+  lead,
+  canResend = false,
+  onResendLink,
+  resending = false,
+  viewerUserId,
+  viewerIsAdmin = false,
+  editable = false,
+  onLeadChanged,
+}) {
   const events = useMemo(() => buildEvents(lead), [lead]);
+  const [editing, setEditing] = useState(null); // full followup row when open
   if (!lead || events.length === 0) return null;
 
   // The Resend chip should only render on the MOST RECENT converted event with
@@ -228,6 +258,12 @@ export default function LeadJourney({ lead, canResend = false, onResendLink, res
       latestConvertedFail = e.id;
     }
   }
+
+  const canEditFollowup = (ev) => {
+    if (!editable || ev.kind !== "followup") return false;
+    if (viewerIsAdmin) return true;
+    return !!viewerUserId && ev.createdByUserId === viewerUserId;
+  };
 
   return (
     <div className="rounded-lg border border-border p-3.5" data-testid="lead-journey">
@@ -250,9 +286,18 @@ export default function LeadJourney({ lead, canResend = false, onResendLink, res
             canResend={canResend && ev.id === latestConvertedFail}
             onResendLink={onResendLink}
             resending={resending}
+            canEditFollowup={canEditFollowup(ev)}
+            onEditFollowup={() => setEditing(ev.raw)}
           />
         ))}
       </div>
+      <FollowUpEditDialog
+        open={!!editing}
+        onOpenChange={(v) => { if (!v) setEditing(null); }}
+        leadId={lead.id}
+        followup={editing}
+        onSaved={(fresh) => { onLeadChanged?.(fresh); setEditing(null); }}
+      />
     </div>
   );
 }
