@@ -110,11 +110,11 @@ export default function StaffProfile() {
                 )}
               </div>
               <div>
-                <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg" onChange={uploadPhoto} className="hidden" data-testid="profile-photo-input" />
+                <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" onChange={uploadPhoto} className="hidden" data-testid="profile-photo-input" />
                 <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => photoInputRef.current?.click()} data-testid="profile-photo-btn">
                   <Camera size={14} className="mr-1.5" /> {uploading ? "Uploading…" : (form.photo_url ? "Change photo" : "Upload photo")}
                 </Button>
-                <p className="text-[11px] text-muted-foreground mt-1">JPEG/JPG · up to 5MB</p>
+                <p className="text-[11px] text-muted-foreground mt-1">JPG, PNG, WebP or GIF · up to 2MB</p>
               </div>
             </div>
 

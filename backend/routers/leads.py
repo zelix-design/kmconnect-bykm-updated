@@ -1239,6 +1239,102 @@ async def _notify_assignment(lead: dict, actor: dict) -> None:
     )
 
 
+# ---------- Attachments (admin-only) ----------
+def _require_admin(user: dict) -> None:
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only admins can manage lead attachments")
+
+
+@router.post("/{lead_id}/attachments", status_code=201)
+async def attach_document(
+    lead_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_edit("leads")),
+):
+    """Upload a document and attach it to the lead in one call.
+
+    Admin-only (staff blocked by ``_require_admin``). Delegates to the
+    uploads router's validation logic (size, MIME allowlist) via the
+    shared storage helpers, then pushes a lightweight reference into
+    ``leads.attachments`` so the detail dialog can render it without a
+    second round-trip.
+    """
+    _require_admin(user)
+    from routers.uploads import (
+        DOCUMENT_TYPES, MAX_DOCUMENT_BYTES, _sniff_ext, _persist_file_record,
+    )
+    from lib.storage import put_object, APP_NAME as _APP
+    import uuid as _uuid
+
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+
+    ct = (file.content_type or "").lower()
+    if ct not in DOCUMENT_TYPES:
+        raise HTTPException(400, "Only PDF or image uploads (JPG/PNG/WebP/GIF) are allowed")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file")
+    if len(data) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(400, "Document must be 10MB or smaller")
+
+    ext = _sniff_ext(file.filename, DOCUMENT_TYPES[ct])
+    path = f"{_APP}/leads/{lead_id}/{_uuid.uuid4()}.{ext}"
+    try:
+        result = put_object(path, data, ct)
+    except Exception as e:
+        raise HTTPException(502, "Upload failed — storage unavailable") from e
+    stored_path = result.get("path", path)
+    record = await _persist_file_record(
+        storage_path=stored_path, filename=file.filename or f"attachment.{ext}",
+        content_type=ct, size=result.get("size", len(data)),
+        owner=user, purpose="lead_document", lead_id=lead_id,
+    )
+    # Attachment reference kept inline on the lead for quick reads.
+    attachment = {
+        "file_id": record["id"],
+        "path": stored_path,
+        "url": f"/api/files/{stored_path}",
+        "original_filename": record["original_filename"],
+        "content_type": record["content_type"],
+        "size": record["size"],
+        "uploaded_by_user_id": user["id"],
+        "uploaded_by_name": user.get("name"),
+        "uploaded_at": record["created_at"],
+    }
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$push": {"attachments": attachment}, "$set": {"updated_at": now_iso()}},
+    )
+    return attachment
+
+
+@router.delete("/{lead_id}/attachments/{file_id}")
+async def detach_document(
+    lead_id: str, file_id: str, user: dict = Depends(require_edit("leads")),
+):
+    """Remove an attachment from the lead + soft-delete the underlying
+    file row. Storage bytes remain (no delete API) but future GETs 404.
+    """
+    _require_admin(user)
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0, "attachments": 1})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    matched = next((a for a in (lead.get("attachments") or []) if a.get("file_id") == file_id), None)
+    if not matched:
+        raise HTTPException(404, "Attachment not found on this lead")
+    await db.leads.update_one(
+        {"id": lead_id},
+        {"$pull": {"attachments": {"file_id": file_id}}, "$set": {"updated_at": now_iso()}},
+    )
+    await db.files.update_one(
+        {"id": file_id},
+        {"$set": {"is_deleted": True, "deleted_at": now_iso(), "deleted_by_user_id": user["id"]}},
+    )
+    return {"ok": True}
+
+
 # ---------- CSV bulk upload ----------
 @router.get("/template", response_class=PlainTextResponse)
 async def csv_template(user: dict = Depends(get_current_user)) -> str:

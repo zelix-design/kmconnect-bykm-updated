@@ -17,6 +17,7 @@ import { canEdit } from "@/lib/perm";
 import InterestedDialog from "./InterestedDialog";
 import ConvertDialog from "./ConvertDialog";
 import LeadJourney from "./LeadJourney";
+import LeadAttachments from "./LeadAttachments";
 
 function InfoRow({ icon: Icon, children }) {
   if (!children) return null;
@@ -336,6 +337,13 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             canResend={editable && isAdmin && !!local.converted_student_id && !!local.phone}
             onResendLink={resendApplicationLink}
             resending={resending}
+          />
+
+          {/* Attachments — admin-only edit; view for everyone */}
+          <LeadAttachments
+            lead={local}
+            canManage={editable && isAdmin}
+            onChanged={(fresh) => refresh(fresh)}
           />
 
           {editable && (

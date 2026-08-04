@@ -241,11 +241,11 @@ function SuperAdminPeople({ pageScope }) {
                         )}
                       </div>
                       <div>
-                        <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg" onChange={uploadPhoto} className="hidden" data-testid="cli-photo-input" />
+                        <input ref={photoInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" onChange={uploadPhoto} className="hidden" data-testid="cli-photo-input" />
                         <Button type="button" variant="outline" size="sm" disabled={uploadingPhoto} onClick={() => photoInputRef.current?.click()} data-testid="cli-photo-btn">
                           <Camera size={14} className="mr-1.5" /> {uploadingPhoto ? "Uploading…" : (form.photo_url ? "Change photo" : "Upload photo")}
                         </Button>
-                        <p className="text-[11px] text-muted-foreground mt-1">JPEG/JPG · up to 5MB</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">JPG, PNG, WebP or GIF · up to 2MB</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
