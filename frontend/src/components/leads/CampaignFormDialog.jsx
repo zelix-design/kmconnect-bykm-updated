@@ -13,12 +13,33 @@ const TAG_TYPES = [["none", "No tag"], ["course", "Course"], ["place", "Place"],
 
 const empty = { name: "", description: "", tag_type: "none", tag_value: "", office: "KM_BLR" };
 
-export default function CampaignFormDialog({ open, onOpenChange, onSaved, user }) {
+/**
+ * Create + Edit dialog for a campaign.
+ *
+ * Pass `campaign` prop to open in edit mode; omit for create mode. Office is
+ * NOT editable in edit mode (moving a campaign across offices would orphan
+ * every assignment). Rename / describe / re-tag freely.
+ */
+export default function CampaignFormDialog({ open, onOpenChange, onSaved, user, campaign }) {
   const isSuper = user?.role === "super_admin";
+  const isEdit = !!campaign?.id;
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { if (open) setForm({ ...empty, office: isSuper ? "KM_BLR" : (user?.office || "KM_BLR") }); }, [open, isSuper, user?.office]);
+  useEffect(() => {
+    if (!open) return;
+    if (isEdit) {
+      setForm({
+        name: campaign.name || "",
+        description: campaign.description || "",
+        tag_type: campaign.tag_type || "none",
+        tag_value: campaign.tag_value || "",
+        office: campaign.office || "KM_BLR",
+      });
+    } else {
+      setForm({ ...empty, office: isSuper ? "KM_BLR" : (user?.office || "KM_BLR") });
+    }
+  }, [open, isEdit, campaign, isSuper, user?.office]);
 
   const handle = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -32,14 +53,16 @@ export default function CampaignFormDialog({ open, onOpenChange, onSaved, user }
         tag_type: form.tag_type === "none" ? null : form.tag_type,
         tag_value: form.tag_type === "none" ? "" : form.tag_value.trim(),
       };
-      if (isSuper) payload.office = form.office;
-      const { data } = await api.post("/campaigns", payload);
-      toast.success("Campaign created");
+      if (!isEdit && isSuper) payload.office = form.office;
+      const { data } = isEdit
+        ? await api.patch(`/campaigns/${campaign.id}`, payload)
+        : await api.post("/campaigns", payload);
+      toast.success(isEdit ? "Campaign updated" : "Campaign created");
       onSaved?.(data);
       onOpenChange(false);
     } catch (err) {
       const detail = err?.response?.data?.detail;
-      toast.error(typeof detail === "string" ? detail : "Could not create campaign");
+      toast.error(typeof detail === "string" ? detail : (isEdit ? "Could not update campaign" : "Could not create campaign"));
     } finally { setSaving(false); }
   };
 
@@ -47,8 +70,10 @@ export default function CampaignFormDialog({ open, onOpenChange, onSaved, user }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card max-w-md" data-testid="campaign-form-dialog">
         <DialogHeader>
-          <DialogTitle className="font-display">Create campaign</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">Group a batch of leads, then distribute them to your team.</DialogDescription>
+          <DialogTitle className="font-display">{isEdit ? "Edit campaign" : "Create campaign"}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            {isEdit ? "Rename, re-tag or update the description. Office can't be changed after creation." : "Group a batch of leads, then distribute them to your team."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -76,7 +101,9 @@ export default function CampaignFormDialog({ open, onOpenChange, onSaved, user }
               </div>
             )}
           </div>
-          {isSuper ? (
+          {isEdit ? (
+            <p className="text-xs text-muted-foreground">Office: <span className="text-foreground font-medium">{(form.office || "").replace("KM_", "KM ")}</span></p>
+          ) : isSuper ? (
             <div className="space-y-1.5">
               <Label>Target office</Label>
               <Select value={form.office} onValueChange={(v) => setForm((f) => ({ ...f, office: v }))}>
@@ -93,7 +120,7 @@ export default function CampaignFormDialog({ open, onOpenChange, onSaved, user }
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" onClick={submit} disabled={saving} data-testid="campaign-save-btn" className="btn-amber border-0">
-            {saving ? "Creating…" : "Create campaign"}
+            {saving ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save changes" : "Create campaign")}
           </Button>
         </DialogFooter>
       </DialogContent>

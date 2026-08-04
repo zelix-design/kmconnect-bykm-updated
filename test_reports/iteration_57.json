@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 57: Campaign edit + orphan-aware stats + delete-with-leads. All 9 backend pytest tests passed. Frontend verified in UI: all data-testid selectors present (campaign-checkbox-*, campaign-edit-inline-*, campaign-delete-inline-*, campaign-delete-dialog, campaign-delete-with-leads (pre-checked), campaign-delete-confirm, campaign-edit-btn, campaign-delete-btn). Edit dialog title 'Edit campaign' shows with name pre-filled. Single-delete, bulk-delete, and detail-view delete dialogs all open with the 'Also delete N leads' checkbox PRE-CHECKED (data-state=checked, aria-checked=true). Bulk dialog correctly reports 'Delete 2 campaigns?'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "CampaignDeleteDialog (detail view)", "issue": "Dialog title shows 'Delete campaign \"\"?' with empty quotes — the campaign name is not being passed when opened from the detail-view header Delete icon. In list-inline delete the name is populated correctly. Confirms functionally works but the empty quotes look bad.", "selector": "[data-testid='campaign-delete-dialog'] header", "priority": "LOW"},
+      {"component": "CampaignDeleteDialog", "issue": "Grammar: 'This campaigns contains N leads.' should be 'This campaign contains N leads.' (singular for single delete). Only the bulk-form should be plural.", "selector": "[data-testid='campaign-delete-dialog']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration57_campaigns_orphan_delete.py",
+    "/app/test_reports/pytest/iter57.xml"
+  ],
+  "action_items": [
+    "(Optional/minor) Pass the campaign name to CampaignDeleteDialog when opened from the detail-view header so the confirm title shows the campaign name instead of empty quotes.",
+    "(Optional/minor) Fix grammar in single-delete confirm body: 'This campaign contains N leads.' (currently reads 'This campaigns contains …' for both single and bulk)."
+  ],
+  "critical_code_review_comments": [
+    "campaigns.py _stats() and _active_user_id_set() are correct — orphan resolution uses users.deleted_at ($or with null/missing/empty), matching the seed logic. Distribution excludes orphans (line 183-184).",
+    "delete_campaign and bulk_delete_campaigns handle both detach (campaign_id=null) and purge modes correctly and return removed_leads count. Backward compat preserved (delete_leads default False).",
+    "PATCH endpoint correctly excludes 'office' — only name/description/tag_type/tag_value are patched.",
+    "Distribute scope='unassigned' now uses $or with $nin active_ids to pick up orphaned leads — verified end-to-end.",
+    "Activity log for campaign.bulk_delete correctly includes delete_leads and removed_leads in extras."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration57_campaigns_orphan_delete.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% for testids and dialog flows"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co / kmf@0786",
+  "seed_data_creation": "Tests seed leads directly in Mongo via pymongo (LeadIn does not accept campaign_id). All TEST_ campaigns + leftover leads cleaned up via bulk-delete?delete_leads=true at end of run. Verified 0 TEST_ campaigns remain after cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 57 fully green on both backend (pytest) and frontend (data-testid presence + dialog behavior). Two very minor cosmetic UI bugs found (empty campaign-name in detail-view delete dialog title and 'This campaigns contains' grammar) — safe to defer or fix cosmetically. All new endpoints have regression coverage in /app/backend/tests/test_iteration57_campaigns_orphan_delete.py.",
+  "rca of the issue": "Original user reports were caused by (a) _stats treating any non-null assigned_to_user_id as 'assigned' even when the user had been deleted (198 orphaned leads counted as assigned but with no visible owner in distribution row), and (b) DELETE/{id} not offering a way to purge the leads. Fix: _active_user_id_set() resolves against a live users query filtered by deleted_at. delete_campaign and bulk_delete_campaigns take an explicit delete_leads flag. distribute scope='unassigned' also picks up orphans. Frontend adds a unified CampaignDeleteDialog with a pre-checked 'also delete N leads' checkbox for both single and bulk flows."
+}

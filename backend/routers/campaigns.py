@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from pymongo import UpdateOne
 
@@ -87,12 +87,35 @@ async def _get_campaign(campaign_id: str, user: dict) -> dict:
     return c
 
 
+async def _active_user_id_set(assignee_ids: List[str]) -> set:
+    """Return the subset of ``assignee_ids`` that still resolve to a real,
+    non-soft-deleted user. Empty set for empty input.
+
+    Used to distinguish real assignments from orphaned ones (a lead was
+    assigned to someone who has since been deleted). Orphaned assignments
+    should be treated as unassigned in stats + distribute scope."""
+    if not assignee_ids:
+        return set()
+    users = await db.users.find(
+        {"id": {"$in": list(set(assignee_ids))},
+         "$or": [{"deleted_at": None}, {"deleted_at": {"$exists": False}}, {"deleted_at": ""}]},
+        {"_id": 0, "id": 1},
+    ).to_list(len(assignee_ids))
+    return {u["id"] for u in users}
+
+
 async def _stats(campaign_id: str) -> dict:
     leads = await db.leads.find(
         {"campaign_id": campaign_id}, {"_id": 0, "status": 1, "assigned_to_user_id": 1}
     ).to_list(50000)
     total = len(leads)
-    assigned = sum(1 for l in leads if l.get("assigned_to_user_id"))
+    assignee_ids = [l.get("assigned_to_user_id") for l in leads if l.get("assigned_to_user_id")]
+    active = await _active_user_id_set(assignee_ids)
+    # A lead only counts as "assigned" when its owner still exists in the
+    # ``users`` collection AND is not soft-deleted. Orphaned assignments
+    # (deleted employee, transferred office …) fall back to "unassigned"
+    # so the Distribute dialog surfaces them again.
+    assigned = sum(1 for l in leads if l.get("assigned_to_user_id") in active)
     converted = sum(1 for l in leads if l.get("status") == "converted")
     return {"total": total, "assigned": assigned, "unassigned": total - assigned, "converted": converted}
 
@@ -149,10 +172,16 @@ async def get_campaign(campaign_id: str, user: dict = Depends(campaign_manager))
         {"campaign_id": campaign_id, "assigned_to_user_id": {"$ne": None}},
         {"_id": 0, "assigned_to_user_id": 1},
     ).to_list(50000)
+    # Filter out orphaned assignees (deleted users) so the distribution row
+    # never contains phantom "—" entries. Their leads are already counted as
+    # unassigned by ``_stats``.
+    active_ids = await _active_user_id_set([l.get("assigned_to_user_id") for l in leads])
     name_map = {e["id"]: e["name"] for e in employees}
     counts: dict = {}
     for l in leads:
         eid = l.get("assigned_to_user_id")
+        if eid not in active_ids:
+            continue
         counts[eid] = counts.get(eid, 0) + 1
     distribution = sorted(
         ({"id": eid, "name": name_map.get(eid, "—"), "count": c} for eid, c in counts.items()),
@@ -190,24 +219,39 @@ async def update_campaign(campaign_id: str, payload: CampaignUpdate, user: dict 
 
 
 @router.delete("/{campaign_id}")
-async def delete_campaign(campaign_id: str, user: dict = Depends(campaign_manager)):
+async def delete_campaign(
+    campaign_id: str,
+    delete_leads: bool = Query(False, description="Also delete the campaign's leads"),
+    user: dict = Depends(campaign_manager),
+):
     await _get_campaign(campaign_id, user)
-    # Detach leads (keep them in the pipeline, just drop the campaign tag).
-    await db.leads.update_many({"campaign_id": campaign_id}, {"$set": {"campaign_id": None}})
+    if delete_leads:
+        # Purge every lead attached to the campaign.
+        purged = await db.leads.delete_many({"campaign_id": campaign_id})
+        removed_leads = purged.deleted_count
+    else:
+        # Legacy behaviour: keep the leads, just drop the campaign tag.
+        await db.leads.update_many({"campaign_id": campaign_id}, {"$set": {"campaign_id": None}})
+        removed_leads = 0
     await db.campaigns.delete_one({"id": campaign_id})
-    return {"ok": True}
+    return {"ok": True, "removed_leads": removed_leads}
 
 
 class BulkCampaignIdsIn(BaseModel):
     ids: List[str] = Field(min_length=1)
+    delete_leads: bool = False
 
 
 @router.post("/bulk-delete")
 async def bulk_delete_campaigns(
     payload: BulkCampaignIdsIn, user: dict = Depends(campaign_manager)
 ) -> dict:
-    """Delete multiple campaigns in one shot. Leads keep their rows but their
-    ``campaign_id`` is cleared (identical semantics to single-delete).
+    """Delete multiple campaigns in one shot.
+
+    * ``delete_leads=False`` (default) → leads keep their rows but their
+      ``campaign_id`` is cleared.
+    * ``delete_leads=True``            → each lead attached to the deleted
+      campaigns is also purged from ``leads``.
 
     Scope: super_admin (all offices) / office_admin (own office only)."""
     ids = list({i for i in payload.ids if i})
@@ -219,15 +263,23 @@ async def bulk_delete_campaigns(
     if not visible:
         raise HTTPException(404, "No matching campaigns in your scope")
     visible_ids = [d["id"] for d in visible]
-    await db.leads.update_many({"campaign_id": {"$in": visible_ids}}, {"$set": {"campaign_id": None}})
+    removed_leads = 0
+    if payload.delete_leads:
+        purged = await db.leads.delete_many({"campaign_id": {"$in": visible_ids}})
+        removed_leads = purged.deleted_count
+    else:
+        await db.leads.update_many({"campaign_id": {"$in": visible_ids}}, {"$set": {"campaign_id": None}})
     res = await db.campaigns.delete_many({"id": {"$in": visible_ids}})
     await log_event(
         event_type="campaign.bulk_delete", actor=user,
         subject_type="campaign", subject_label=f"{res.deleted_count} campaigns",
-        note=f"Bulk deleted {res.deleted_count} campaigns",
-        extras={"campaign_ids": visible_ids},
+        note=f"Bulk deleted {res.deleted_count} campaigns"
+             + (f" (+ {removed_leads} leads)" if removed_leads else ""),
+        extras={"campaign_ids": visible_ids, "delete_leads": payload.delete_leads,
+                "removed_leads": removed_leads},
     )
-    return {"ok": True, "affected_ids": visible_ids, "count": res.deleted_count}
+    return {"ok": True, "affected_ids": visible_ids, "count": res.deleted_count,
+            "removed_leads": removed_leads}
 
 
 # ---------- populate ----------
@@ -278,7 +330,19 @@ async def distribute_campaign(campaign_id: str, payload: DistributeIn, user: dic
 
     lead_q: dict = {"campaign_id": campaign_id}
     if payload.scope != "all":
-        lead_q["$or"] = [{"assigned_to_user_id": None}, {"assigned_to_user_id": {"$exists": False}}]
+        # "Unassigned" scope = truly unassigned OR orphaned to a deleted user.
+        # Include the orphaned set so we don't strand 198 leads with a stale
+        # ``assigned_to_user_id`` pointing at a removed employee.
+        all_leads = await db.leads.find(
+            {"campaign_id": campaign_id, "assigned_to_user_id": {"$ne": None}},
+            {"_id": 0, "assigned_to_user_id": 1},
+        ).to_list(50000)
+        active_ids = await _active_user_id_set([l.get("assigned_to_user_id") for l in all_leads])
+        lead_q["$or"] = [
+            {"assigned_to_user_id": None},
+            {"assigned_to_user_id": {"$exists": False}},
+            {"assigned_to_user_id": {"$nin": list(active_ids)}},
+        ]
     leads = await db.leads.find(lead_q, {"_id": 0, "id": 1}).sort("created_at", 1).to_list(50000)
     lead_ids = [l["id"] for l in leads]
     if not lead_ids:

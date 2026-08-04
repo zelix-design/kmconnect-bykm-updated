@@ -5,11 +5,12 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
-  Plus, Megaphone, ArrowLeft, UploadSimple, ShareNetwork, Trash, Target, UserCheck, UsersThree, CheckCircle, X,
+  Plus, Megaphone, ArrowLeft, UploadSimple, ShareNetwork, Trash, Target, UserCheck, UsersThree, CheckCircle, X, PencilSimple,
 } from "@phosphor-icons/react";
 import CampaignFormDialog from "./CampaignFormDialog";
 import CampaignAddLeadsDialog from "./CampaignAddLeadsDialog";
 import CampaignDistributeDialog from "./CampaignDistributeDialog";
+import CampaignDeleteDialog from "./CampaignDeleteDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import LeadsPipeline from "./LeadsPipeline";
 
@@ -36,10 +37,15 @@ export default function CampaignsPanel({ user }) {
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editCampaign, setEditCampaign] = useState(null);   // set → open in edit mode
   const [addOpen, setAddOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [distOpen, setDistOpen] = useState(false);
   const [pipelineKey, setPipelineKey] = useState(0);
+  // Delete confirm dialog state — covers both single-detail-delete and
+  // bulk-selection-delete flows. `deleteContext` holds the payload metadata.
+  const [deleteContext, setDeleteContext] = useState(null); // { campaign?, campaigns?, leadCount }
+  const [deleteBusy, setDeleteBusy] = useState(false);
   // Bulk selection state (list view only). Cleared when the list reloads
   // or the user drills into a campaign.
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -77,20 +83,45 @@ export default function CampaignsPanel({ user }) {
   const refreshDetail = () => loadDetail(selectedId);
   const refreshAll = () => { loadDetail(selectedId); setPipelineKey((k) => k + 1); };
 
-  const bulkDelete = async () => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    if (!window.confirm(`Delete ${ids.length} campaign(s)? Their leads stay in the pipeline (untagged).`)) return;
-    setBulkBusy(true);
+  const bulkDelete = () => {
+    const selected = list.filter((c) => selectedIds.has(c.id));
+    if (!selected.length) return;
+    const leadCount = selected.reduce((sum, c) => sum + (c.stats?.total || 0), 0);
+    setDeleteContext({ campaigns: selected, leadCount });
+  };
+
+  const confirmDelete = async (deleteLeads) => {
+    if (!deleteContext) return;
+    setDeleteBusy(true);
     try {
-      const { data } = await api.post("/campaigns/bulk-delete", { ids });
-      toast.success(`Deleted ${data.count} campaign(s)`);
-      clearSelection();
-      loadList();
+      if (deleteContext.campaigns) {
+        // Bulk path
+        const ids = deleteContext.campaigns.map((c) => c.id);
+        const { data } = await api.post("/campaigns/bulk-delete", { ids, delete_leads: deleteLeads });
+        toast.success(
+          data.removed_leads
+            ? `Deleted ${data.count} campaign(s) + ${data.removed_leads.toLocaleString()} lead(s)`
+            : `Deleted ${data.count} campaign(s)`,
+        );
+        clearSelection();
+        loadList();
+      } else if (deleteContext.campaign) {
+        // Single path (from detail view)
+        const { data } = await api.delete(`/campaigns/${deleteContext.campaign.id}`, {
+          params: { delete_leads: deleteLeads ? "true" : "false" },
+        });
+        toast.success(
+          data?.removed_leads
+            ? `Campaign + ${data.removed_leads.toLocaleString()} lead(s) deleted`
+            : "Campaign deleted",
+        );
+        back();
+      }
+      setDeleteContext(null);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Bulk delete failed");
+      toast.error(err?.response?.data?.detail || "Delete failed");
     } finally {
-      setBulkBusy(false);
+      setDeleteBusy(false);
     }
   };
 
@@ -101,10 +132,13 @@ export default function CampaignsPanel({ user }) {
     else setSelectedIds(new Set(visibleIds));
   };
 
-  const removeCampaign = async () => {
-    if (!window.confirm("Delete this campaign? Its leads stay in the pipeline (untagged).")) return;
-    try { await api.delete(`/campaigns/${selectedId}`); toast.success("Campaign deleted"); back(); }
-    catch { toast.error("Could not delete campaign"); }
+  const removeCampaign = () => {
+    if (!detail?.campaign) return;
+    setDeleteContext({ campaign: detail.campaign, leadCount: detail.stats?.total || 0 });
+  };
+
+  const editCurrent = () => {
+    if (detail?.campaign) setEditCampaign(detail.campaign);
   };
 
   // ---- Detail view ----
@@ -130,7 +164,8 @@ export default function CampaignsPanel({ user }) {
             <Button variant="outline" size="sm" onClick={() => setAddOpen(true)} data-testid="campaign-add-leads-btn"><Plus size={15} className="mr-1" /> Add leads</Button>
             <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)} data-testid="campaign-upload-btn"><UploadSimple size={15} className="mr-1" /> Upload CSV</Button>
             <Button size="sm" onClick={() => setDistOpen(true)} data-testid="campaign-distribute-btn" className="btn-amber border-0"><ShareNetwork size={15} className="mr-1" /> Distribute</Button>
-            <button type="button" onClick={removeCampaign} data-testid="campaign-delete-btn" className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors"><Trash size={16} /></button>
+            <button type="button" onClick={editCurrent} data-testid="campaign-edit-btn" className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-colors" aria-label="Edit campaign"><PencilSimple size={16} /></button>
+            <button type="button" onClick={removeCampaign} data-testid="campaign-delete-btn" className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors" aria-label="Delete campaign"><Trash size={16} /></button>
           </div>
         </div>
 
@@ -160,6 +195,21 @@ export default function CampaignsPanel({ user }) {
         <CampaignAddLeadsDialog open={addOpen} onOpenChange={setAddOpen} campaignId={selectedId} onAdded={refreshAll} />
         <LeadsBulkUploadDialog open={uploadOpen} onOpenChange={setUploadOpen} onUploaded={refreshAll} user={user} campaignId={selectedId} />
         <CampaignDistributeDialog open={distOpen} onOpenChange={setDistOpen} campaignId={selectedId} employees={detail.employees} stats={s} onDistributed={refreshAll} />
+        <CampaignFormDialog
+          open={!!editCampaign}
+          campaign={editCampaign}
+          onOpenChange={(v) => { if (!v) setEditCampaign(null); }}
+          user={user}
+          onSaved={() => { setEditCampaign(null); refreshDetail(); loadList(); }}
+        />
+        <CampaignDeleteDialog
+          open={!!deleteContext}
+          onOpenChange={(v) => { if (!v && !deleteBusy) setDeleteContext(null); }}
+          campaign={deleteContext?.campaign}
+          leadCount={deleteContext?.leadCount || 0}
+          busy={deleteBusy}
+          onConfirm={confirmDelete}
+        />
       </div>
     );
   }
@@ -230,8 +280,29 @@ export default function CampaignsPanel({ user }) {
                       aria-label={`Select campaign ${c.name}`}
                     />
                   </div>
+                  {/* Quick actions — surface Edit + Delete without opening the campaign */}
+                  <div className="absolute top-3 right-3 z-10 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setEditCampaign(c)}
+                      className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-colors"
+                      data-testid={`campaign-edit-inline-${c.id}`}
+                      aria-label={`Edit ${c.name}`}
+                    >
+                      <PencilSimple size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeleteContext({ campaign: c, leadCount: c.stats?.total || 0 })}
+                      className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+                      data-testid={`campaign-delete-inline-${c.id}`}
+                      aria-label={`Delete ${c.name}`}
+                    >
+                      <Trash size={13} />
+                    </button>
+                  </div>
                   <button type="button" onClick={() => open(c.id)}
-                    className="w-full text-left pl-6"
+                    className="w-full text-left pl-6 pr-14"
                     data-testid={`campaign-card-open-${c.id}`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -254,6 +325,22 @@ export default function CampaignsPanel({ user }) {
       )}
 
       <CampaignFormDialog open={createOpen} onOpenChange={setCreateOpen} user={user} onSaved={(c) => { loadList(); open(c.id); }} />
+      <CampaignFormDialog
+        open={!!editCampaign}
+        campaign={editCampaign}
+        onOpenChange={(v) => { if (!v) setEditCampaign(null); }}
+        user={user}
+        onSaved={() => { setEditCampaign(null); loadList(); }}
+      />
+      <CampaignDeleteDialog
+        open={!!deleteContext}
+        onOpenChange={(v) => { if (!v && !deleteBusy) setDeleteContext(null); }}
+        campaign={deleteContext?.campaign}
+        campaigns={deleteContext?.campaigns}
+        leadCount={deleteContext?.leadCount || 0}
+        busy={deleteBusy}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
