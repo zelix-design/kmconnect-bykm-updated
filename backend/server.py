@@ -122,10 +122,10 @@ _static_origins = [
     *_extra_origins,
 ]
 _ALLOW_ORIGIN_REGEX = (
-    r"^https?://("
+    r"(?i)^https?://("
     r"localhost(:\d+)?|"
     r"127\.0\.0\.1(:\d+)?|"
-    r"([a-z0-9-]+\.)*preview\.emergentagent\.com|"
+    r"([a-z0-9-]+\.)*emergentagent\.com|"
     r"([a-z0-9-]+\.)*emergent\.host|"
     r"([a-z0-9-]+\.)*kmfoundation\.co|"
     r"([a-z0-9-]+\.)*kmfoundation\.co\.in|"

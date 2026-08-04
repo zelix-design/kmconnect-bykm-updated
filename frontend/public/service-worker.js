@@ -6,7 +6,7 @@
 //   - Handle Web Push events → show OS-level notifications even when the app
 //     is closed.
 
-const CACHE = "finflow-shell-v3";
+const CACHE = "finflow-shell-v4";
 const SHELL = [
   "/manifest.json",
   "/finflow-icon.png",
