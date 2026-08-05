@@ -186,21 +186,25 @@ export default function OfficeDashboard({ superView = false }) {
               eyebrow="Admissions"
               value={loading ? "—" : (t.admissions ?? 0)}
               hint={`in ${windowLabel}`}
+              onClick={() => nav("/students")}
             />
             <StatCard testId="stat-incentive-earned" icon={Trophy} palette="emerald"
               eyebrow="Incentive earned"
               value={loading ? "—" : formatMoney(t.incentive_earned ?? 0, currency)}
               hint={`${t.eligible_admissions ?? 0} eligible admissions`}
+              onClick={() => nav("/expense-requests")}
             />
             <StatCard testId="stat-incentive-pending" icon={ClockClockwise} palette="rose"
               eyebrow="Incentive pending"
               value={loading ? "—" : formatMoney(t.incentive_pending ?? 0, currency)}
               hint="Yet to mark paid"
+              onClick={() => nav("/expense-requests")}
             />
             <StatCard testId="stat-staff-count" icon={UserCircle} palette="violet"
               eyebrow="Staff on roster"
               value={loading ? "—" : (t.staff_count ?? 0)}
               hint="Add more in Staff"
+              onClick={() => nav("/staff")}
             />
           </div>
 

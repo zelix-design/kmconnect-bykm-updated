@@ -16,7 +16,7 @@ import {
   Student, Notebook, ArrowUpRight, ArrowDownRight,
   IdentificationBadge, Briefcase, Buildings, GraduationCap, Copy,
 } from "@phosphor-icons/react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import OfficeDashboard from "./OfficeDashboard";
 import StaffDashboard from "./StaffDashboard";
 import {
@@ -286,6 +286,7 @@ function SuperAdminDashboard() {
 // -------- Tile-specific overview blocks --------
 
 function TransactionsOverview({ summary, cashflow, byCat, transactions, currency, range, hideActivityChart }) {
+  const nav = useNavigate();
   const cfTrend = useMemo(() => {
     if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
     const cur = cashflow[cashflow.length - 1];
@@ -304,10 +305,14 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={formatMoney(todaysSpend, currency)} palette="amber" icon={ShoppingBag} hint="All expense transactions today" />
-        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight} />
-        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight} />
-        <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue" />
+        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={formatMoney(todaysSpend, currency)} palette="amber" icon={ShoppingBag} hint="All expense transactions today"
+          onClick={() => nav("/transactions?type=expense")} />
+        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight}
+          onClick={() => nav("/transactions?type=income")} />
+        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight}
+          onClick={() => nav("/transactions?type=expense")} />
+        <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue"
+          onClick={() => nav("/invoices?filter=outstanding")} />
       </section>
       <section className={`grid grid-cols-1 ${hideActivityChart ? "" : "lg:grid-cols-3"} gap-4`}>
         {!hideActivityChart && (
@@ -375,6 +380,7 @@ const STATUS_COLORS = { inquiry: "#a8a29e", enrolled: "#10b981", cancelled: "#e1
 const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", cancelled: "Cancelled", completed: "Completed" };
 
 function StudentsOverview({ students, currency, range }) {
+  const nav = useNavigate();
   const stats = useMemo(() => {
     const total = students.length;
     const counts = { inquiry: 0, enrolled: 0, cancelled: 0, completed: 0 };
@@ -438,10 +444,14 @@ function StudentsOverview({ students, currency, range }) {
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student} />
-        <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight} />
-        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Earned" />
-        <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`} />
+        <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student}
+          onClick={() => nav("/students")} />
+        <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight}
+          onClick={() => nav("/students")} />
+        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Earned"
+          onClick={() => nav("/students?filter=balance")} />
+        <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`}
+          onClick={() => nav("/students?filter=enrolled")} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
@@ -527,6 +537,7 @@ const CLIENT_TYPES = [
 ];
 
 function ClientsOverview({ clients, students }) {
+  const nav = useNavigate();
   const stats = useMemo(() => {
     const total = clients.length;
     const counts = Object.fromEntries(CLIENT_TYPES.map((t) => [t.value, 0]));
@@ -563,10 +574,14 @@ function ClientsOverview({ clients, students }) {
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="cl-stat-total" eyebrow="Total clients" value={String(stats.total)} palette="amber" icon={UsersThree} />
-        <StatCard testId="cl-stat-sub" eyebrow="Sub Agents / Associates" value={String(stats.counts.sub_agent_associate)} palette="violet" icon={IdentificationBadge} />
-        <StatCard testId="cl-stat-consultant" eyebrow="Associate Consultants" value={String(stats.counts.associate_consultant)} palette="rose" icon={Briefcase} />
-        <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={String(stats.kmTotal)} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined" />
+        <StatCard testId="cl-stat-total" eyebrow="Total clients" value={String(stats.total)} palette="amber" icon={UsersThree}
+          onClick={() => nav("/clients")} />
+        <StatCard testId="cl-stat-sub" eyebrow="Sub Agents / Associates" value={String(stats.counts.sub_agent_associate)} palette="violet" icon={IdentificationBadge}
+          onClick={() => nav("/clients?type=sub_agent_associate")} />
+        <StatCard testId="cl-stat-consultant" eyebrow="Associate Consultants" value={String(stats.counts.associate_consultant)} palette="rose" icon={Briefcase}
+          onClick={() => nav("/clients?type=associate_consultant")} />
+        <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={String(stats.kmTotal)} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined"
+          onClick={() => nav("/clients?type=km_office")} />
       </section>
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
@@ -653,6 +668,7 @@ function ClientsOverview({ clients, students }) {
 }
 
 function LedgerOverview({ ledger, students, currency }) {
+  const nav = useNavigate();
   const stats = useMemo(() => {
     let totalReceived = 0, paidToCollege = 0, scAdjusted = 0, holding = 0;
     const byType = { sub_agent: 0, associate: 0, km: 0 };
@@ -702,16 +718,21 @@ function LedgerOverview({ ledger, students, currency }) {
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`} />
-        <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings} />
-        <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out" />
+        <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`}
+          onClick={() => nav("/ledger")} />
+        <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings}
+          onClick={() => nav("/ledger?type=paid_to_college")} />
+        <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out"
+          onClick={() => nav("/ledger?type=sub_agent")} />
         <div className="relative" data-testid="lg-stat-holding-wrapper">
-          <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled" />
+          <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled"
+            onClick={() => nav("/ledger?filter=holding")} />
           {stats.holding > 0 && (
             <Link
               to="/agents"
               data-testid="settle-pending-badge"
-              className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full bg-rose-900 text-rose-50 hover:bg-rose-800 lift"
+              className="absolute right-4 bottom-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-1 rounded-full bg-rose-900 text-rose-50 hover:bg-rose-800 lift z-10"
+              onClick={(e) => e.stopPropagation()}
             >
               Settle pending <ArrowUpRight size={10} weight="bold" />
             </Link>

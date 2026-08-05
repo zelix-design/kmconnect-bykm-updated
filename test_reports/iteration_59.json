@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only test of clickable stat cards across Super-admin Dashboard (Transactions/Students/Clients/Ledger tabs), Office-admin Dashboard, Staff Desk (StatTiles + MiniTiles), and LeadsPipeline. 24/34 automated card-click checks passed. 2 real bugs found: (a) all 4 Ledger overview cards navigate to /ledger which is NOT a registered route in App.js so React Router falls back and lands on / (broken drill-down); (b) OfficeDashboard's stat-staff-count navigates to /staff which is SUPER_ADMIN_ONLY via PermGate, so the office admin (the intended user) is redirected back to /. All Transactions overview, Students overview, Clients overview, Staff Desk stat-tiles, LeadsPipeline stat cards, URL sync (?filter=...) with strip, chip highlighting, keyboard Enter navigation, <button> semantics, and settle-pending badge stopPropagation all behave correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard.jsx LedgerOverview", "issue": "lg-stat-received, lg-stat-college, lg-stat-sc, lg-stat-holding all navigate to /ledger (with optional ?type=/?filter=) but there is NO Route path=\"/ledger\" in App.js. Router falls back and returns user to /. The agent-ledger page lives at /agents. All four Ledger drill-down clicks are silently broken.", "selector": "[data-testid='lg-stat-received'|'lg-stat-college'|'lg-stat-sc'|'lg-stat-holding']", "priority": "HIGH"},
+      {"component": "OfficeDashboard.jsx", "issue": "stat-staff-count uses onClick={() => nav('/staff')} but /staff is PermGate roles={SUPER_ADMIN_ONLY}. Office admin (the intended user of OfficeDashboard) is redirected to /. Suggest navigating to /employees (unified staff profile+login page per test_credentials.md) or a dedicated office-scoped staff route.", "selector": "[data-testid='stat-staff-count']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard / all", "issues": ["Recharts warning: 'The width(-1) and height(-1) of chart should be greater than 0' — non-blocking but noisy console; caused by containers initialising before layout."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Change Ledger overview card nav targets from /ledger to /agents (with type/filter query params kept as-is; Agents page can be enhanced later to consume them).",
+    "Change OfficeDashboard stat-staff-count nav target from /staff to /employees (or an office_admin-accessible staff-management route)."
+  ],
+  "critical_code_review_comments": [
+    "LeadsPipeline.jsx declares useSearchParams TWICE (const [params,setParams]=useSearchParams() on line 67 AND const [searchParams,setSearchParams]=useSearchParams() on line 76). Not a functional bug but harmful duplication — consolidate to a single tuple. The 'new=1' side-effect on line 177 also uses `params`/`setParams` while the filter sync uses `searchParams`/`setSearchParams`; if left as-is a future author will introduce a state divergence bug.",
+    "Dashboard.jsx: Ledger cards point to a non-existent route (/ledger). Add the route or fix the target — this is the highest-impact miss in the iteration.",
+    "OfficeDashboard.jsx: navigating office_admin to a SUPER_ADMIN_ONLY route silently redirects — no toast, no visible feedback. Consider adding a role-gated fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "~94% (32/34 real signals PASS — the 10 apparent 'FAIL /leads' rows for staff-mini-* and staff-stat-missed are false negatives caused by LeadsPipeline correctly stripping the ?filter= query param on mount; verified separately as URL sync working)."},
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Super admin Dashboard uses tab tiles [data-testid=tile-transactions|tile-students|tile-clients|tile-ledger] — you MUST click the relevant tile before the section's stat cards exist in the DOM (they conditionally render). Do NOT assert on URL immediately after clicking a card that navigates to /leads?filter=X — LeadsPipeline strips the query on mount, so the URL will read /leads with no query when you check post-navigation. Instead assert on the highlighted chip [data-testid=leads-filter-<key>] class containing 'amber-gradient' (or 'rose-500/15' for the missed chip). Office admin dashboard is served at / (Dashboard.jsx delegates to OfficeDashboard when user.role==='office_admin'); /office/dashboard is not a registered route but landing there redirects to /.",
+  "rca of the issue": "Ledger cards: dev used /ledger URL prefix but the app routes agent-ledger at /agents. React Router v6 catch-all sends unmatched to a NotFound that itself Navigates to /. Fix: replace /ledger with /agents (and, if the Agents page should honour ?type= and ?filter=, wire that in a follow-up).\nstat-staff-count: PermGate roles={SUPER_ADMIN_ONLY} guarding /staff was overlooked when the office-admin-facing tile was made clickable. Fix: target /employees or a role-appropriate route."
+}

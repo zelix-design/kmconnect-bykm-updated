@@ -13,21 +13,64 @@ import {
 import LeaveRequestDialog from "@/components/leave/LeaveRequestDialog";
 import ComposeMessageDialog from "@/components/messages/ComposeMessageDialog";
 
-function StatTile({ icon: Icon, label, value, tone }) {
+function StatTile({ icon: Icon, label, value, tone, onClick, testid, ariaLabel }) {
   const tones = {
     amber: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300",
     rose: "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300",
     emerald: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
     sky: "bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300",
   };
-  return (
-    <Card className="p-4 flex items-center gap-3">
+  const inner = (
+    <>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
-      <div>
+      <div className="flex-1 min-w-0">
         <p className="text-2xl font-display font-semibold leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-1">{label}</p>
       </div>
-    </Card>
+      {onClick && (
+        <span aria-hidden="true"
+          className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all text-muted-foreground shrink-0"
+        >
+          <ArrowRight size={14} weight="bold" />
+        </span>
+      )}
+    </>
+  );
+  if (!onClick) {
+    return <Card className="p-4 flex items-center gap-3" data-testid={testid}>{inner}</Card>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testid}
+      aria-label={ariaLabel || label}
+      className="group text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+    >
+      {inner}
+    </button>
+  );
+}
+
+function MiniTile({ label, value, onClick, testid }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testid}
+      aria-label={`View ${label} leads`}
+      className="group text-left rounded-lg bg-muted/40 p-3 hover:bg-muted transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+    >
+      <div className="flex items-start justify-between">
+        <p className="text-xl font-semibold tabular-nums">{value}</p>
+        <span aria-hidden="true"
+          className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-muted-foreground"
+        >
+          <ArrowRight size={12} weight="bold" />
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+    </button>
   );
 }
 
@@ -76,16 +119,20 @@ export default function StaffDashboard() {
     <div className="space-y-6" data-testid="staff-dashboard">
       <div>
         <p className="label-eyebrow">Welcome back</p>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{user?.name?.split(" ")[0] || "Staff"}'s desk</h1>
+        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{user?.name?.split(" ")[0] || "Staff"}&apos;s desk</h1>
         <p className="text-sm text-muted-foreground mt-1">Your leads, referrals and quick actions in one place.</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="staff-stats">
-        <StatTile icon={Target} label="My leads" value={stats.total} tone="amber" />
-        <StatTile icon={ClockCountdown} label="Missed follow-ups" value={stats.missed} tone="rose" />
-        <StatTile icon={GraduationCap} label="Students referred" value={referrals.length} tone="emerald" />
-        <StatTile icon={CalendarCheck} label="Pending leave" value={leaveStats.pending_mine} tone="sky" />
+        <StatTile icon={Target} label="My leads" value={stats.total} tone="amber"
+          testid="staff-stat-leads" onClick={() => nav("/leads")} />
+        <StatTile icon={ClockCountdown} label="Missed follow-ups" value={stats.missed} tone="rose"
+          testid="staff-stat-missed" onClick={() => nav("/leads?filter=missed")} />
+        <StatTile icon={GraduationCap} label="Students referred" value={referrals.length} tone="emerald"
+          testid="staff-stat-referrals" onClick={() => nav("/my-students")} />
+        <StatTile icon={CalendarCheck} label="Pending leave" value={leaveStats.pending_mine} tone="sky"
+          testid="staff-stat-leave" onClick={() => nav("/leave")} />
       </div>
 
       {/* Quick actions */}
@@ -126,10 +173,14 @@ export default function StaffDashboard() {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-lg bg-muted/40 p-3"><p className="text-xl font-semibold tabular-nums">{stats.by_status?.follow_up || 0}</p><p className="text-xs text-muted-foreground">Follow-up</p></div>
-            <div className="rounded-lg bg-muted/40 p-3"><p className="text-xl font-semibold tabular-nums">{stats.by_status?.interested || 0}</p><p className="text-xs text-muted-foreground">Interested</p></div>
-            <div className="rounded-lg bg-muted/40 p-3"><p className="text-xl font-semibold tabular-nums">{stats.by_status?.new || 0}</p><p className="text-xs text-muted-foreground">New</p></div>
-            <div className="rounded-lg bg-muted/40 p-3"><p className="text-xl font-semibold tabular-nums">{stats.by_status?.converted || 0}</p><p className="text-xs text-muted-foreground">Converted</p></div>
+            <MiniTile label="Follow-up" value={stats.by_status?.follow_up || 0}
+              onClick={() => nav("/leads?filter=follow_up")} testid="staff-mini-follow_up" />
+            <MiniTile label="Interested" value={stats.by_status?.interested || 0}
+              onClick={() => nav("/leads?filter=interested")} testid="staff-mini-interested" />
+            <MiniTile label="New" value={stats.by_status?.new || 0}
+              onClick={() => nav("/leads?filter=new")} testid="staff-mini-new" />
+            <MiniTile label="Converted" value={stats.by_status?.converted || 0}
+              onClick={() => nav("/leads?filter=converted")} testid="staff-mini-converted" />
           </div>
         </Card>
 

@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   Plus, UploadSimple, MagnifyingGlass, Target, ClockCountdown, CheckCircle, Phone, GraduationCap,
-  ListBullets, Kanban,
+  ListBullets, Kanban, ArrowRight,
 } from "@phosphor-icons/react";
 import { LEAD_STATUSES, LEAD_STATUS_META, sourceLabel, fmtDateTime } from "./constants";
 import LeadFormDialog from "./LeadFormDialog";
@@ -19,21 +19,44 @@ import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import LeadsBoard from "./LeadsBoard";
 import LeadsBulkActionBar from "./LeadsBulkActionBar";
 
-function StatTile({ icon: Icon, label, value, tone, testid }) {
+function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }) {
   const tones = {
     amber: "bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300",
     sky: "bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300",
     rose: "bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300",
     emerald: "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
   };
-  return (
-    <Card className="p-4 flex items-center gap-3" data-testid={testid}>
+  const inner = (
+    <>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
-      <div>
+      <div className="flex-1 min-w-0">
         <p className="text-2xl font-display font-semibold leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-1">{label}</p>
       </div>
-    </Card>
+      {onClick && (
+        <span aria-hidden="true"
+          className="opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all text-muted-foreground shrink-0"
+        >
+          <ArrowRight size={14} weight="bold" />
+        </span>
+      )}
+    </>
+  );
+  if (!onClick) {
+    return (
+      <Card className="p-4 flex items-center gap-3" data-testid={testid}>{inner}</Card>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testid}
+      aria-label={ariaLabel || label}
+      className="group text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+    >
+      {inner}
+    </button>
   );
 }
 
@@ -50,11 +73,28 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const [assignable, setAssignable] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilter = searchParams.get("filter") || "all";
+  const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [sourceFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [q, setQ] = useState("");
   const [view, setView] = useState("list");
+
+  // Whenever the URL ``?filter=<status>`` changes (e.g. staff clicks a dashboard
+  // card that navigates here), sync the pipeline's status filter. Strip the
+  // param after applying so filter chips remain the source of truth.
+  useEffect(() => {
+    const p = searchParams.get("filter");
+    if (!p) return;
+    setStatusFilter(p);
+    setView("list");
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("filter");
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState(null);
@@ -195,10 +235,14 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
 
       {!campaignId && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="leads-stats">
-          <StatTile icon={Target} label="Total leads" value={stats.total} tone="amber" testid="stat-total-leads" />
-          <StatTile icon={ClockCountdown} label="Follow-up" value={stats.by_status?.follow_up || 0} tone="sky" testid="stat-followup-leads" />
-          <StatTile icon={ClockCountdown} label="Missed" value={stats.missed} tone="rose" testid="stat-missed-leads" />
-          <StatTile icon={CheckCircle} label="Converted" value={stats.by_status?.converted || 0} tone="emerald" testid="stat-converted-leads" />
+          <StatTile icon={Target} label="Total leads" value={stats.total} tone="amber"
+            testid="stat-total-leads" onClick={() => { setStatusFilter("all"); setView("list"); }} />
+          <StatTile icon={ClockCountdown} label="Follow-up" value={stats.by_status?.follow_up || 0} tone="sky"
+            testid="stat-followup-leads" onClick={() => { setStatusFilter("follow_up"); setView("list"); }} />
+          <StatTile icon={ClockCountdown} label="Missed" value={stats.missed} tone="rose"
+            testid="stat-missed-leads" onClick={() => { setStatusFilter("missed"); setView("list"); }} />
+          <StatTile icon={CheckCircle} label="Converted" value={stats.by_status?.converted || 0} tone="emerald"
+            testid="stat-converted-leads" onClick={() => { setStatusFilter("converted"); setView("list"); }} />
         </div>
       )}
 
