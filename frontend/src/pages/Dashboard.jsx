@@ -719,14 +719,14 @@ function LedgerOverview({ ledger, students, currency }) {
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`}
-          onClick={() => nav("/ledger")} />
+          onClick={() => nav("/agents")} />
         <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings}
-          onClick={() => nav("/ledger?type=paid_to_college")} />
+          onClick={() => nav("/agents?type=paid_to_college")} />
         <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out"
-          onClick={() => nav("/ledger?type=sub_agent")} />
+          onClick={() => nav("/agents?type=sub_agent")} />
         <div className="relative" data-testid="lg-stat-holding-wrapper">
           <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled"
-            onClick={() => nav("/ledger?filter=holding")} />
+            onClick={() => nav("/agents?filter=holding")} />
           {stats.holding > 0 && (
             <Link
               to="/agents"

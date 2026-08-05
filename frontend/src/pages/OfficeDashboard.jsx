@@ -204,7 +204,7 @@ export default function OfficeDashboard({ superView = false }) {
               eyebrow="Staff on roster"
               value={loading ? "—" : (t.staff_count ?? 0)}
               hint="Add more in Staff"
-              onClick={() => nav("/staff")}
+              onClick={() => nav("/employees")}
             />
           </div>
 

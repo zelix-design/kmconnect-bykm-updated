@@ -73,8 +73,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const [assignable, setAssignable] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  const initialFilter = searchParams.get("filter") || "all";
+  const initialFilter = params.get("filter") || "all";
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [sourceFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
@@ -85,16 +84,16 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   // card that navigates here), sync the pipeline's status filter. Strip the
   // param after applying so filter chips remain the source of truth.
   useEffect(() => {
-    const p = searchParams.get("filter");
+    const p = params.get("filter");
     if (!p) return;
     setStatusFilter(p);
     setView("list");
-    setSearchParams((prev) => {
+    setParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("filter");
       return next;
     }, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [params, setParams]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editLead, setEditLead] = useState(null);
