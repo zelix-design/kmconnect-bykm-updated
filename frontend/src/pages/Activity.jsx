@@ -195,6 +195,16 @@ export default function Activity() {
                   const meta = EVENT_META[ev.type] || { icon: ChatCircleDots, tone: "sky", label: ev.type };
                   const Icon = meta.icon;
                   const restored = !!ev.restored;
+                  // Bulk events that end up affecting just one row read
+                  // more naturally as the singular equivalent — the label
+                  // itself will already be the specific name (see backend).
+                  const isBulkOfOne = (t) => (
+                    (t === "campaign.bulk_delete" || t === "lead.bulk_delete") &&
+                    !/^\d+\s+(campaigns?|leads?)$/i.test(ev.subject_label || "")
+                  );
+                  const displayLabel = isBulkOfOne(ev.type)
+                    ? (ev.type === "campaign.bulk_delete" ? "Campaign deleted" : "Lead deleted")
+                    : meta.label;
                   return (
                     <div
                       key={ev.id}
@@ -207,7 +217,7 @@ export default function Activity() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-foreground">
                           <span className="font-medium">{ev.actor_name || "System"}</span>
-                          <span className="text-muted-foreground"> · {meta.label}</span>
+                          <span className="text-muted-foreground"> · {displayLabel}</span>
                           {ev.subject_label && (
                             <>
                               {" — "}

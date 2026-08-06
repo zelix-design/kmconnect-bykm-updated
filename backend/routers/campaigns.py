@@ -293,12 +293,25 @@ async def bulk_delete_campaigns(
     else:
         await db.leads.update_many({"campaign_id": {"$in": visible_ids}}, {"$set": {"campaign_id": None}})
     res = await db.campaigns.delete_many({"id": {"$in": visible_ids}})
+    # Human-friendly label: when just one campaign was deleted, show its name
+    # so the Activity page reads "Campaign deleted — <name>" instead of the
+    # generic "1 campaigns".
+    if res.deleted_count == 1 and snap_campaigns:
+        _cname = snap_campaigns[0].get("name") or "1 campaign"
+        _label = _cname
+        _note = f"Deleted campaign {_cname}" + (
+            f" (+ {removed_leads} leads)" if removed_leads else ""
+        )
+    else:
+        _label = f"{res.deleted_count} campaigns"
+        _note = f"Bulk deleted {res.deleted_count} campaigns" + (
+            f" (+ {removed_leads} leads)" if removed_leads else ""
+        )
     await log_event(
         event_type="campaign.bulk_delete", actor=user,
-        subject_type="campaign", subject_label=f"{res.deleted_count} campaigns",
+        subject_type="campaign", subject_label=_label,
         before={"campaigns": snap_campaigns, "leads": snap_leads, "delete_leads": payload.delete_leads},
-        note=f"Bulk deleted {res.deleted_count} campaigns"
-             + (f" (+ {removed_leads} leads)" if removed_leads else ""),
+        note=_note,
         extras={"campaign_ids": visible_ids, "removed_leads": removed_leads},
         reversible=True,
     )

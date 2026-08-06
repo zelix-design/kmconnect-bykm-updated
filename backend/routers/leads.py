@@ -791,11 +791,21 @@ async def bulk_actions_leads(
         for r in snap:
             r.pop("_id", None)
         res = await db.leads.delete_many({"id": {"$in": visible_ids}})
+        # Human-friendly label: show the lead's actual name when just one row
+        # was deleted, otherwise the count. Note text mirrors the label so the
+        # Activity feed lists the specific name, not a generic "1 leads".
+        if res.deleted_count == 1 and snap:
+            _name = snap[0].get("name") or "1 lead"
+            _label = _name
+            _note = f"Bulk deleted lead {_name}"
+        else:
+            _label = f"{res.deleted_count} leads"
+            _note = f"Bulk deleted {res.deleted_count} leads"
         await log_event(
             event_type="lead.bulk_delete", actor=user,
-            subject_type="lead", subject_id=None, subject_label=f"{res.deleted_count} leads",
+            subject_type="lead", subject_id=None, subject_label=_label,
             before={"leads": snap},
-            note=f"Bulk deleted {res.deleted_count} leads",
+            note=_note,
             extras={"lead_ids": visible_ids},
             reversible=True,
         )
