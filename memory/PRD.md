@@ -1341,3 +1341,25 @@ admissions per year. It's confidential — only super admin can see it."
 - ✅ Playwright smoke: PIN unlock → dashboard renders with 3 office groups on the right (`ALL OFFICES`, `NO OFFICE`, `KM BLR OFFICE`), each with client-type tags visible under names.
 - ✅ Playwright smoke: clicking the "Any partner college" row opens the drilldown modal with "B.Sc — Nursing · 1 · 0 / 50,000 / -50,000" course row.
 
+
+
+## Implementation status — 2026-08-06 (iteration 60: Activity Log & Restore — frontend wiring)
+
+**Requested change (verbatim)**: "I want recent activity of CRM, Lead upload, Campaign deleted, staffs follow up data mistakenly deleted to restore"
+
+**What was built (this session)**
+- Backend was already in place (previous session): `GET /api/activity-log` + `POST /api/activity-log/{id}/restore` with TTL retention, event scoping (`_scope`) and 7 restore dispatchers (lead.deleted, lead.bulk_delete, lead.bulk_upload, lead.followup.deleted, lead.followup.edited, campaign.deleted, campaign.bulk_delete). `/app/frontend/src/pages/Activity.jsx` also authored in the previous session.
+- **This session**: page was not routed. Wired it up:
+  - `App.js`: added `ADMIN_ROLES = ["super_admin","office_admin"]` and `<Route path="/activity" element={<PermGate roles={ADMIN_ROLES}><Activity /></PermGate>} />`.
+  - `AppShell.jsx`: imported `ClockCounterClockwise` icon, added `{ to: "/activity", label: "Activity", tid: "nav-activity", roles: ["super_admin","office_admin"] }` to `ALL_NAV`, slotted into the flat items group next to Team/Settings, added `/activity` to `PAGE_TITLES`.
+- Data-testids on the page: `activity-page`, `activity-search`, `activity-refresh`, `activity-filter-{all|lead|campaign|followup|user}`, `activity-only-reversible`, `activity-loading`, `activity-empty`, `activity-row-<id>`, `activity-restore-<id>`.
+
+**Testing (iteration_60)**
+- Backend pytest 7/7 pass: admin gating (staff→403), super_admin + office_admin list, subject_type + reversible filters, lead.delete→restore round-trip, 409 on second restore, 404 on unknown event.
+- Frontend Playwright E2E 100%: super_admin sidebar nav works, filter chips + reversible-only checkbox narrow correctly (26→17→8 rows), Restore click flow completes with toast + row marked restored. Office admin also sees the nav; staff/user hidden.
+- Zero backend or UI bugs; four minor optional polish notes only (see `/app/test_reports/iteration_60.json`).
+- Pytest file: `/app/backend/tests/test_iteration60_activity.py`.
+
+**Minor polish backlog (from code review, non-blockers)**
+- Office admin sees empty log until their office's staff perform actions — friendlier empty-state hint would help.
+- Restore result payload doesn't return `campaign_id`, so campaign-restore deep-link is missing (currently only lead-restore deep-links to `/leads?lead=<id>`).
