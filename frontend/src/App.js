@@ -34,6 +34,7 @@ import Leave from "@/pages/Leave";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
 import Messages from "@/pages/Messages";
 import OfficeOverview from "@/pages/OfficeOverview";
+import Activity from "@/pages/Activity";
 import PermGate from "@/components/PermGate";
 
 function Protected({ children }) {

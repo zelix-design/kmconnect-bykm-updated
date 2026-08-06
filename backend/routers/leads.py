@@ -739,7 +739,17 @@ async def delete_lead(lead_id: str, user: dict = Depends(require_edit("leads")))
     lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
     if not lead:
         raise HTTPException(404, "Lead not found")
+    lead.pop("_id", None)
     await db.leads.delete_one({"id": lead_id})
+    # Audit + restorable — full row snapshot goes into `before`.
+    await log_event(
+        event_type="lead.deleted", actor=user,
+        subject_type="lead", subject_id=lead_id, subject_label=lead.get("name"),
+        before=lead,
+        office=lead.get("office"),
+        note=f"Deleted lead {lead.get('name')}",
+        reversible=True,
+    )
     return {"ok": True}
 
 
@@ -776,12 +786,18 @@ async def bulk_actions_leads(
     if action == "delete":
         if role == "staff":
             raise HTTPException(403, "Staff cannot bulk delete leads")
+        # Full snapshot for restore.
+        snap = await db.leads.find({"id": {"$in": visible_ids}}).to_list(len(visible_ids))
+        for r in snap:
+            r.pop("_id", None)
         res = await db.leads.delete_many({"id": {"$in": visible_ids}})
         await log_event(
             event_type="lead.bulk_delete", actor=user,
             subject_type="lead", subject_id=None, subject_label=f"{res.deleted_count} leads",
+            before={"leads": snap},
             note=f"Bulk deleted {res.deleted_count} leads",
             extras={"lead_ids": visible_ids},
+            reversible=True,
         )
         return {"ok": True, "action": action, "affected_ids": visible_ids, "count": res.deleted_count}
 
@@ -1307,6 +1323,16 @@ async def update_followup(
         {"$set": set_ops},
     )
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    await log_event(
+        event_type="lead.followup.edited", actor=user,
+        subject_type="lead", subject_id=lead_id, subject_label=fresh.get("name"),
+        before={"at": old_at, "note": entry.get("note", ""), "follow_up_id": followup_id},
+        after={"at": new_at if new_at is not None else old_at,
+               "note": new_note if new_note is not None else entry.get("note", "")},
+        office=fresh.get("office"),
+        note=f"Follow-up rescheduled" if new_at is not None else "Follow-up note edited",
+        reversible=True,
+    )
 
     # Notify the assignee if their follow-up moved and they weren't the editor.
     if new_at is not None and new_at != old_at:
@@ -1357,6 +1383,16 @@ async def delete_followup(
         set_ops["follow_up_reminded_for"] = None
     await db.leads.update_one({"id": lead_id}, {"$set": set_ops})
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    # Restorable — the whole follow-up row goes into `before` so /activity-log
+    # /restore can $push it back into place if the operator changes their mind.
+    await log_event(
+        event_type="lead.followup.deleted", actor=user,
+        subject_type="lead", subject_id=lead_id, subject_label=fresh.get("name"),
+        before={"follow_up": entry, "prev_next_follow_up": lead.get("next_follow_up")},
+        office=fresh.get("office"),
+        note=f"Follow-up deleted ({entry.get('at', '')[:16].replace('T', ' ')})",
+        reversible=True,
+    )
     return fresh
 
 
@@ -1607,6 +1643,18 @@ async def bulk_upload(
 
     if created:
         await db.leads.insert_many([dict(d) for d in created])
+    # Log the bulk import for the CRM Activity feed.
+    if created:
+        created_ids = [c["id"] for c in created]
+        await log_event(
+            event_type="lead.bulk_upload", actor=user,
+            subject_type="lead", subject_label=f"{len(created)} leads",
+            after={"count": len(created), "campaign_id": campaign_id},
+            office=office,
+            note=f"Uploaded {len(created)} leads" + (f" to a campaign" if campaign_id else ""),
+            reversible=True,
+            extras={"lead_ids": created_ids, "campaign_id": campaign_id},
+        )
     # De-dupe unmatched names (case-insensitive) while preserving first spelling.
     seen: set = set()
     unmatched_unique: list[str] = []

@@ -18,7 +18,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns, admission_revenue
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns, admission_revenue, activity
 
 
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +51,7 @@ app.include_router(uploads.router)
 app.include_router(staff.router)
 app.include_router(campaigns.router)
 app.include_router(admission_revenue.router)
+app.include_router(activity.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])
@@ -230,6 +231,12 @@ async def startup() -> None:
         await _rl_indexes()
     except Exception:
         logger.exception("[rate_limit] index setup failed")
+    # Activity log TTL + query indexes (30-day retention).
+    try:
+        from lib.activity_log import ensure_indexes as _al_indexes
+        await _al_indexes()
+    except Exception:
+        logger.exception("[activity_log] index setup failed")
     # One-shot backfill: legacy invoices predate the invoice_type field.
     await db.invoices.update_many(
         {"invoice_type": {"$exists": False}},

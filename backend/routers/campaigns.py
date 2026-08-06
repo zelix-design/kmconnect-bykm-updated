@@ -224,16 +224,30 @@ async def delete_campaign(
     delete_leads: bool = Query(False, description="Also delete the campaign's leads"),
     user: dict = Depends(campaign_manager),
 ):
-    await _get_campaign(campaign_id, user)
+    campaign = await _get_campaign(campaign_id, user)
+    # Snapshot the leads we're about to purge so a restore can bring them
+    # back verbatim. Skip when we're only detaching (leads stay in DB).
+    purged_snapshot: list = []
     if delete_leads:
-        # Purge every lead attached to the campaign.
-        purged = await db.leads.delete_many({"campaign_id": campaign_id})
-        removed_leads = purged.deleted_count
+        purged_snapshot = await db.leads.find({"campaign_id": campaign_id}).to_list(50000)
+        for row in purged_snapshot:
+            row.pop("_id", None)
+        removed = await db.leads.delete_many({"campaign_id": campaign_id})
+        removed_leads = removed.deleted_count
     else:
-        # Legacy behaviour: keep the leads, just drop the campaign tag.
         await db.leads.update_many({"campaign_id": campaign_id}, {"$set": {"campaign_id": None}})
         removed_leads = 0
     await db.campaigns.delete_one({"id": campaign_id})
+    campaign.pop("_id", None)
+    await log_event(
+        event_type="campaign.deleted", actor=user,
+        subject_type="campaign", subject_id=campaign_id, subject_label=campaign.get("name"),
+        before={"campaign": campaign, "leads": purged_snapshot, "delete_leads": delete_leads},
+        office=campaign.get("office"),
+        note=f"Deleted campaign {campaign.get('name')}"
+             + (f" (+ {removed_leads} leads)" if removed_leads else ""),
+        reversible=True,
+    )
     return {"ok": True, "removed_leads": removed_leads}
 
 
@@ -263,8 +277,17 @@ async def bulk_delete_campaigns(
     if not visible:
         raise HTTPException(404, "No matching campaigns in your scope")
     visible_ids = [d["id"] for d in visible]
+    # Snapshot campaigns + optionally their leads so /activity-log/restore
+    # can bring them back.
+    snap_campaigns = await db.campaigns.find({"id": {"$in": visible_ids}}).to_list(len(visible_ids))
+    for c in snap_campaigns:
+        c.pop("_id", None)
+    snap_leads: list = []
     removed_leads = 0
     if payload.delete_leads:
+        snap_leads = await db.leads.find({"campaign_id": {"$in": visible_ids}}).to_list(50000)
+        for l in snap_leads:
+            l.pop("_id", None)
         purged = await db.leads.delete_many({"campaign_id": {"$in": visible_ids}})
         removed_leads = purged.deleted_count
     else:
@@ -273,10 +296,11 @@ async def bulk_delete_campaigns(
     await log_event(
         event_type="campaign.bulk_delete", actor=user,
         subject_type="campaign", subject_label=f"{res.deleted_count} campaigns",
+        before={"campaigns": snap_campaigns, "leads": snap_leads, "delete_leads": payload.delete_leads},
         note=f"Bulk deleted {res.deleted_count} campaigns"
              + (f" (+ {removed_leads} leads)" if removed_leads else ""),
-        extras={"campaign_ids": visible_ids, "delete_leads": payload.delete_leads,
-                "removed_leads": removed_leads},
+        extras={"campaign_ids": visible_ids, "removed_leads": removed_leads},
+        reversible=True,
     )
     return {"ok": True, "affected_ids": visible_ids, "count": res.deleted_count,
             "removed_leads": removed_leads}
