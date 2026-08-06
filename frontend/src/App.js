@@ -63,6 +63,7 @@ const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
 const USER_ONLY = Object.freeze(["user"]);
 const LEADS_ROLES = Object.freeze(["super_admin", "office_admin", "staff"]);
 const STAFF_ONLY = Object.freeze(["staff"]);
+const ADMIN_ROLES = Object.freeze(["super_admin", "office_admin"]);
 
 // Hostnames whose entire surface is just the public admission form. Comma-
 // separated env var, e.g. "apply.kmfoundation.online,admissions.example.com".
@@ -134,6 +135,7 @@ export default function App() {
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:id" element={<Messages />} />
             <Route path="/expense-requests" element={<PermGate page="expense_requests"><ExpenseRequests /></PermGate>} />
+            <Route path="/activity" element={<PermGate roles={ADMIN_ROLES}><Activity /></PermGate>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

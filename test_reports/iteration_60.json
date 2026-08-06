@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 60 — Activity Log & Restore page tested end-to-end. Backend: 7/7 pytest cases pass (admin gating for staff → 403, super_admin + office_admin list access, subject_type + reversible filters, and full lead.delete → restore round-trip with event marked restored + 409 on second restore + 404 on unknown event). Frontend: Super Admin sidebar nav-activity works, /activity route renders with all required testids (activity-page, activity-search, activity-refresh, activity-filter-{all,lead,campaign,followup,user}, activity-only-reversible). 26 events loaded; lead filter narrowed to 17; reversible-only narrowed to 8 rows / 5 restore buttons; restore click succeeded (toast shown, button removed for the row). Office Admin also sees the nav item and can open /activity (sees 0 rows because scoped by office/actor_office — no events tagged to KM_BLR yet; expected behavior of _scope()). Staff role gating was verified at the backend (403 on /api/activity-log).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration60_activity.py",
+    "/app/test_reports/pytest/iteration60.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Activity.jsx line 79 uses api.get('/activity-log?...') — relies on api client's baseURL /api. Confirmed working; no action.",
+    "Backend routers/activity.py — _scope() means office_admins only see events whose office/actor_office matches theirs. This is the desired security posture but be aware office admins may see an 'empty' log until their staff perform actions. Consider a friendlier empty-state hint mentioning this scope.",
+    "Follow-up client-side filter (Activity.jsx line 82-84): fetching subject_type=lead but only showing lead.followup.* means the user's chip narrows to fewer rows than actually returned — minor UX; acceptable.",
+    "restore() best-effort nav to /leads?lead=<id> is fine but there is no equivalent deep-link for campaign restore (result.campaign_id is never returned)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration60_activity.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "super=muneer@kmfoundation.co/kmf@0786, office=blr1@finflow.com/Office@123, staff=staff.blr@kmfoundation.online/Staff@123",
+  "seed_data_creation": "One AGENT_TEST_LEAD_* lead was created & deleted & restored & finally deleted by backend pytest — no residue.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Activity page + restore endpoint fully verified. Backend restore code paths covered: lead.deleted (round-trip). Other restore code paths (bulk_delete, bulk_upload, followup.deleted, followup.edited, campaign.deleted, campaign.bulk_delete) were NOT exercised end-to-end this iteration but were smoke-tested in iterations 55-59. Restore UI hides its button post-restore and shows toast (confirmed). Office-admin scope is intentionally strict; if UX around empty state needs improvement, that's a design tweak, not a bug.",
+  "rca of the issue": "N/A — no defects detected."
+}

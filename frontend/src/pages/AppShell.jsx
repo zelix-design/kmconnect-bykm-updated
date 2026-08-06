@@ -12,6 +12,7 @@ import {
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
   Target, IdentificationBadge, CalendarCheck, Handshake, UserCircle, CaretRight, FolderSimplePlus,
+  ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -43,6 +44,7 @@ const ALL_NAV = [
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
   { to: "/expense-requests", label: "Expense requests", icon: ReceiptX, tid: "nav-user-expenses", roles: ["user"], userRoleAllowed: true, perm: "expense_requests" },
   { to: "/users", label: "Team", icon: ShieldCheck, tid: "nav-users", roles: ["super_admin"] },
+  { to: "/activity", label: "Activity", icon: ClockCounterClockwise, tid: "nav-activity", roles: ["super_admin", "office_admin"] },
   { to: "/categories", label: "Categories", icon: Tag, tid: "nav-categories", roles: ["super_admin"] },
   { to: "/settings", label: "Settings", icon: Gear, tid: "nav-settings", perm: "settings", userRoleAllowed: true },
 ];
@@ -69,6 +71,7 @@ const PAGE_TITLES = {
   "/categories": "Categories",
   "/settings": "Settings",
   "/users": "Team & approvals",
+  "/activity": "Activity",
   "/expense-requests": "Expense requests",
 };
 
@@ -99,7 +102,7 @@ function buildSections(navItems, role) {
     { type: "items", items: pick(["/messages", "/clients", "/students"]) },
     { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(GROUP_ROUTES.office) },
     { type: "group", key: "details", label: "Add details", icon: FolderSimplePlus, items: pick(GROUP_ROUTES.details) },
-    { type: "items", items: pick(["/users", "/expense-requests", "/settings"]) },
+    { type: "items", items: pick(["/users", "/expense-requests", "/activity", "/settings"]) },
   ].filter((s) => s.items.length > 0);
 }
 
