@@ -25,6 +25,39 @@ log = logging.getLogger("auth")
 RESET_TOKEN_TTL_MINUTES = 30
 
 
+async def _resolve_user_photo_url(user: dict) -> str:
+    """Look up the current user's profile photo from the ``clients`` catalogue.
+
+    Priority:
+      1. Explicit link — ``users.linked_client_id`` (for role='user' accounts)
+      2. Staff self-profile — ``clients.login_user_id`` matches
+      3. Legacy fallback — a staff-type ``clients`` row owned by this user
+
+    Returns "" when no photo is on file (never raises).
+    """
+    photo: str = ""
+    try:
+        linked_id = user.get("linked_client_id")
+        if linked_id:
+            row = await db.clients.find_one({"id": linked_id}, {"_id": 0, "photo_url": 1})
+            photo = (row or {}).get("photo_url") or ""
+        if not photo:
+            row = await db.clients.find_one(
+                {"login_user_id": user["id"]}, {"_id": 0, "photo_url": 1}
+            )
+            photo = (row or {}).get("photo_url") or ""
+        if not photo:
+            row = await db.clients.find_one(
+                {"user_id": user["id"], "client_type": "staff"},
+                {"_id": 0, "photo_url": 1},
+            )
+            photo = (row or {}).get("photo_url") or ""
+    except Exception:  # noqa: BLE001 — photo is optional, never break auth
+        log.exception("[auth] photo_url lookup failed for user=%s", user.get("id"))
+        photo = ""
+    return photo
+
+
 @router.post("/register")
 async def register(payload: RegisterIn):
     """Office-admin self-registration. Account is created with approval_status='pending'
@@ -100,6 +133,7 @@ async def login(payload: LoginIn, response: Response):
         set_auth_cookie(response, token)
         user.pop("password_hash", None)
         user.pop("_id", None)
+        user["photo_url"] = await _resolve_user_photo_url(user)
         # Return the JWT in the body too, so cross-origin deployments (Vercel
         # frontend + Railway backend) where Chrome blocks third-party cookies
         # can fall back to Authorization: Bearer auth via localStorage.
@@ -123,6 +157,7 @@ async def logout(response: Response):
 
 @router.get("/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):
+    user["photo_url"] = await _resolve_user_photo_url(user)
     return user
 
 
@@ -132,6 +167,7 @@ async def update_settings(payload: SettingsUpdate, user: dict = Depends(require_
     if update:
         await db.users.update_one({"id": user["id"]}, {"$set": update})
     fresh = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    fresh["photo_url"] = await _resolve_user_photo_url(fresh)
     return fresh
 
 

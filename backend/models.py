@@ -80,6 +80,9 @@ class UserOut(BaseModel):
     # to filter the user's Students view and their SC-earned totals.
     linked_client_id: Optional[str] = None
     linked_client_name: Optional[str] = None
+    # Profile photo — resolved from the linked/own client row on read.
+    # Relative /api/files/... path (or empty string when no photo uploaded).
+    photo_url: Optional[str] = None
     created_at: str
 
 
