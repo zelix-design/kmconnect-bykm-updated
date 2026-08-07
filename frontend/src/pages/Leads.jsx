@@ -134,8 +134,8 @@ export default function Leads() {
 
           {crmTab === "overview" ? (
             <div className="space-y-5" data-testid="crm-overview">
-              <TodayVisitsPanel user={user} officeOverride={activeOffice} />
               <StaffPerformancePanel officeOverride={activeOffice} />
+              <TodayVisitsPanel user={user} officeOverride={activeOffice} />
               <CrmAnalytics office={activeOffice === "all" ? null : activeOffice} />
             </div>
           ) : crmTab === "campaigns" ? (
