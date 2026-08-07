@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { LEAD_STATUSES, LEAD_STATUS_META } from "./constants";
 import { Phone, GraduationCap } from "@phosphor-icons/react";
+import UserAvatar from "@/components/UserAvatar";
 
 export default function LeadsBoard({ leads, onCardClick, onStatusChange, editable }) {
   const [dragId, setDragId] = useState(null);
@@ -58,7 +59,12 @@ export default function LeadsBoard({ leads, onCardClick, onStatusChange, editabl
                   {l.course && <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {l.course}</p>}
                   <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                     {l.phone && <span className="flex items-center gap-1"><Phone size={11} /> {l.phone}</span>}
-                    {l.assigned_to_name && <span className="px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>}
+                    {l.assigned_to_name && (
+                      <span className="pl-0.5 pr-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
+                        <UserAvatar name={l.assigned_to_name} photoUrl={l.assigned_to_photo_url} size="xs" />
+                        {l.assigned_to_name}
+                      </span>
+                    )}
                     {l.is_missed && <span className="text-rose-500 font-medium">Missed</span>}
                   </div>
                 </div>

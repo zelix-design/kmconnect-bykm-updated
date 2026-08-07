@@ -27,6 +27,7 @@ from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR, WORK_END_HOUR
 from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
 from lib.activity_log import log_event
+from lib.user_photo import resolve_photos_for_users
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -425,13 +426,16 @@ async def list_leads(
     if view == "missed":
         docs = [d for d in docs if d["is_missed"]]
 
-    # Enrich assignee names for the UI (single round-trip)
+    # Enrich assignee names + photos for the UI (bulk lookups keep this O(1))
     ids = list({d.get("assigned_to_user_id") for d in docs if d.get("assigned_to_user_id")})
     if ids:
         users = await db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
         umap = {u["id"]: u.get("name") for u in users}
+        photo_map = await resolve_photos_for_users(ids)
         for d in docs:
-            d["assigned_to_name"] = umap.get(d.get("assigned_to_user_id"))
+            uid = d.get("assigned_to_user_id")
+            d["assigned_to_name"] = umap.get(uid)
+            d["assigned_to_photo_url"] = photo_map.get(uid) or ""
     return docs
 
 
@@ -469,6 +473,8 @@ async def assign_lead_campaign(
     if fresh.get("assigned_to_user_id"):
         u = await db.users.find_one({"id": fresh["assigned_to_user_id"]}, {"_id": 0, "name": 1})
         fresh["assigned_to_name"] = u.get("name") if u else None
+        photo_map = await resolve_photos_for_users([fresh["assigned_to_user_id"]])
+        fresh["assigned_to_photo_url"] = photo_map.get(fresh["assigned_to_user_id"]) or ""
     return fresh
 
 

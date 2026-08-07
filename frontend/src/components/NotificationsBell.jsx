@@ -13,6 +13,7 @@ import {
   Bell, Check, ReceiptX, Receipt, GraduationCap, Trash, BellSlash, BellRinging,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import UserAvatar from "@/components/UserAvatar";
 
 const TYPE_ICON = {
   expense_request: { icon: ReceiptX, palette: "bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400" },
@@ -202,8 +203,18 @@ export default function NotificationsBell() {
                       n.read ? "" : "bg-orange-500/5 dark:bg-orange-500/10"
                     }`}
                   >
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.palette}`}>
+                    <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${meta.palette}`}>
                       <Icon size={16} weight="duotone" />
+                      {n.actor_photo_url && (
+                        <span className="absolute -bottom-1 -right-1 rounded-full ring-2 ring-card">
+                          <UserAvatar
+                            name={n.actor_name}
+                            photoUrl={n.actor_photo_url}
+                            size="xs"
+                            testid={`notification-actor-${n.id}`}
+                          />
+                        </span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-2">

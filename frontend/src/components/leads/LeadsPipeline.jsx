@@ -18,6 +18,7 @@ import LeadDetailDialog from "./LeadDetailDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import LeadsBoard from "./LeadsBoard";
 import LeadsBulkActionBar from "./LeadsBulkActionBar";
+import UserAvatar from "@/components/UserAvatar";
 
 function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }) {
   const tones = {
@@ -376,7 +377,12 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
                       <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{sourceLabel(l.source)}</span>
-                      {l.assigned_to_name && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{l.assigned_to_name}</span>}
+                      {l.assigned_to_name && (
+                        <span className="pl-0.5 pr-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
+                          <UserAvatar name={l.assigned_to_name} photoUrl={l.assigned_to_photo_url} size="xs" />
+                          {l.assigned_to_name}
+                        </span>
+                      )}
                       {allLeadsMode && (
                         <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
                           {l.campaign_id ? (campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}

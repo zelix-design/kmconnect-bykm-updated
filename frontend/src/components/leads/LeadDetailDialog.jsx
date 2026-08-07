@@ -18,6 +18,7 @@ import InterestedDialog from "./InterestedDialog";
 import ConvertDialog from "./ConvertDialog";
 import LeadJourney from "./LeadJourney";
 import LeadAttachments from "./LeadAttachments";
+import UserAvatar from "@/components/UserAvatar";
 
 function InfoRow({ icon: Icon, children }) {
   if (!children) return null;
@@ -189,7 +190,12 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="px-2 py-0.5 rounded-full bg-muted">{sourceLabel(local.source)}</span>
-            {local.assigned_to_name && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300">{local.assigned_to_name}</span>}
+            {local.assigned_to_name && (
+              <span className="pl-0.5 pr-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
+                <UserAvatar name={local.assigned_to_name} photoUrl={local.assigned_to_photo_url} size="xs" />
+                {local.assigned_to_name}
+              </span>
+            )}
             {local.next_follow_up && (
               <span className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${local.is_missed ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`}>
                 <ClockCountdown size={12} /> {fmtDateTime(local.next_follow_up)}{local.is_missed ? " · Missed" : ""}

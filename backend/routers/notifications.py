@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso
 from lib.push import send_push_to_users
+from lib.user_photo import resolve_photos_for_users
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -42,6 +43,7 @@ async def _bulk_persist_and_push(
             "message": message,
             "link": link,
             "metadata": metadata or {},
+            "actor_user_id": actor_user_id,
             "read": False,
             "created_at": now,
         }
@@ -107,12 +109,19 @@ async def list_notifications(
     q: dict = {"recipient_user_id": user["id"]}
     if unread_only:
         q["read"] = False
-    return await (
+    rows = await (
         db.notifications.find(q, {"_id": 0})
         .sort("created_at", -1)
         .limit(max(1, min(limit, 200)))
         .to_list(200)
     )
+    # Enrich with the actor's profile photo so the bell UI can show a real
+    # avatar next to each item (falls back to initials when no photo).
+    actor_ids = [r.get("actor_user_id") for r in rows if r.get("actor_user_id")]
+    photos = await resolve_photos_for_users(actor_ids) if actor_ids else {}
+    for r in rows:
+        r["actor_photo_url"] = photos.get(r.get("actor_user_id")) or ""
+    return rows
 
 
 @router.get("/unread-count")
