@@ -500,6 +500,153 @@ async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Option
     return {"total": len(docs), "by_status": by_status, "missed": missed}
 
 
+@router.get("/staff-performance")
+async def staff_performance(
+    user: dict = Depends(get_current_user),
+    window: str = "today",
+):
+    """Daily/weekly/monthly staff performance for the CRM Overview.
+
+    Returns one row per staff/office_admin in the caller's scope, showing:
+      • ``touched`` — count of leads worked on inside the window (updated_at gte)
+      • ``by_status`` — those touched leads grouped by their current status
+      • ``follow_ups`` — count of touched leads with a scheduled follow-up
+      • ``missed`` — count of touched leads whose follow-up is overdue
+
+    Scope rules:
+      • super_admin → every approved staff + office_admin
+      • office_admin → same, restricted to their office
+      • staff / others → 403 (staff can already see their own stats via /leads/stats)
+    """
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    if window not in ("today", "week", "month"):
+        raise HTTPException(400, "window must be today|week|month")
+
+    now = datetime.now(timezone.utc)
+    if window == "today":
+        # Rolling last 24h so early-morning viewers still see yesterday
+        # afternoon activity — matches operator expectation better than
+        # a hard midnight-UTC cutoff.
+        start = now - timedelta(hours=24)
+    elif window == "week":
+        start = now - timedelta(days=7)
+    else:
+        start = now - timedelta(days=30)
+    start_iso = start.isoformat()
+
+    user_q: dict = {
+        "role": {"$in": ["staff", "office_admin"]},
+        "approval_status": "approved",
+    }
+    if user.get("role") == "office_admin":
+        user_q["office"] = user.get("office")
+    users = await db.users.find(
+        user_q,
+        {"_id": 0, "id": 1, "name": 1, "role": 1, "office": 1},
+    ).sort("name", 1).to_list(500)
+    if not users:
+        return {"window": window, "range": {"start": start_iso, "end": now.isoformat()}, "staff": []}
+
+    ids = [u["id"] for u in users]
+
+    # Batch aggregate touched-leads grouped by (user, status)
+    pipeline = [
+        {"$match": {"assigned_to_user_id": {"$in": ids}, "updated_at": {"$gte": start_iso}}},
+        {"$group": {
+            "_id": {"user": "$assigned_to_user_id", "status": "$status"},
+            "n": {"$sum": 1},
+        }},
+    ]
+    agg_rows = await db.leads.aggregate(pipeline).to_list(len(ids) * len(LEAD_STATUSES) + 10)
+
+    # Missed = touched + status in OPEN_STATUSES + next_follow_up < now
+    # We still need to pull per-lead next_follow_up so use one extra query.
+    missed_docs = await db.leads.find(
+        {"assigned_to_user_id": {"$in": ids}, "updated_at": {"$gte": start_iso},
+         "status": {"$in": list(OPEN_STATUSES)}, "next_follow_up": {"$ne": None}},
+        {"_id": 0, "assigned_to_user_id": 1, "next_follow_up": 1},
+    ).to_list(50000)
+    missed_map: dict[str, int] = {}
+    followup_map: dict[str, int] = {}
+    for d in missed_docs:
+        uid = d.get("assigned_to_user_id")
+        if not uid:
+            continue
+        followup_map[uid] = followup_map.get(uid, 0) + 1
+        if _is_missed(d, now):
+            missed_map[uid] = missed_map.get(uid, 0) + 1
+
+    # Batch photo lookups
+    photos = await resolve_photos_for_users(ids)
+
+    by_user: dict[str, dict] = {
+        u["id"]: {
+            "user_id": u["id"],
+            "name": u["name"],
+            "role": u["role"],
+            "office": u.get("office"),
+            "photo_url": photos.get(u["id"]) or "",
+            "touched": 0,
+            "by_status": {s: 0 for s in LEAD_STATUSES},
+            "follow_ups": followup_map.get(u["id"], 0),
+            "missed": missed_map.get(u["id"], 0),
+        } for u in users
+    }
+    for row in agg_rows:
+        uid = row["_id"]["user"]
+        st = row["_id"]["status"]
+        n = row["n"]
+        if uid not in by_user or st not in by_user[uid]["by_status"]:
+            continue
+        by_user[uid]["by_status"][st] += n
+        by_user[uid]["touched"] += n
+
+    staff = sorted(by_user.values(), key=lambda r: (-r["touched"], r["name"].lower()))
+    return {
+        "window": window,
+        "range": {"start": start_iso, "end": now.isoformat()},
+        "staff": staff,
+    }
+
+
+@router.get("/staff-performance/{user_id}")
+async def staff_performance_leads(
+    user_id: str,
+    user: dict = Depends(get_current_user),
+    window: str = "today",
+    limit: int = 100,
+):
+    """Drill-down: individual leads a specific staff touched in the window."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    if window not in ("today", "week", "month"):
+        raise HTTPException(400, "window must be today|week|month")
+    target = await db.users.find_one(
+        {"id": user_id}, {"_id": 0, "id": 1, "office": 1, "role": 1},
+    )
+    if not target:
+        raise HTTPException(404, "Staff not found")
+    if user.get("role") == "office_admin" and target.get("office") != user.get("office"):
+        raise HTTPException(403, "Out of scope")
+
+    now = datetime.now(timezone.utc)
+    if window == "today":
+        start = now - timedelta(hours=24)
+    elif window == "week":
+        start = now - timedelta(days=7)
+    else:
+        start = now - timedelta(days=30)
+
+    docs = await db.leads.find(
+        {"assigned_to_user_id": user_id, "updated_at": {"$gte": start.isoformat()}},
+        {"_id": 0, "id": 1, "name": 1, "phone": 1, "status": 1, "next_follow_up": 1,
+         "updated_at": 1, "campaign_id": 1, "office": 1},
+    ).sort("updated_at", -1).limit(max(1, min(limit, 500))).to_list(500)
+    return {"user_id": user_id, "window": window, "leads": docs, "total": len(docs)}
+
+
+
 @router.get("/next-followup-slot")
 async def next_followup_slot(
     user: dict = Depends(get_current_user),

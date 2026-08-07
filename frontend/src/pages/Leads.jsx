@@ -7,6 +7,7 @@ import CampaignsPanel from "@/components/leads/CampaignsPanel";
 import LeadsPipeline from "@/components/leads/LeadsPipeline";
 import TodayVisitsPanel from "@/components/leads/TodayVisitsPanel";
 import LeadDetailDialog from "@/components/leads/LeadDetailDialog";
+import StaffPerformancePanel from "@/components/leads/StaffPerformancePanel";
 
 export default function Leads() {
   const { user } = useAuth();
@@ -92,6 +93,7 @@ export default function Leads() {
           {crmTab === "overview" ? (
             <div className="space-y-5" data-testid="crm-overview">
               <TodayVisitsPanel user={user} />
+              <StaffPerformancePanel />
               <CrmAnalytics />
             </div>
           ) : crmTab === "campaigns" ? (
