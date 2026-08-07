@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/campaigns", tags=["campaigns"])
 
 TAG_TYPES = ("course", "place", "source")
 DISTRIBUTE_METHODS = ("equal", "count", "percentage")
+CAMPAIGN_STATUSES = ("draft", "active", "paused", "completed")
 
 
 class CampaignIn(BaseModel):
@@ -36,6 +37,14 @@ class CampaignIn(BaseModel):
     tag_type: Optional[str] = None      # course | place | source | None
     tag_value: Optional[str] = ""
     office: Optional[OfficeCode] = None  # required for super_admin
+    # 3-step wizard extensions (all optional so existing callers still work)
+    status: Optional[str] = "draft"                     # draft | active | paused | completed
+    source_type: Optional[str] = None                   # walk_in / referral / social / …
+    start_date: Optional[str] = None                    # ISO date (YYYY-MM-DD)
+    end_date: Optional[str] = None
+    owner_user_id: Optional[str] = None                 # any admin (super_admin or office_admin)
+    distribute_method: Optional[str] = None             # equal | count | percentage
+    distribute_employee_ids: Optional[List[str]] = None  # persisted plan for drafts
 
 
 class CampaignUpdate(BaseModel):
@@ -43,6 +52,13 @@ class CampaignUpdate(BaseModel):
     description: Optional[str] = None
     tag_type: Optional[str] = None
     tag_value: Optional[str] = None
+    status: Optional[str] = None
+    source_type: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    owner_user_id: Optional[str] = None
+    distribute_method: Optional[str] = None
+    distribute_employee_ids: Optional[List[str]] = None
 
 
 class LeadRowIn(BaseModel):
@@ -139,6 +155,25 @@ async def create_campaign(payload: CampaignIn, user: dict = Depends(campaign_man
             raise HTTPException(400, "Select a target office for the campaign")
         office = payload.office
     tag_type = payload.tag_type if payload.tag_type in TAG_TYPES else None
+    status = payload.status if payload.status in CAMPAIGN_STATUSES else "draft"
+    source_type = (payload.source_type or "").strip() or None
+    if source_type and source_type not in LEAD_SOURCES:
+        # Accept freetext but nudge unknown values to "other" so downstream
+        # filters that expect a LEAD_SOURCES member don't blow up.
+        source_type = "other"
+    # Owner must be an approved admin if provided (defense-in-depth — the UI
+    # already restricts the dropdown to super_admin / office_admin).
+    owner_user_id: Optional[str] = None
+    if payload.owner_user_id:
+        owner = await db.users.find_one(
+            {"id": payload.owner_user_id, "approval_status": "approved",
+             "role": {"$in": ["super_admin", "office_admin"]}},
+            {"_id": 0, "id": 1},
+        )
+        if not owner:
+            raise HTTPException(400, "Owner must be an approved admin")
+        owner_user_id = owner["id"]
+    distribute_method = payload.distribute_method if payload.distribute_method in DISTRIBUTE_METHODS else None
     doc = {
         "id": gen_id(),
         "name": payload.name.strip(),
@@ -146,6 +181,13 @@ async def create_campaign(payload: CampaignIn, user: dict = Depends(campaign_man
         "tag_type": tag_type,
         "tag_value": (payload.tag_value or "").strip() if tag_type else "",
         "office": office,
+        "status": status,
+        "source_type": source_type,
+        "start_date": (payload.start_date or "").strip() or None,
+        "end_date": (payload.end_date or "").strip() or None,
+        "owner_user_id": owner_user_id,
+        "distribute_method": distribute_method,
+        "distribute_employee_ids": payload.distribute_employee_ids or [],
         "created_by_user_id": user["id"],
         "created_at": now_iso(),
         "updated_at": now_iso(),
@@ -211,6 +253,36 @@ async def update_campaign(campaign_id: str, payload: CampaignUpdate, user: dict 
             patch["tag_value"] = ""
     if "tag_value" in data:
         patch["tag_value"] = str(data["tag_value"] or "").strip()
+    if "status" in data:
+        v = data["status"]
+        if v in CAMPAIGN_STATUSES:
+            patch["status"] = v
+    if "source_type" in data:
+        v = (data["source_type"] or "").strip() or None
+        if v and v not in LEAD_SOURCES:
+            v = "other"
+        patch["source_type"] = v
+    for k in ("start_date", "end_date"):
+        if k in data:
+            patch[k] = (data[k] or "").strip() or None
+    if "owner_user_id" in data:
+        v = data["owner_user_id"]
+        if v:
+            owner = await db.users.find_one(
+                {"id": v, "approval_status": "approved",
+                 "role": {"$in": ["super_admin", "office_admin"]}},
+                {"_id": 0, "id": 1},
+            )
+            if not owner:
+                raise HTTPException(400, "Owner must be an approved admin")
+            patch["owner_user_id"] = owner["id"]
+        else:
+            patch["owner_user_id"] = None
+    if "distribute_method" in data:
+        v = data["distribute_method"]
+        patch["distribute_method"] = v if v in DISTRIBUTE_METHODS else None
+    if "distribute_employee_ids" in data:
+        patch["distribute_employee_ids"] = list(data["distribute_employee_ids"] or [])
     if patch:
         patch["updated_at"] = now_iso()
         await db.campaigns.update_one({"id": campaign_id}, {"$set": patch})

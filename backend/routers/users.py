@@ -89,6 +89,21 @@ async def list_assignable(user: dict = Depends(get_current_user)):
     return docs
 
 
+@router.get("/admins")
+async def list_admins(user: dict = Depends(get_current_user)):
+    """Every approved super_admin + office_admin — used as the "Owner" picker
+    in the Create Campaign wizard. Only admins (super_admin / office_admin) can
+    call this since only admins can create campaigns."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Not allowed")
+    docs = await db.users.find(
+        {"role": {"$in": ["super_admin", "office_admin"]},
+         "approval_status": "approved", **_active_filter()},
+        {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "office": 1},
+    ).sort("name", 1).to_list(500)
+    return docs
+
+
 @router.get("/me/ledger")
 async def my_ledger(user: dict = Depends(get_current_user)):
     """Combined credit/debit ledger for a linked sub-agent / associate
