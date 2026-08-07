@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -301,6 +301,7 @@ export default function Messages() {
   const { user } = useAuth();
   const { id: routeId } = useParams();
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [folder, setFolder] = useState("inbox");
   const [kindFilter, setKindFilter] = useState("all");
   const [items, setItems] = useState([]);
@@ -308,6 +309,18 @@ export default function Messages() {
   const [search, setSearch] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [bumper, setBumper] = useState(0);
+
+  // Deep-link support: /messages?compose=1 auto-opens the composer. Used by
+  // the Staff dashboard's "Reminder to office admin" quick action so the flow
+  // happens inside the Messages page (in-context reply-all + threading UX).
+  useEffect(() => {
+    if (searchParams.get("compose") === "1") {
+      setComposeOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("compose");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const load = async () => {
     setLoading(true);
@@ -338,7 +351,8 @@ export default function Messages() {
 
   const canCompose = user?.role === "super_admin"
     || user?.role === "office_admin"
-    || user?.role === "user";
+    || user?.role === "user"
+    || user?.role === "staff";
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="messages-page">

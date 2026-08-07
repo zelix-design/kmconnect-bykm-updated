@@ -11,7 +11,6 @@ import {
   Copy, ShareNetwork, ArrowRight, Student as StudentIcon,
 } from "@phosphor-icons/react";
 import LeaveRequestDialog from "@/components/leave/LeaveRequestDialog";
-import ComposeMessageDialog from "@/components/messages/ComposeMessageDialog";
 
 function StatTile({ icon: Icon, label, value, tone, onClick, testid, ariaLabel }) {
   const tones = {
@@ -94,7 +93,6 @@ export default function StaffDashboard() {
   const [referrals, setReferrals] = useState([]);
   const [leaveStats, setLeaveStats] = useState({ pending_mine: 0 });
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const [composeOpen, setComposeOpen] = useState(false);
 
   const refreshLeave = () => api.get("/leave/stats").then(({ data }) => setLeaveStats(data)).catch(() => {});
 
@@ -144,7 +142,7 @@ export default function StaffDashboard() {
           <ActionButton icon={CalendarCheck} label="Request leave" sub="Casual / sick / earned / unpaid" testid="staff-action-leave"
             onClick={() => setLeaveOpen(true)} />
           <ActionButton icon={PaperPlaneTilt} label="Reminder to office admin" sub="Send a quick message" testid="staff-action-reminder"
-            onClick={() => setComposeOpen(true)} />
+            onClick={() => nav("/messages?compose=1")} />
         </div>
       </div>
 
@@ -210,7 +208,6 @@ export default function StaffDashboard() {
       </div>
 
       <LeaveRequestDialog open={leaveOpen} onOpenChange={setLeaveOpen} onSubmitted={refreshLeave} />
-      <ComposeMessageDialog open={composeOpen} onOpenChange={setComposeOpen} />
     </div>
   );
 }
