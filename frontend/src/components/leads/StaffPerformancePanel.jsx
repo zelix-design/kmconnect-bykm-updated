@@ -34,10 +34,15 @@ import {
 } from "@phosphor-icons/react";
 
 const WINDOWS = [
+  ["live", "Live"],
   ["today", "Today"],
   ["week", "This week"],
   ["month", "This month"],
 ];
+
+// "Live" polls every 15s so the operator can watch activity roll in in
+// near-real-time; the historical windows only need a gentle 60s refresh.
+const REFRESH_MS = { live: 15_000, today: 60_000, week: 60_000, month: 60_000 };
 
 // Ordered subset that dominates most pipelines — the segmented bar shows
 // these in this order for a consistent visual footprint. Statuses NOT here
@@ -86,7 +91,7 @@ function StatusBar({ byStatus, total }) {
   );
 }
 
-function TouchedLeadsDialog({ open, onOpenChange, staff, window }) {
+function TouchedLeadsDialog({ open, onOpenChange, staff, window: winProp }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -94,7 +99,7 @@ function TouchedLeadsDialog({ open, onOpenChange, staff, window }) {
     let cancel = false;
     setLoading(true);
     api
-      .get(`/leads/staff-performance/${staff.user_id}`, { params: { window } })
+      .get(`/leads/staff-performance/${staff.user_id}`, { params: { window: winProp } })
       .then(({ data }) => {
         if (cancel) return;
         setRows(data?.leads || []);
@@ -102,7 +107,7 @@ function TouchedLeadsDialog({ open, onOpenChange, staff, window }) {
       .catch(() => { if (!cancel) setRows([]); })
       .finally(() => { if (!cancel) setLoading(false); });
     return () => { cancel = true; };
-  }, [open, staff?.user_id, window]);
+  }, [open, staff?.user_id, winProp]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -112,7 +117,7 @@ function TouchedLeadsDialog({ open, onOpenChange, staff, window }) {
             <UserAvatar name={staff?.name} photoUrl={staff?.photo_url} size="md" />
             {staff?.name}
             <Badge className="bg-muted text-muted-foreground border-transparent ml-1">
-              {WINDOWS.find((w) => w[0] === window)?.[1]}
+              {WINDOWS.find((w) => w[0] === winProp)?.[1]}
             </Badge>
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
@@ -156,8 +161,8 @@ function TouchedLeadsDialog({ open, onOpenChange, staff, window }) {
   );
 }
 
-export default function StaffPerformancePanel() {
-  const [window, setWindow] = useState("today");
+export default function StaffPerformancePanel({ officeOverride = "all" }) {
+  const [window, setWindow] = useState("live");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshedAt, setRefreshedAt] = useState(null);
@@ -166,7 +171,11 @@ export default function StaffPerformancePanel() {
   const load = useCallback(async (opts = {}) => {
     if (!opts.silent) setLoading(true);
     try {
-      const { data } = await api.get("/leads/staff-performance", { params: { window } });
+      const params = { window };
+      if (officeOverride && officeOverride !== "all") {
+        params.office = officeOverride;
+      }
+      const { data } = await api.get("/leads/staff-performance", { params });
       setRows(data?.staff || []);
       setRefreshedAt(new Date());
     } catch {
@@ -174,14 +183,19 @@ export default function StaffPerformancePanel() {
     } finally {
       if (!opts.silent) setLoading(false);
     }
-  }, [window]);
+  }, [window, officeOverride]);
 
   useEffect(() => {
     load();
-    const t = setInterval(() => load({ silent: true }), 30_000);
+    const ms = REFRESH_MS[window] || 60_000;
+    const t = setInterval(() => load({ silent: true }), ms);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, window]);
 
+  const refreshMs = REFRESH_MS[window] || 60_000;
+  const refreshLabel = refreshMs >= 60_000
+    ? `every ${Math.round(refreshMs / 1000)}s`
+    : `every ${Math.round(refreshMs / 1000)}s`;
   const anyTouched = rows.some((r) => r.touched > 0);
 
   return (
@@ -197,29 +211,38 @@ export default function StaffPerformancePanel() {
           <div>
             <h3 className="font-display text-base sm:text-lg font-semibold leading-tight">Staff performance</h3>
             <p className="text-[11px] text-muted-foreground">
-              Live · leads touched &amp; status by staff
+              Live · auto-refresh {refreshLabel}
               {refreshedAt && (
-                <> · refreshed {refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
+                <> · updated {refreshedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
               )}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5 self-start sm:self-auto" data-testid="perf-window-chips">
-          {WINDOWS.map(([v, label]) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setWindow(v)}
-              data-testid={`perf-window-${v}`}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                window === v
-                  ? "bg-card text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          {WINDOWS.map(([v, label]) => {
+            const active = window === v;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setWindow(v)}
+                data-testid={`perf-window-${v}`}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 ${
+                  active
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v === "live" && (
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-500 animate-pulse" : "bg-emerald-500/40"}`}
+                    data-testid="perf-live-dot"
+                  />
+                )}
+                {label}
+              </button>
+            );
+          })}
         </div>
       </div>
 

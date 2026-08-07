@@ -387,6 +387,17 @@ async def _schedule_visit(lead: dict, visit_in: VisitIn, user: dict) -> tuple[di
 
 
 # ---------- list / stats ----------
+SUPER_ADMIN_OFFICES = ("KM_BLR", "KM_TCR", "KM_KMLY")
+
+
+def _apply_office_override(user: dict, base: dict, office: Optional[str]) -> dict:
+    """Super admin can narrow their view to a single office via `?office=`;
+    everyone else has hard scope enforced by _scope_filter() already."""
+    if user.get("role") == "super_admin" and office in SUPER_ADMIN_OFFICES:
+        return {**base, "office": office}
+    return base
+
+
 @router.get("")
 async def list_leads(
     user: dict = Depends(get_current_user),
@@ -397,10 +408,11 @@ async def list_leads(
     uncategorized: Optional[bool] = None,
     q: Optional[str] = None,
     view: Optional[str] = None,  # "missed" | "today" | None
+    office: Optional[str] = None,  # super_admin only — narrow to one office
 ):
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
-    query = _scope_filter(user)
+    query = _apply_office_override(user, _scope_filter(user), office)
     if status and status in LEAD_STATUSES:
         query["status"] = status
     if assigned_to:
@@ -479,10 +491,15 @@ async def assign_lead_campaign(
 
 
 @router.get("/stats")
-async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Optional[str] = None, uncategorized: Optional[bool] = None):
+async def lead_stats(
+    user: dict = Depends(get_current_user),
+    campaign_id: Optional[str] = None,
+    uncategorized: Optional[bool] = None,
+    office: Optional[str] = None,
+):
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
-    scope = _scope_filter(user)
+    scope = _apply_office_override(user, _scope_filter(user), office)
     if campaign_id:
         scope = {**scope, "campaign_id": campaign_id}
     if uncategorized:
@@ -504,6 +521,7 @@ async def lead_stats(user: dict = Depends(get_current_user), campaign_id: Option
 async def staff_performance(
     user: dict = Depends(get_current_user),
     window: str = "today",
+    office: Optional[str] = None,
 ):
     """Daily/weekly/monthly staff performance for the CRM Overview.
 
@@ -514,17 +532,21 @@ async def staff_performance(
       • ``missed`` — count of touched leads whose follow-up is overdue
 
     Scope rules:
-      • super_admin → every approved staff + office_admin
-      • office_admin → same, restricted to their office
+      • super_admin → every approved staff + office_admin (optionally narrowed
+        to a single ``?office=KM_BLR|KM_TCR|KM_KMLY``)
+      • office_admin → same, restricted to their office (``?office=`` ignored)
       • staff / others → 403 (staff can already see their own stats via /leads/stats)
     """
     if user.get("role") not in ("super_admin", "office_admin"):
         raise HTTPException(403, "Not allowed")
-    if window not in ("today", "week", "month"):
-        raise HTTPException(400, "window must be today|week|month")
+    if window not in ("live", "today", "week", "month"):
+        raise HTTPException(400, "window must be live|today|week|month")
 
     now = datetime.now(timezone.utc)
-    if window == "today":
+    if window == "live":
+        # Rolling 60-minute window — the "Live" tab feels near-real-time.
+        start = now - timedelta(minutes=60)
+    elif window == "today":
         # Rolling last 24h so early-morning viewers still see yesterday
         # afternoon activity — matches operator expectation better than
         # a hard midnight-UTC cutoff.
@@ -541,6 +563,8 @@ async def staff_performance(
     }
     if user.get("role") == "office_admin":
         user_q["office"] = user.get("office")
+    elif user.get("role") == "super_admin" and office in SUPER_ADMIN_OFFICES:
+        user_q["office"] = office
     users = await db.users.find(
         user_q,
         {"_id": 0, "id": 1, "name": 1, "role": 1, "office": 1},
@@ -620,8 +644,8 @@ async def staff_performance_leads(
     """Drill-down: individual leads a specific staff touched in the window."""
     if user.get("role") not in ("super_admin", "office_admin"):
         raise HTTPException(403, "Not allowed")
-    if window not in ("today", "week", "month"):
-        raise HTTPException(400, "window must be today|week|month")
+    if window not in ("live", "today", "week", "month"):
+        raise HTTPException(400, "window must be live|today|week|month")
     target = await db.users.find_one(
         {"id": user_id}, {"_id": 0, "id": 1, "office": 1, "role": 1},
     )
@@ -631,7 +655,9 @@ async def staff_performance_leads(
         raise HTTPException(403, "Out of scope")
 
     now = datetime.now(timezone.utc)
-    if window == "today":
+    if window == "live":
+        start = now - timedelta(minutes=60)
+    elif window == "today":
         start = now - timedelta(hours=24)
     elif window == "week":
         start = now - timedelta(days=7)
@@ -1191,7 +1217,10 @@ async def resend_application_link(lead_id: str, user: dict = Depends(require_edi
 
 
 @router.get("/visits/today")
-async def visits_today(user: dict = Depends(get_current_user)):
+async def visits_today(
+    user: dict = Depends(get_current_user),
+    office: Optional[str] = None,
+):
     """Live 'today's campus visits' board for the CRM Overview.
 
     Time-window semantics (per user request):
@@ -1204,12 +1233,13 @@ async def visits_today(user: dict = Depends(get_current_user)):
         timestamp (or the anchor + 1 day if arrival is unset).
 
     Scope: staff → own leads only, office_admin → own office, super_admin →
-    everything. Sorted live-first, then preview, both by departure asc.
+    everything (optionally narrowed with ``?office=KM_BLR|KM_TCR|KM_KMLY``).
+    Sorted live-first, then preview, both by departure asc.
     """
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
     now_dt = datetime.now(timezone.utc)
-    scope = _scope_filter(user)
+    scope = _apply_office_override(user, _scope_filter(user), office)
     scope["visit"] = {"$ne": None}
     docs = await db.leads.find(
         scope,

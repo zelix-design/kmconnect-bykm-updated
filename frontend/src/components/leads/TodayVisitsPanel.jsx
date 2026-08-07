@@ -13,7 +13,7 @@ import { VISIT_STATUS_META, fmtDateTime } from "./constants";
  *
  * Backed by `GET /api/leads/visits/today` (scope handled server-side).
  */
-export default function TodayVisitsPanel({ user }) {
+export default function TodayVisitsPanel({ user, officeOverride = "all" }) {
   const nav = useNavigate();
   const [visits, setVisits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,9 @@ export default function TodayVisitsPanel({ user }) {
   const fetchVisits = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/leads/visits/today");
+      const params = {};
+      if (officeOverride && officeOverride !== "all") params.office = officeOverride;
+      const { data } = await api.get("/leads/visits/today", { params });
       setVisits(data.visits || []);
       setDate(data.date || "");
     } catch (_) {
@@ -30,7 +32,7 @@ export default function TodayVisitsPanel({ user }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [officeOverride]);
 
   useEffect(() => { fetchVisits(); }, [fetchVisits]);
   // Auto-refresh every 60s so the "Live" label stays honest — but pause

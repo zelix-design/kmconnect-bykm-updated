@@ -1363,3 +1363,19 @@ admissions per year. It's confidential — only super admin can see it."
 **Minor polish backlog (from code review, non-blockers)**
 - Office admin sees empty log until their office's staff perform actions — friendlier empty-state hint would help.
 - Restore result payload doesn't return `campaign_id`, so campaign-restore deep-link is missing (currently only lead-restore deep-links to `/leads?lead=<id>`).
+
+
+## Implementation status — 2026-08-07 (iteration 61: Office switcher + Live tab)
+
+**Requested changes (verbatim)**:
+1. "Super Admin dashboard can switch the office and monitor this Switch office (KM BLR, KM TCR, KM KMLY) place the switch behind the heading CRM & Description"
+2. "Today | This Week | This Month I add here 1 more tab 'Live' and show the above live details"
+3. "Change Staff Perfomance today live update can auto refresh in 60 seconds interval of time"
+
+**Implementation**
+- Backend (`routers/leads.py`): `_apply_office_override()` helper — `?office=KM_BLR|KM_TCR|KM_KMLY` honoured only for super_admin, silently ignored for office_admin/staff (verified via curl). Applied to `/leads`, `/leads/stats`, `/leads/visits/today`, `/leads/staff-performance`, `/leads/staff-performance/{user_id}`. Extended `window="live"` on staff-performance = rolling last 60 minutes.
+- Frontend (`pages/Leads.jsx`): Office switcher chip group next to the CRM heading (super_admin only, persisted in `localStorage["crm.office_override"]`). `activeOffice` piped into `TodayVisitsPanel`, `StaffPerformancePanel`, `CrmAnalytics`, `LeadsPipeline`.
+- Frontend (`StaffPerformancePanel`): Added `Live` as first + default window chip with an emerald pulsing dot when active. Dynamic refresh cadence: 15s in Live, 60s otherwise. Subtitle now reads "Live · auto-refresh every 15s · updated HH:mm".
+- Data-testids: `crm-office-switcher`, `crm-office-{all|KM_BLR|KM_TCR|KM_KMLY}`, `perf-window-live`, `perf-live-dot`.
+- Verified via curl: `?office=KM_BLR` returned 37 KM_BLR-scoped leads for super_admin; office_admin BLR + `?office=KM_TCR` still returned only KM_BLR (security preserved). `?window=live` returned a 60-minute range.
+- Verified via screenshot: office switcher visible at top-right of CRM heading, Live chip is default selected with pulse dot, "auto-refresh every 15s" subtitle rendered.

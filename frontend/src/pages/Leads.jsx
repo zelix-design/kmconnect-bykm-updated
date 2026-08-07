@@ -12,8 +12,26 @@ import StaffPerformancePanel from "@/components/leads/StaffPerformancePanel";
 export default function Leads() {
   const { user } = useAuth();
   const isStaff = user?.role === "staff";
+  const isSuper = user?.role === "super_admin";
   const [params, setParams] = useSearchParams();
   const [crmTab, setCrmTab] = useState("overview"); // overview | campaigns (admins)
+
+  // Super Admin only: narrow every CRM widget to a single office. Persisted
+  // in localStorage so a page reload keeps the picked office. "all" (default)
+  // shows the un-scoped view (super_admin sees all offices).
+  const [officeOverride, setOfficeOverride] = useState(() => {
+    if (typeof window === "undefined") return "all";
+    return localStorage.getItem("crm.office_override") || "all";
+  });
+  const updateOffice = useCallback((v) => {
+    setOfficeOverride(v);
+    try {
+      localStorage.setItem("crm.office_override", v);
+    } catch { /* localStorage may be blocked in private-window/tests — no-op */ }
+  }, []);
+  // Everyone below super_admin should never send an override — the backend
+  // ignores it anyway, but this keeps API traffic clean.
+  const activeOffice = isSuper ? officeOverride : "all";
 
   // ---- Deep-link `?lead=<id>` (notifications, Today's Visits cards) --------
   // Fetches the lead and pops the detail dialog IN-PLACE on whichever tab the
@@ -57,13 +75,37 @@ export default function Leads() {
 
   return (
     <div className="space-y-6" data-testid="leads-page">
-      {/* Header */}
-      <div>
-        <p className="label-eyebrow">CRM</p>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{isStaff ? "My Leads" : "CRM"}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {isStaff ? "Your assigned prospects and follow-ups." : "Lead performance at a glance, then dive into a campaign to work its pipeline."}
-        </p>
+      {/* Header — with Super Admin office switcher */}
+      <div className="flex items-start sm:items-center justify-between gap-3 flex-col sm:flex-row">
+        <div>
+          <p className="label-eyebrow">CRM</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight">{isStaff ? "My Leads" : "CRM"}</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isStaff ? "Your assigned prospects and follow-ups." : "Lead performance at a glance, then dive into a campaign to work its pipeline."}
+          </p>
+        </div>
+        {isSuper && (
+          <div
+            className="flex items-center gap-1 rounded-lg bg-muted p-0.5 self-start sm:self-auto shrink-0"
+            data-testid="crm-office-switcher"
+          >
+            {[["all", "All offices"], ["KM_BLR", "KM BLR"], ["KM_TCR", "KM TCR"], ["KM_KMLY", "KM KMLY"]].map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => updateOffice(v)}
+                data-testid={`crm-office-${v}`}
+                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  officeOverride === v
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {isStaff ? (
@@ -92,15 +134,15 @@ export default function Leads() {
 
           {crmTab === "overview" ? (
             <div className="space-y-5" data-testid="crm-overview">
-              <TodayVisitsPanel user={user} />
-              <StaffPerformancePanel />
-              <CrmAnalytics />
+              <TodayVisitsPanel user={user} officeOverride={activeOffice} />
+              <StaffPerformancePanel officeOverride={activeOffice} />
+              <CrmAnalytics office={activeOffice === "all" ? null : activeOffice} />
             </div>
           ) : crmTab === "campaigns" ? (
             <CampaignsPanel user={user} />
           ) : (
             <div data-testid="crm-all-leads">
-              <LeadsPipeline user={user} allLeadsMode refreshKey={pipelineRefreshKey} />
+              <LeadsPipeline user={user} allLeadsMode refreshKey={pipelineRefreshKey} officeOverride={activeOffice} />
             </div>
           )}
         </>

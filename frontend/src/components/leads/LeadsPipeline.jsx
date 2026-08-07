@@ -64,7 +64,7 @@ function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }
 // Reusable lead pipeline (stats + filters + board/list + dialogs).
 // `campaignId` scopes everything to one campaign; `showActions` toggles the
 // Add lead / Upload CSV toolbar; `onChanged` fires after any mutation.
-export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged, allLeadsMode = false, refreshKey = 0 }) {
+export default function LeadsPipeline({ user, campaignId = null, showActions = true, onChanged, allLeadsMode = false, refreshKey = 0, officeOverride = "all" }) {
   const [params, setParams] = useSearchParams();
   const isStaff = user?.role === "staff";
   const editable = canEdit(user, "leads");
@@ -126,6 +126,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       if (sourceFilter !== "all") qp.source = sourceFilter;
       if (assigneeFilter !== "all") qp.assigned_to = assigneeFilter;
       if (q.trim()) qp.q = q.trim();
+      if (officeOverride && officeOverride !== "all") qp.office = officeOverride;
       const { data } = await api.get("/leads", { params: qp });
       setLeads(data);
     } catch (err) {
@@ -133,19 +134,20 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, allLeadsMode, uncategorizedOnly]);
+  }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, allLeadsMode, uncategorizedOnly, officeOverride]);
 
   const fetchStats = useCallback(async () => {
     try {
       const params = {};
       if (campaignId) params.campaign_id = campaignId;
       if (allLeadsMode && uncategorizedOnly) params.uncategorized = true;
+      if (officeOverride && officeOverride !== "all") params.office = officeOverride;
       const { data } = await api.get("/leads/stats", { params });
       setStats(data);
     } catch (err) {
       /* non-blocking */
     }
-  }, [campaignId, allLeadsMode, uncategorizedOnly]);
+  }, [campaignId, allLeadsMode, uncategorizedOnly, officeOverride]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
