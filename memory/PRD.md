@@ -1379,3 +1379,64 @@ admissions per year. It's confidential — only super admin can see it."
 - Data-testids: `crm-office-switcher`, `crm-office-{all|KM_BLR|KM_TCR|KM_KMLY}`, `perf-window-live`, `perf-live-dot`.
 - Verified via curl: `?office=KM_BLR` returned 37 KM_BLR-scoped leads for super_admin; office_admin BLR + `?office=KM_TCR` still returned only KM_BLR (security preserved). `?window=live` returned a 60-minute range.
 - Verified via screenshot: office switcher visible at top-right of CRM heading, Live chip is default selected with pulse dot, "auto-refresh every 15s" subtitle rendered.
+
+
+## Implementation status — 2026-08-09 (iteration 62: Mobile 4-digit PIN unlock)
+
+**Requested change (verbatim)**: "In mobile app -> once login through the credentials. Can set the 4 digit pin to unlock the app."
+
+**Confirmed spec (via ask_human)**:
+- 1a. Mobile-only (viewport < 768 px). Desktop keeps the normal login.
+- 2b. Re-lock on fresh browser open / reload AND after 5 minutes of inactivity.
+- 3a. 3 wrong tries → clear the PIN server-side + force full email/password login.
+
+**Backend** (`routers/auth.py`, `models.py`)
+- Added `pin_enabled` boolean to `UserOut`. Reads a `pin_hash` field on the users collection.
+- `POST /api/auth/pin` — set/replace PIN. Requires re-typing account password. Rejects the 14 most-predictable 4-digit combos (1234, 0000, etc.). Reuses existing bcrypt helpers.
+- `DELETE /api/auth/pin` — disable PIN unlock (authenticated user only).
+- `POST /api/auth/pin/verify {email, pin}` — returns a fresh JWT on success. Wrong PIN increments `pin_fail_count`; on the 3rd fail the stored PIN is unset and the endpoint returns HTTP 429 with a "sign in with password" message.
+- `/auth/me` and `/auth/login` now include `pin_enabled` in the payload.
+
+**Frontend** (new files under `components/auth/` and `components/settings/`)
+- `PinPad.jsx` — reusable numeric keypad + 4-dot indicator, auto-submits on the 4th digit.
+- `PinSetupDialog.jsx` — two-step wizard (enter → confirm + password) shown once per mobile login when `!pin_enabled`.
+- `PinLockScreen.jsx` — full-screen unlock overlay with avatar + name + "Sign in with password instead" bail-out.
+- `PinSettingsSection.jsx` — Card mounted in both `/settings` and `/staff-profile`; Set / Change / Turn off.
+- `lib/auth.jsx` — Added `locked`, `unlockWithUser`, `bailToPasswordLogin`, `setupPinPromptOpen` to context. Boot-time lock on mobile when `pin_enabled=true`. Inactivity timer (5 min) via click / keydown / touchstart / scroll / pointerdown listeners. `App.js` wraps routes in `<PinLockGate>` so the lock screen replaces everything when active.
+
+**Testing**
+- Backend curl: set weak PIN → 400 ("less predictable"), wrong password → 401, correct → 200. 3× wrong PIN verify → HTTP 429 with attempts-left countdown + PIN auto-cleared. Correct PIN verify → fresh JWT returned.
+- Frontend Playwright (mobile 390x800): login → PIN setup dialog auto-opens, 2-step flow completes; reload → lock screen appears; correct PIN → "Unlocked" toast + dashboard rendered.
+
+**Data-testids**: `pin-setup-dialog`, `pin-setup-pad-1`, `pin-setup-pad-2`, `pin-setup-password`, `pin-setup-save`, `pin-setup-skip`, `pin-setup-back`, `pin-lock-screen`, `pin-lock-pad`, `pin-lock-signin-instead`, `pin-settings-card`, `pin-settings-open`, `pin-settings-disable`, `pin-settings-save`, `pin-key-{0-9|back}`, `pin-dots`, `pin-error`.
+
+
+## Implementation status — 2026-08-09 (iteration 63: Background auto-lock + WebAuthn biometric unlock)
+
+**Requested changes (verbatim)**:
+1. "Biometric Unlock: Wire Face ID / Touch ID via WebAuthn on top of the existing PIN pad for iOS/Android PWA installs"
+2. "Auto-Lock On Background: Also lock when the tab is backgrounded > 60s"
+
+### 1. Background auto-lock (>60s)
+- `lib/auth.jsx` — added `visibilitychange` listener alongside the existing 5-min inactivity path. When `hidden`, records the timestamp; when visible, if hidden > 60s, sets `locked=true` so the PIN pad appears. Only active on mobile viewports with PIN enabled.
+
+### 2. WebAuthn biometric unlock
+- **Playbook**: integration_playbook_expert_v2 was consulted (per AUTH-IS-ALWAYS-INTEGRATION rule) — went with the `webauthn` Python library (v3.0.0), platform authenticators only, no attestation verification.
+- **Env vars** (`backend/.env`): `WEBAUTHN_RP_ID=finance-flow-1727.preview.emergentagent.com`, `WEBAUTHN_RP_NAME="KM Connect"`, `WEBAUTHN_ORIGIN=https://finance-flow-1727.preview.emergentagent.com`. Deployers must update these when moving to `kmconnect.co.in`.
+- **Backend** (new `routers/webauthn.py`, mounted in `server.py`):
+  - `POST /api/webauthn/register/begin` — 400 if user hasn't set a PIN (PIN is the mandatory fallback); otherwise issues platform-authenticator options with `resident_key=required`, `user_verification=required`, `attestation=none`; stores the challenge with a 5-min TTL.
+  - `POST /api/webauthn/register/finish` — verifies attestation; persists `{credential_id, public_key, sign_count, aaguid, transports}` in a new `webauthn_credentials` collection (unique index on `(user_id, credential_id)`).
+  - `POST /api/webauthn/auth/begin` — issues authentication options with the user's `allow_credentials`; 404 when no passkey exists.
+  - `POST /api/webauthn/auth/finish` — verifies the assertion, updates `sign_count`, returns a fresh JWT. If sign_count decreases → nuke the credential (clone-detection). Any verify failure → 401 with "try again or enter your PIN".
+  - `GET /api/webauthn/status` — lightweight `{configured, biometric_enabled, count}` for the settings UI.
+  - `DELETE /api/webauthn/credentials` — one-tap removal of all passkeys for the caller.
+- **Backend hook**: `_resolve_biometric_enabled()` in `auth.py`; `pin_enabled` and `biometric_enabled` added to `/auth/me` and `/auth/login` responses.
+- **Frontend**:
+  - `lib/webauthn.js` — base64url ↔ Uint8Array marshalling helpers, `isBiometricSupported()` (uses `PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()`), `enrolPasskey()`, `unlockWithBiometric()`, `disableBiometric()`.
+  - `components/settings/PinSettingsSection.jsx` — new "Biometric unlock" block appears after a PIN is set AND the browser can do platform authenticators. "Enable biometric unlock" (`biometric-enable` testid) triggers `navigator.credentials.create()`. "Turn off biometric" (`biometric-disable`) removes all credentials. `data-testid="app-pin-settings-card"` (renamed to avoid clash with `AdmissionRevenuePinSettings`).
+  - `components/auth/PinLockScreen.jsx` — auto-triggers the OS biometric prompt as soon as the lock screen mounts when `user.biometric_enabled && isBiometricSupported()`. Falls back to PIN silently on `NotAllowedError` / `AbortError`. Adds a manual "Use Face ID / Touch ID" button (`pin-lock-biometric`).
+
+**Testing**
+- Backend curl: `/auth/me.biometric_enabled=false` initially; `/webauthn/status={configured:true, biometric_enabled:false}`; `/register/begin` returns 400 without a PIN and correct options with rp.id / userVerification=required / attachment=platform once PIN is set; `/auth/begin` returns 404 when nothing enrolled.
+- Frontend Playwright (mobile 390×800): Settings page renders the "App PIN" card with ON badge and Change/Turn-off buttons. Biometric block is correctly hidden in headless Chromium (no platform authenticator), will appear on real iOS/Android.
+- Full biometric ceremony cannot be scripted from Playwright — requires a real Touch ID / Face ID sensor. Manual verification on iOS Safari / Android Chrome recommended before deployment.

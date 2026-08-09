@@ -3,6 +3,7 @@ import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { photoSrc } from "@/pages/Clients";
 import { Button } from "@/components/ui/button";
+import PinSettingsSection from "@/components/settings/PinSettingsSection";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -153,6 +154,7 @@ export default function StaffProfile() {
           </form>
         )}
       </Card>
+      <PinSettingsSection />
     </div>
   );
 }

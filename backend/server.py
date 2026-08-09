@@ -18,7 +18,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import client, db
 from seed import seed_admin_and_backfill
-from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns, admission_revenue, activity
+from routers import auth, accounts, clients, categories, transactions, invoices, dashboard, students, users, expense_requests, notifications, applications, colleges, push, messages, leads, leave, uploads, staff, campaigns, admission_revenue, activity, webauthn
 
 
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +52,7 @@ app.include_router(staff.router)
 app.include_router(campaigns.router)
 app.include_router(admission_revenue.router)
 app.include_router(activity.router)
+app.include_router(webauthn.router)
 
 # Health endpoint
 health = APIRouter(prefix="/api", tags=["health"])

@@ -83,6 +83,12 @@ class UserOut(BaseModel):
     # Profile photo — resolved from the linked/own client row on read.
     # Relative /api/files/... path (or empty string when no photo uploaded).
     photo_url: Optional[str] = None
+    # Mobile 4-digit unlock PIN — the hash is stored on the row and never
+    # returned; this boolean lets the client decide whether to render the
+    # "Set PIN" prompt or the PIN pad on next open.
+    pin_enabled: Optional[bool] = False
+    # WebAuthn passkey biometric — derived from webauthn_credentials count > 0.
+    biometric_enabled: Optional[bool] = False
     created_at: str
 
 

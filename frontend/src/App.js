@@ -36,6 +36,37 @@ import Messages from "@/pages/Messages";
 import OfficeOverview from "@/pages/OfficeOverview";
 import Activity from "@/pages/Activity";
 import PermGate from "@/components/PermGate";
+import PinLockScreen from "@/components/auth/PinLockScreen";
+import PinSetupDialog from "@/components/auth/PinSetupDialog";
+
+/**
+ * When the auth context reports the mobile session is "locked" (fresh open
+ * with PIN enabled, or 5-min inactivity), swap the entire app for the PIN
+ * pad. We keep the user object in context so the lock screen can render
+ * their name + avatar without a network round-trip.
+ */
+function PinLockGate({ children }) {
+  const { user, locked, unlockWithUser, bailToPasswordLogin, refresh, setupPinPromptOpen, setSetupPinPromptOpen } = useAuth();
+  if (locked && user && user !== false) {
+    return (
+      <PinLockScreen
+        user={user}
+        onUnlocked={unlockWithUser}
+        onBailToLogin={bailToPasswordLogin}
+      />
+    );
+  }
+  return (
+    <>
+      {children}
+      <PinSetupDialog
+        open={setupPinPromptOpen}
+        onOpenChange={setSetupPinPromptOpen}
+        onDone={refresh}
+      />
+    </>
+  );
+}
 
 function Protected({ children }) {
   const { user } = useAuth();
@@ -101,6 +132,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
+        <PinLockGate>
         <BrowserRouter>
         <Routes>
           <Route path="/apply" element={<PublicApplication />} />
@@ -140,6 +172,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </BrowserRouter>
+        </PinLockGate>
         <Toaster position="top-right" richColors />
       </AuthProvider>
     </ThemeProvider>
