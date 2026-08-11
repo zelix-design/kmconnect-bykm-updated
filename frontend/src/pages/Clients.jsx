@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import OfficeStaff from "@/pages/OfficeStaff";
 
@@ -172,6 +172,41 @@ function SuperAdminPeople({ pageScope }) {
     toast.success("Deleted"); load();
   };
 
+  // ---- Employees-only: create / reset login dialogs ----
+  const [loginFor, setLoginFor] = useState(null);   // client row we're creating a login for
+  const [resetFor, setResetFor] = useState(null);   // client row we're resetting the pwd for
+  const [loginPw, setLoginPw] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const openCreateLogin = (c) => { setLoginFor(c); setLoginPw(""); };
+  const openResetLogin = (c) => { setResetFor(c); setLoginPw(""); };
+  const closeLoginDialogs = () => { setLoginFor(null); setResetFor(null); setLoginPw(""); };
+
+  const submitCreateLogin = async () => {
+    if (!loginFor) return;
+    if (!loginPw || loginPw.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    setLoginBusy(true);
+    try {
+      await api.post(`/staff/members/${loginFor.id}/login`, { password: loginPw });
+      toast.success(`Login created for ${loginFor.name}`);
+      closeLoginDialogs();
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not create login");
+    } finally { setLoginBusy(false); }
+  };
+  const submitResetLogin = async () => {
+    if (!resetFor) return;
+    if (!loginPw || loginPw.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    setLoginBusy(true);
+    try {
+      await api.post(`/staff/members/${resetFor.id}/login/reset`, { password: loginPw });
+      toast.success(`Password updated for ${resetFor.name}`);
+      closeLoginDialogs();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not reset password");
+    } finally { setLoginBusy(false); }
+  };
+
   const isStaff = form.client_type === "staff";
 
   return (
@@ -330,8 +365,74 @@ function SuperAdminPeople({ pageScope }) {
             : "No entries match this filter."}
         </Card>
       ) : (
-        <GroupedClients filter={filter} scopeTypes={scopeTypes} clients={filtered} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+        <GroupedClients
+          filter={filter} scopeTypes={scopeTypes} clients={filtered}
+          allowEdit={allowEdit} openEdit={openEdit} remove={remove}
+          isEmployees={isEmployees}
+          onCreateLogin={openCreateLogin}
+          onResetLogin={openResetLogin}
+        />
       )}
+
+      {/* Create-login dialog (Employees only) */}
+      <Dialog open={!!loginFor} onOpenChange={(v) => { if (!v) closeLoginDialogs(); }}>
+        <DialogContent className="bg-card max-w-sm" data-testid="employee-create-login-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Create login</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Grant <span className="font-medium text-foreground">{loginFor?.name}</span> access to the CRM using their email <span className="font-medium text-foreground">{loginFor?.email || "—"}</span>.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="new-login-pw">Temporary password</Label>
+            <Input
+              id="new-login-pw"
+              type="password"
+              autoComplete="new-password"
+              value={loginPw}
+              onChange={(e) => setLoginPw(e.target.value)}
+              placeholder="Minimum 8 characters"
+              data-testid="employee-create-login-pw"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeLoginDialogs} disabled={loginBusy}>Cancel</Button>
+            <Button onClick={submitCreateLogin} disabled={loginBusy || !loginPw} className="btn-amber border-0" data-testid="employee-create-login-submit">
+              {loginBusy ? "Creating…" : "Create login"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset-password dialog (Employees only) */}
+      <Dialog open={!!resetFor} onOpenChange={(v) => { if (!v) closeLoginDialogs(); }}>
+        <DialogContent className="bg-card max-w-sm" data-testid="employee-reset-login-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Reset password</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Set a new login password for <span className="font-medium text-foreground">{resetFor?.name}</span>.
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="reset-login-pw">New password</Label>
+            <Input
+              id="reset-login-pw"
+              type="password"
+              autoComplete="new-password"
+              value={loginPw}
+              onChange={(e) => setLoginPw(e.target.value)}
+              placeholder="Minimum 8 characters"
+              data-testid="employee-reset-login-pw"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={closeLoginDialogs} disabled={loginBusy}>Cancel</Button>
+            <Button onClick={submitResetLogin} disabled={loginBusy || !loginPw} className="btn-amber border-0" data-testid="employee-reset-login-submit">
+              {loginBusy ? "Saving…" : "Update password"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -345,7 +446,7 @@ const OFFICE_OPTIONS = [
   { value: "_none", label: "No office set" },
 ];
 
-function ClientCard({ c, allowEdit, openEdit, remove }) {
+function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
   const nav = useNavigate();
   const goDetail = () => nav(`/clients/${c.id}`);
   const onKey = (e) => {
@@ -406,15 +507,67 @@ function ClientCard({ c, allowEdit, openEdit, remove }) {
           <p className="flex items-center gap-2"><CurrencyInr size={14} /> ₹{c.eligible_incentive}/admission</p>
         )}
       </div>
+      {/* Login access controls — Employees view only, only for staff-type rows */}
+      {isEmployees && c.client_type === "staff" && allowEdit && (
+        <div
+          className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`cli-login-block-${c.id}`}
+        >
+          {c.has_login ? (
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                data-testid={`cli-login-status-${c.id}`}
+              >
+                <LinkSimple size={11} weight="duotone" /> Login active
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onResetLogin?.(c); }}
+                data-testid={`cli-reset-login-${c.id}`}
+              >
+                <Key size={13} className="mr-1" /> Reset password
+              </Button>
+            </>
+          ) : (
+            <>
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                data-testid={`cli-login-status-${c.id}`}
+              >
+                <ShieldWarning size={11} weight="duotone" /> No login
+              </span>
+              <Button
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onCreateLogin?.(c); }}
+                disabled={!c.email}
+                className="btn-amber border-0"
+                data-testid={`cli-create-login-${c.id}`}
+                title={!c.email ? "Add an email to this employee first" : undefined}
+              >
+                <Key size={13} className="mr-1" /> Create login
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
 
-function ClientGrid({ clients, allowEdit, openEdit, remove }) {
+function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {clients.map((c) => (
-        <ClientCard key={c.id} c={c} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+        <ClientCard
+          key={c.id} c={c}
+          allowEdit={allowEdit} openEdit={openEdit} remove={remove}
+          isEmployees={isEmployees}
+          onCreateLogin={onCreateLogin}
+          onResetLogin={onResetLogin}
+        />
       ))}
     </div>
   );
@@ -430,7 +583,7 @@ function CategoryHeader({ label, count }) {
   );
 }
 
-function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove }) {
+function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
   // When a specific type filter is selected, just show that category (with Staff sub-grouping)
   const groups = CLIENT_TYPES
     .filter((t) => scopeTypes.includes(t.value))
@@ -457,13 +610,25 @@ function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remo
                       <span className="text-xs uppercase tracking-[0.16em] font-semibold text-muted-foreground">{o.label}</span>
                       <span className="text-[10px] text-muted-foreground/70">· {sub.length}</span>
                     </div>
-                    <ClientGrid clients={sub} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+                    <ClientGrid
+                      clients={sub}
+                      allowEdit={allowEdit} openEdit={openEdit} remove={remove}
+                      isEmployees={isEmployees}
+                      onCreateLogin={onCreateLogin}
+                      onResetLogin={onResetLogin}
+                    />
                   </div>
                 );
               })}
             </div>
           ) : (
-            <ClientGrid clients={g.items} allowEdit={allowEdit} openEdit={openEdit} remove={remove} />
+            <ClientGrid
+              clients={g.items}
+              allowEdit={allowEdit} openEdit={openEdit} remove={remove}
+              isEmployees={isEmployees}
+              onCreateLogin={onCreateLogin}
+              onResetLogin={onResetLogin}
+            />
           )}
         </section>
       ))}

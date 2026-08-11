@@ -36,7 +36,6 @@ const ALL_NAV = [
   { to: "/my-students", label: "Students", icon: Student, tid: "nav-my-students", roles: ["staff"] },
   { to: "/leads", label: "CRM", icon: Target, tid: "nav-leads", roles: ["super_admin", "office_admin", "staff"], perm: "leads", userRoleAllowed: false },
   { to: "/office-overview", label: "Overview", icon: House, tid: "nav-office-overview", roles: ["super_admin"] },
-  { to: "/staff", label: "Staff", icon: IdentificationBadge, tid: "nav-staff", roles: ["super_admin"] },
   { to: "/leave", label: "Leave", icon: CalendarCheck, tid: "nav-leave", roles: ["super_admin", "office_admin", "staff"], perm: "leave" },
   { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
   { to: "/admission-revenue", label: "Admission Revenue", icon: Coins, tid: "nav-admission-revenue", roles: ["super_admin"] },
@@ -64,7 +63,6 @@ const PAGE_TITLES = {
   "/my-students": "Students",
   "/leads": "CRM",
   "/office-overview": "Office overview",
-  "/staff": "Staff",
   "/leave": "Leave",
   "/colleges": "Colleges",
   "/admission-revenue": "Admission Revenue",
@@ -86,7 +84,7 @@ function initialsOf(name) {
 // Office / Add details). Every other role keeps a single flat list.
 const GROUP_ROUTES = {
   accounts: ["/accounts", "/transactions", "/agents", "/invoices"],
-  office: ["/office-overview", "/employees", "/leads", "/staff", "/leave"],
+  office: ["/office-overview", "/employees", "/leads", "/leave"],
   details: ["/colleges", "/categories"],
 };
 

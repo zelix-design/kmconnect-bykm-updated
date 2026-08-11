@@ -28,7 +28,6 @@ import PublicApplication from "@/pages/PublicApplication";
 import Colleges from "@/pages/Colleges";
 import AdmissionRevenue from "@/pages/AdmissionRevenue";
 import Leads from "@/pages/Leads";
-import StaffMembers from "@/pages/StaffMembers";
 import StaffStudents from "@/pages/StaffStudents";
 import Leave from "@/pages/Leave";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
@@ -155,7 +154,6 @@ export default function App() {
             <Route path="/colleges" element={<PermGate roles={SUPER_ADMIN_ONLY}><Colleges /></PermGate>} />
             <Route path="/admission-revenue" element={<PermGate roles={SUPER_ADMIN_ONLY}><AdmissionRevenue /></PermGate>} />
             <Route path="/leads" element={<PermGate roles={LEADS_ROLES} page="leads"><Leads /></PermGate>} />
-            <Route path="/staff" element={<PermGate roles={SUPER_ADMIN_ONLY}><StaffMembers /></PermGate>} />
             <Route path="/office-overview" element={<PermGate roles={SUPER_ADMIN_ONLY}><OfficeOverview /></PermGate>} />
             <Route path="/leave" element={<PermGate roles={LEADS_ROLES} page="leave"><Leave /></PermGate>} />
             <Route path="/agents" element={<Agents />} />

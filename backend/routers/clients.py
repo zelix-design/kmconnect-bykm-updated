@@ -29,7 +29,11 @@ async def list_clients(user: dict = Depends(get_current_user)):
     """Office admin sees own clients PLUS clients scoped to their office (or
     shared with ALL) via home_office. Super admin sees clients from ALL users
     (so staff onboarded by office admins are visible too). Each returned doc
-    gets a `_creator_name` / `_creator_office` for UI attribution."""
+    gets a `_creator_name` / `_creator_office` for UI attribution.
+
+    Also enriches staff-type rows with ``has_login`` + ``login_user_id`` so
+    the Employees UI can show a "Create login" action inline (matching the
+    Office Admin's Staff page)."""
     if user.get("role") == "super_admin":
         docs = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
         if docs:
@@ -44,10 +48,22 @@ async def list_clients(user: dict = Depends(get_current_user)):
                 if u and u.get("role") == "office_admin":
                     d["_creator_name"] = u.get("name")
                     d["_creator_office"] = u.get("office")
+        _enrich_login_status(docs)
         return docs
-    return await db.clients.find(
+    docs = await db.clients.find(
         _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
+    _enrich_login_status(docs)
+    return docs
+
+
+def _enrich_login_status(docs: list[dict]) -> None:
+    """Mutates each row to add ``has_login`` — used by the Employees UI to
+    decide whether to show "Create login" or "Reset password". ``login_user_id``
+    is already on the row when the login exists."""
+    for d in docs:
+        if d.get("client_type") == "staff":
+            d["has_login"] = bool(d.get("login_user_id"))
 
 
 async def _next_employee_id(office: str | None) -> str:
