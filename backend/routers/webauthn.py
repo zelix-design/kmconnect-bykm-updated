@@ -260,13 +260,28 @@ async def auth_finish(body: CredentialBody, request: Request, response: Response
     if not pending:
         raise HTTPException(400, "Expired or already-used challenge")
 
-    cid = body.credential.get("id")
-    if not cid:
-        raise HTTPException(400, "Missing credential id")
+    cid_raw = body.credential.get("id") or ""
+    # Some browsers strip base64url padding, others don't; also credential.id
+    # can come as either the un-padded base64url of rawId OR a padded string.
+    # Normalise: decode both stored + incoming to bytes, then re-encode with
+    # our helper so we match whatever we stored on registration.
+    try:
+        cid = _b64url_encode(_b64url_decode(cid_raw))
+    except Exception:
+        cid = cid_raw
     rec = await db.webauthn_credentials.find_one(
         {"user_id": user["id"], "credential_id": cid}
     )
+    if not rec and cid != cid_raw:
+        # Fall back to the raw id in case an older row was stored differently.
+        rec = await db.webauthn_credentials.find_one(
+            {"user_id": user["id"], "credential_id": cid_raw}
+        )
     if not rec:
+        log.warning(
+            "[webauthn] auth/finish credential lookup miss for user=%s cid_raw=%r cid_norm=%r",
+            user["id"], cid_raw, cid,
+        )
         raise HTTPException(404, "Unknown credential — please re-enrol biometrics")
 
     try:
@@ -280,7 +295,12 @@ async def auth_finish(body: CredentialBody, request: Request, response: Response
             require_user_verification=True,
         )
     except Exception as exc:  # noqa: BLE001
-        log.warning("[webauthn] auth verify failed for user=%s: %s", user["id"], exc)
+        # Log the full class name + message + traceback so operators can
+        # diagnose signature / origin / RP-id mismatches from `journalctl`.
+        log.exception(
+            "[webauthn] auth verify failed for user=%s rp_id=%s origin=%s: %s: %s",
+            user["id"], rp_id, origin, type(exc).__name__, exc,
+        )
         raise HTTPException(401, "Biometric unlock failed. Try again or enter your PIN.")
 
     if verified.new_sign_count and verified.new_sign_count < rec["sign_count"]:
