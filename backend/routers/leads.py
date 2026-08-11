@@ -1793,15 +1793,74 @@ async def bulk_upload(
         h = norm.get(key)
         return str(row.get(h) or "").strip() if h else ""
 
+    def _phone_key(raw: str) -> str:
+        """Normalise a phone into a dedup key — digits only, last 10 chars.
+        Strips country codes, spaces, dashes, parentheses. Empty → ``""``."""
+        digits = "".join(ch for ch in (raw or "") if ch.isdigit())
+        return digits[-10:] if len(digits) >= 10 else digits
+
+    def _name_place_key(name: str, place: str) -> str:
+        n = " ".join((name or "").lower().split())
+        p = " ".join((place or "").lower().split())
+        return f"{n}|{p}" if n else ""
+
+    # Pre-fetch every existing lead in the caller's visibility scope + build
+    # ``existing_phone_keys`` / ``existing_name_keys`` sets so each CSV row is
+    # deduped in O(1). ``_scope_filter`` already handles staff / office_admin
+    # scoping; super_admin sees the whole database.
+    dedup_scope = _scope_filter(user)
+    existing_docs = await db.leads.find(
+        dedup_scope, {"_id": 0, "phone": 1, "name": 1, "place": 1}
+    ).to_list(200_000)
+    existing_phone_keys: set[str] = set()
+    existing_name_keys: set[str] = set()
+    for d in existing_docs:
+        pk = _phone_key(d.get("phone", ""))
+        if pk:
+            existing_phone_keys.add(pk)
+        else:
+            nk = _name_place_key(d.get("name", ""), d.get("place", ""))
+            if nk:
+                existing_name_keys.add(nk)
+
     created: list[dict] = []
     skipped_rows: list[int] = []
+    skipped_duplicates: list[dict] = []
     unmatched_employees: list[str] = []
+    # Within-CSV dedup so a file containing "Ravi 9999999999" twice only
+    # creates one lead even when nothing similar exists in the DB yet.
+    seen_phone_keys: set[str] = set()
+    seen_name_keys: set[str] = set()
     now = now_iso()
     for idx, row in enumerate(reader, start=2):
         name = str(row.get(name_h) or "").strip()
         if not name:
             skipped_rows.append(idx)
             continue
+        phone = cell(row, "phone")
+        place = cell(row, "place")
+        pk = _phone_key(phone)
+        nk = _name_place_key(name, place) if not pk else ""
+        # Duplicate detection — check the DB set first, then the within-CSV
+        # set so subsequent identical rows in the file are also skipped.
+        dup_reason: Optional[str] = None
+        if pk:
+            if pk in existing_phone_keys:
+                dup_reason = "phone already in CRM"
+            elif pk in seen_phone_keys:
+                dup_reason = "phone repeated in file"
+        elif nk:
+            if nk in existing_name_keys:
+                dup_reason = "name already in CRM"
+            elif nk in seen_name_keys:
+                dup_reason = "name repeated in file"
+        if dup_reason:
+            skipped_duplicates.append({"row": idx, "name": name, "phone": phone, "reason": dup_reason})
+            continue
+        if pk:
+            seen_phone_keys.add(pk)
+        elif nk:
+            seen_name_keys.add(nk)
         src = cell(row, "source").lower()
         row_assignee = assignee_id
         row_office = office
@@ -1817,10 +1876,10 @@ async def bulk_upload(
         created.append({
             "id": gen_id(),
             "name": name,
-            "phone": cell(row, "phone"),
+            "phone": phone,
             "email": cell(row, "email"),
             "course": cell(row, "course"),
-            "place": cell(row, "place"),
+            "place": place,
             "source": src if src in LEAD_SOURCES else "csv",
             "status": "new",
             "assigned_to_user_id": row_assignee,
@@ -1861,6 +1920,11 @@ async def bulk_upload(
         "skipped_blank_rows": skipped_rows,
         "created_sample": [c["name"] for c in created[:10]],
         "unmatched_employees": unmatched_unique,
+        # Duplicates that were already in the CRM (or repeated inside the CSV
+        # itself). The frontend uses ``duplicate_count`` in the summary toast
+        # and can render the full list on demand.
+        "duplicate_count": len(skipped_duplicates),
+        "duplicates": skipped_duplicates[:200],
     }
 
 
