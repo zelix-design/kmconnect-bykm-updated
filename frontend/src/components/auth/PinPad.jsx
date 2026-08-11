@@ -70,7 +70,7 @@ export default function PinPad({
       )}
 
       {/* Keypad */}
-      <div className="grid grid-cols-3 gap-2.5 w-full max-w-xs">
+      <div className="grid grid-cols-3 gap-3 w-full max-w-sm">
         {KEYS.flat().map((k, idx) => {
           if (!k) return <span key={`e-${idx}`} />;
           if (k === "back") {
@@ -82,9 +82,9 @@ export default function PinPad({
                 disabled={disabled || value.length === 0}
                 aria-label="Delete last digit"
                 data-testid="pin-key-back"
-                className="h-14 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                className="h-16 sm:h-14 rounded-2xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Backspace size={22} weight="duotone" />
+                <Backspace size={26} weight="duotone" />
               </button>
             );
           }
@@ -95,7 +95,7 @@ export default function PinPad({
               onClick={() => press(k)}
               disabled={disabled}
               data-testid={`pin-key-${k}`}
-              className="h-14 rounded-xl bg-muted/70 hover:bg-muted text-lg font-semibold text-foreground transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-16 sm:h-14 rounded-2xl bg-muted text-2xl sm:text-xl font-semibold text-foreground shadow-sm border border-border/40 transition-all active:scale-95 active:bg-muted/80 hover:bg-muted/90 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             >
               {k}
             </button>

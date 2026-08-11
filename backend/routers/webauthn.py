@@ -24,7 +24,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from webauthn import (
@@ -53,6 +53,32 @@ RP_ID = os.environ.get("WEBAUTHN_RP_ID", "").strip()
 RP_NAME = os.environ.get("WEBAUTHN_RP_NAME", "KM Connect").strip()
 ORIGIN = os.environ.get("WEBAUTHN_ORIGIN", "").strip()
 CHALLENGE_TTL_SECONDS = int(os.environ.get("WEBAUTHN_CHALLENGE_TTL_SECONDS", "300"))
+
+
+def _resolve_rp_config(request: Request) -> tuple[str, str]:
+    """Return the effective ``(rp_id, origin)`` for this ceremony.
+
+    Falls back to the caller's Origin / Host header when env vars aren't set,
+    so a fresh deployment doesn't need manual WEBAUTHN_* configuration —
+    every well-formed HTTPS request self-describes both values. Env vars,
+    when present, always win (needed for multi-origin setups like a Vercel
+    frontend + Railway backend).
+    """
+    origin = ORIGIN
+    if not origin:
+        # ``request.headers['origin']`` is set on all browser requests; the
+        # Referer fallback handles curl / same-origin edge cases.
+        origin = (request.headers.get("origin") or request.headers.get("referer") or "").strip()
+        if origin:
+            # Trim off any path from Referer — WebAuthn wants scheme+host+port.
+            origin = origin.split("/", 3)
+            origin = "/".join(origin[:3])
+    rp_id = RP_ID
+    if not rp_id and origin:
+        # Strip scheme + optional port to get the pure host = RP ID.
+        host = origin.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+        rp_id = host
+    return rp_id, origin
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -90,26 +116,26 @@ class CredentialBody(BaseModel):
     challenge_id: str
 
 
-def _guard_config() -> None:
-    """Fail fast when the deployer forgot to configure the RP identifiers."""
-    if not RP_ID or not ORIGIN:
+def _guard_config(rp_id: str, origin: str) -> None:
+    """Fail fast when the incoming request has neither env vars nor headers."""
+    if not rp_id or not origin:
         raise HTTPException(
             503,
-            "Biometric unlock is not configured on this deployment "
-            "(WEBAUTHN_RP_ID / WEBAUTHN_ORIGIN env vars missing).",
+            "Biometric unlock is not configured — request is missing Origin header.",
         )
 
 
 # ---------- Registration ----------
 @router.post("/register/begin")
-async def register_begin(user: dict = Depends(get_current_user)):
+async def register_begin(request: Request, user: dict = Depends(get_current_user)):
     """Issue platform-authenticator registration options for the caller.
 
     Refuses when the user hasn't set a PIN — that would leave them with
     biometric-only access, and biometrics on a shared device would let anyone
     with a face/finger in enrol themselves as the user.
     """
-    _guard_config()
+    rp_id, origin = _resolve_rp_config(request)
+    _guard_config(rp_id, origin)
     await _ensure_indexes()
     full = await db.users.find_one({"id": user["id"]}, {"_id": 0, "pin_hash": 1})
     if not full or not full.get("pin_hash"):
@@ -121,7 +147,7 @@ async def register_begin(user: dict = Depends(get_current_user)):
     exclude = [PublicKeyCredentialDescriptor(id=_b64url_decode(x["credential_id"])) for x in existing]
 
     options = generate_registration_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         rp_name=RP_NAME,
         user_id=user["id"].encode("utf-8"),
         user_name=user.get("email", ""),
@@ -146,9 +172,10 @@ async def register_begin(user: dict = Depends(get_current_user)):
 
 
 @router.post("/register/finish")
-async def register_finish(body: CredentialBody, user: dict = Depends(get_current_user)):
+async def register_finish(body: CredentialBody, request: Request, user: dict = Depends(get_current_user)):
     """Verify the attestation + persist the credential."""
-    _guard_config()
+    rp_id, origin = _resolve_rp_config(request)
+    _guard_config(rp_id, origin)
     pending = await db.webauthn_challenges.find_one_and_update(
         {"_id": body.challenge_id, "user_id": user["id"], "kind": "registration",
          "consumed": False, "expires_at": {"$gt": _now_dt()}},
@@ -160,8 +187,8 @@ async def register_finish(body: CredentialBody, user: dict = Depends(get_current
         verified = verify_registration_response(
             credential=body.credential,
             expected_challenge=_b64url_decode(body.challenge_id),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             require_user_verification=True,
         )
     except Exception as exc:  # noqa: BLE001 — surface a friendly 4xx
@@ -189,9 +216,10 @@ async def register_finish(body: CredentialBody, user: dict = Depends(get_current
 
 # ---------- Authentication (unlock) ----------
 @router.post("/auth/begin")
-async def auth_begin(user: dict = Depends(get_current_user)):
+async def auth_begin(request: Request, user: dict = Depends(get_current_user)):
     """Issue authentication options for a caller who already has a JWT."""
-    _guard_config()
+    rp_id, origin = _resolve_rp_config(request)
+    _guard_config(rp_id, origin)
     creds = await db.webauthn_credentials.find(
         {"user_id": user["id"]}, {"_id": 0, "credential_id": 1, "transports": 1}
     ).to_list(50)
@@ -199,7 +227,7 @@ async def auth_begin(user: dict = Depends(get_current_user)):
         raise HTTPException(404, "No passkey enrolled on this account")
 
     options = generate_authentication_options(
-        rp_id=RP_ID,
+        rp_id=rp_id,
         allow_credentials=[
             PublicKeyCredentialDescriptor(
                 id=_b64url_decode(c["credential_id"]),
@@ -220,9 +248,10 @@ async def auth_begin(user: dict = Depends(get_current_user)):
 
 
 @router.post("/auth/finish")
-async def auth_finish(body: CredentialBody, response: Response, user: dict = Depends(get_current_user)):
+async def auth_finish(body: CredentialBody, request: Request, response: Response, user: dict = Depends(get_current_user)):
     """Verify the assertion, return a fresh JWT, unlock the app."""
-    _guard_config()
+    rp_id, origin = _resolve_rp_config(request)
+    _guard_config(rp_id, origin)
     pending = await db.webauthn_challenges.find_one_and_update(
         {"_id": body.challenge_id, "user_id": user["id"], "kind": "authentication",
          "consumed": False, "expires_at": {"$gt": _now_dt()}},
@@ -244,8 +273,8 @@ async def auth_finish(body: CredentialBody, response: Response, user: dict = Dep
         verified = verify_authentication_response(
             credential=body.credential,
             expected_challenge=_b64url_decode(body.challenge_id),
-            expected_rp_id=RP_ID,
-            expected_origin=ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             credential_public_key=_b64url_decode(rec["public_key"]),
             credential_current_sign_count=rec["sign_count"],
             require_user_verification=True,
@@ -270,11 +299,12 @@ async def auth_finish(body: CredentialBody, response: Response, user: dict = Dep
 
 # ---------- Management ----------
 @router.get("/status")
-async def status(user: dict = Depends(get_current_user)):
+async def status(request: Request, user: dict = Depends(get_current_user)):
     """Lightweight check used by the settings UI to decide whether to show
     "Enable biometric" vs "Turn off". Also returns whether the deployment is
     configured (so we hide the whole card in dev)."""
-    if not RP_ID or not ORIGIN:
+    rp_id, origin = _resolve_rp_config(request)
+    if not rp_id or not origin:
         return {"configured": False, "biometric_enabled": False, "count": 0}
     count = await db.webauthn_credentials.count_documents({"user_id": user["id"]})
     return {"configured": True, "biometric_enabled": count > 0, "count": count}
