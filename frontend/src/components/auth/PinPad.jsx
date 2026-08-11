@@ -43,7 +43,7 @@ export default function PinPad({
   };
 
   return (
-    <div className="flex flex-col items-center gap-5 select-none" data-testid={testid}>
+    <div className="flex flex-col items-center gap-5 select-none w-full" data-testid={testid}>
       {/* Dots */}
       <div className="flex items-center gap-3" data-testid="pin-dots" aria-label={`PIN ${value.length} of 4 digits entered`}>
         {[0, 1, 2, 3].map((i) => {
@@ -69,8 +69,10 @@ export default function PinPad({
         </p>
       )}
 
-      {/* Keypad */}
-      <div className="grid grid-cols-3 gap-3 w-full max-w-sm">
+      {/* Keypad — grid tracks are 1fr each so buttons ALWAYS fill the row
+          regardless of parent width. Aspect-square makes them consistent
+          taps on any viewport. Max width guards against ultra-wide screens. */}
+      <div className="grid grid-cols-3 gap-3 w-full max-w-xs mx-auto">
         {KEYS.flat().map((k, idx) => {
           if (!k) return <span key={`e-${idx}`} />;
           if (k === "back") {
@@ -82,9 +84,9 @@ export default function PinPad({
                 disabled={disabled || value.length === 0}
                 aria-label="Delete last digit"
                 data-testid="pin-key-back"
-                className="h-16 sm:h-14 rounded-2xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                className="aspect-square min-h-[64px] w-full rounded-2xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
               >
-                <Backspace size={26} weight="duotone" />
+                <Backspace size={28} weight="duotone" />
               </button>
             );
           }
@@ -95,7 +97,7 @@ export default function PinPad({
               onClick={() => press(k)}
               disabled={disabled}
               data-testid={`pin-key-${k}`}
-              className="h-16 sm:h-14 rounded-2xl bg-muted text-2xl sm:text-xl font-semibold text-foreground shadow-sm border border-border/40 transition-all active:scale-95 active:bg-muted/80 hover:bg-muted/90 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+              className="aspect-square min-h-[64px] w-full rounded-2xl bg-muted text-2xl font-semibold text-foreground shadow-sm border border-border/50 transition-all active:scale-95 active:bg-muted/80 hover:bg-muted/90 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
             >
               {k}
             </button>
