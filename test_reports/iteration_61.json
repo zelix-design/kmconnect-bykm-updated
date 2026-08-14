@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 61 — SEC-001/002/003 security hardening + WebAuthn hardening tested. Backend pytest: 14/14 pass. SEC-001 verified: unauth GET /api/files/{path} → 401; ?auth=<token> query param is IGNORED (still 401 even with a valid token in ?auth=); Bearer auth serves file OK; profile photos accessible to any authenticated user (needed for topbar/staff cards); lead_document files scoped correctly — BLR office_admin can read own-office lead docs, super_admin sees all, cross-office KM_TCR office_admin gets 403. SEC-002 verified: valid login=200, invalid password=401 with generic message, no traceback/exception class leakage in error bodies. SEC-003 verified: /api/auth/pin/verify returns 429 with a Retry-After header well within 12 attempts against the per-(IP,email) 8/5min budget. Regression: super admin + office admin logins work, dashboards load, Clients/Students pages load, /api/webauthn/status responds OK. Frontend UI: super_admin dashboard, /clients (10 clients), client detail page (MUZAVIR), office_admin login+dashboard+/students all load without any non-401 console errors. AuthedImage is wired but no client in the seed data has an uploaded photo, so no blob: URLs were observed on the list — the fallback (initials avatar) renders correctly. The transient 401 console lines are from AuthedImage's initial pre-auth fetch attempts and are non-blocking (component swallows them and shows fallback).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration61_security.py",
+    "/app/test_reports/pytest/iteration61.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/uploads.py::_user_from_request looks up user then discards password_hash — good. Consider also short-circuiting on user.get('approval_status') != 'approved' so a pending/rejected account can't read files after their approval is revoked but before their cookie expires.",
+    "routers/uploads.py::_authorize_file_read grants 'profile' access to every authenticated user. That is intentional per SEC-001 spec (topbar/staff cards cross-office), but keep an eye on the 'anyone-with-a-file-path can view any photo' surface — the storage_path contains a uuid which makes enumeration impractical, but there is no revocation semantics for old profile photos beyond soft-delete.",
+    "AuthedImage.jsx catches all fetch errors silently — this is correct UX, but the resulting 401 console lines will hide real issues later. Consider suppressing/tagging those logs (e.g. use api instance option to skip global error toast) so ops can distinguish real failures.",
+    "routers/auth.py::verify_pin — rate_limit.hit is called BEFORE the user lookup, so even a completely unknown email counts against the (IP,email) bucket. That's fine for SEC-003 (blocks enumeration) but be aware it makes a client's own retry budget shared with typos.",
+    "SEC-002 masking wraps login body in try/except and re-raises HTTPException; good. Confirm log.exception() actually records the traceback server-side for prod ops (verified in code)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration61_security.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "super=muneer@kmfoundation.co/kmf@0786, office=blr1@finflow.com/Office@123. Second office admin TEST_tcr_admin@finflow.com/Office@123 (KM_TCR) is auto-created by the pytest for cross-office tests.",
+  "seed_data_creation": "TEST_tcr_admin@finflow.com (KM_TCR office_admin) created via /api/users. Several TEST_LEAD_SEC001_* leads + 1x1 PNG profile & document uploads were created; they are minimal (<1KB) and prefixed TEST_ for identification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SEC-001/002/003 & WebAuthn RP hardening are green. Biometric end-to-end still NOT tested (needs physical authenticator, per E1 note). If future iterations touch /api/files, re-run backend/tests/test_iteration61_security.py — it exercises the full auth+scoping matrix (unauth 401, ?auth ignored, profile cross-user OK, lead_document cross-office 403, PIN rate limit 429). Frontend AuthedImage: no seed client currently has a photo_url, so blob:-URL rendering wasn't visually observed on Clients cards; to visually test end-to-end an operator should upload a photo on any staff/client via the existing photo uploader.",
+  "rca of the issue": "N/A — no defects detected."
+}

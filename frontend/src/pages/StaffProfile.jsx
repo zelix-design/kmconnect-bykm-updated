@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { photoSrc } from "@/pages/Clients";
+import AuthedImage from "@/components/AuthedImage";
 import { Button } from "@/components/ui/button";
 import PinSettingsSection from "@/components/settings/PinSettingsSection";
 import { Input } from "@/components/ui/input";
@@ -105,7 +105,7 @@ export default function StaffProfile() {
             <div className="flex items-center gap-4">
               <div className="w-20 h-20 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0 border border-border">
                 {form.photo_url ? (
-                  <img src={photoSrc(form.photo_url)} alt="profile" className="w-full h-full object-cover" data-testid="profile-photo-preview" />
+                  <AuthedImage url={form.photo_url} alt="profile" className="w-full h-full object-cover" testid="profile-photo-preview" />
                 ) : (
                   <UserCircle size={46} className="text-muted-foreground" weight="thin" />
                 )}

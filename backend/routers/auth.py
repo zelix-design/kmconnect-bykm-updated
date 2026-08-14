@@ -18,6 +18,7 @@ from models import RegisterIn, LoginIn, UserOut, SettingsUpdate, DEFAULT_PERMISS
 from seed import seed_user_defaults
 from routers.notifications import notify_super_admins
 from lib.email_notifier import send_email, password_reset_email_html
+from lib.rate_limit import hit as rate_limit_hit, client_ip
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 log = logging.getLogger("auth")
@@ -151,12 +152,12 @@ async def login(payload: LoginIn, response: Response):
         return {**user, "access_token": token}
     except HTTPException:
         raise
-    except Exception as exc:  # log opaque crashes so prod ops can debug
+    except Exception:  # log opaque crashes so prod ops can debug
         log.exception("[auth/login] unexpected error for email=%r", email)
-        # Surface the exception class so a 500 isn't a black box.
+        # SEC-002: never leak the internal exception class/message to clients.
         raise HTTPException(
             status_code=500,
-            detail=f"Login failed: {type(exc).__name__}: {exc}",
+            detail="Login failed due to a server error. Please try again.",
         )
 
 
@@ -240,14 +241,26 @@ async def disable_pin(user: dict = Depends(get_current_user)):
 
 
 @router.post("/pin/verify")
-async def verify_pin(payload: VerifyPinIn, response: Response):
+async def verify_pin(payload: VerifyPinIn, request: Request, response: Response):
     """Unlock via 4-digit PIN — returns a fresh JWT on success.
 
     After ``PIN_MAX_ATTEMPTS`` wrong tries the stored PIN is cleared and the
     user is forced back to full password login (returned as HTTP 429). The
     lockout counter is per-account, resets on any successful verify.
+
+    SEC-003: on top of the per-account 3-strike wipe, we throttle by source IP
+    (20 attempts / 5 min) so an attacker can't rotate emails to enumerate which
+    accounts have a PIN, nor hammer many victims into a forced PIN reset.
     """
+    await rate_limit_hit(
+        bucket="pin-verify-ip", key=client_ip(request), max_hits=20, window_seconds=300,
+    )
     email = payload.email.lower().strip()
+    # A tighter per-(IP,email) budget blocks brute-forcing a single account.
+    await rate_limit_hit(
+        bucket="pin-verify-email", key=f"{client_ip(request)}:{email}",
+        max_hits=8, window_seconds=300,
+    )
     user = await db.users.find_one({"email": email})
     # Return the same 401 for "no user" and "wrong PIN" so we don't leak
     # existence of an account.

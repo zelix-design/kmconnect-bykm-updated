@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { API, getStoredToken } from "@/lib/api";
+import api, { API } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { canEdit } from "@/lib/perm";
+import AuthedImage from "@/components/AuthedImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +39,10 @@ export function clientTypeLabel(v) {
 }
 
 export function photoSrc(u) {
-  return u ? `${API}${u.replace(/^\/api/, "")}?auth=${getStoredToken() || ""}` : null;
+  // Kept for back-compat callers. Returns the plain (tokenless) API URL; the
+  // token is no longer appended to the query string (SEC-001). Prefer the
+  // <AuthedImage> component which fetches via an authenticated request.
+  return u ? `${API}${u.replace(/^\/api/, "")}` : null;
 }
 
 const TYPE_BADGE = {
@@ -270,7 +274,7 @@ function SuperAdminPeople({ pageScope }) {
                     <div className="flex items-center gap-4">
                       <div className="w-16 h-16 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0 border border-border">
                         {form.photo_url ? (
-                          <img src={photoSrc(form.photo_url)} alt="staff" className="w-full h-full object-cover" data-testid="cli-photo-preview" />
+                          <AuthedImage url={form.photo_url} alt="staff" className="w-full h-full object-cover" testid="cli-photo-preview" />
                         ) : (
                           <UserCircle size={38} className="text-muted-foreground" weight="thin" />
                         )}
@@ -468,7 +472,7 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium overflow-hidden shrink-0">
-            {c.photo_url ? <img src={photoSrc(c.photo_url)} alt={c.name} className="w-full h-full object-cover" /> : c.name.slice(0, 2).toUpperCase()}
+            {c.photo_url ? <AuthedImage url={c.photo_url} alt={c.name} className="w-full h-full object-cover" fallback={c.name.slice(0, 2).toUpperCase()} /> : c.name.slice(0, 2).toUpperCase()}
           </div>
           <div>
             <p className="font-medium">{c.name}</p>

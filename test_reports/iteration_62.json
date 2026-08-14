@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 62 — Google Sheets lead-import integration. Backend pytest: 13/13 pass (test_iteration62_google_sheets.py). Verified: (1) /api/google/status returns {configured:true, connected:false} for both super_admin and office_admin without crashing; (2) /api/google/connect as super_admin returns a well-formed accounts.google.com authorization_url with access_type=offline, prompt=consent, redirect_uri ending in /api/oauth/sheets/callback, and a state param; office_admin also allowed (per _require_admin), staff → 403; (3) All Google data endpoints (/spreadsheets, /spreadsheets/{id}/worksheets, /spreadsheets/{id}/values, POST /template) correctly return 404 'Google account is not connected' with NO 500s when unconnected; (4) POST /api/google/import returns 404 for bogus campaign_id, and with a valid campaign correctly reports created_count/duplicate_count/invalid_count/duplicates/invalids — dedup by phone within payload works, empty-name rows counted as invalid; (5) /api/oauth/sheets/callback with error param or missing code/state returns 302 → /settings?google=error (no 500). Frontend UI: super_admin Settings page shows the 'Google Sheets' card (data-testid=google-sheets-settings) with 'Sign in with Google' button (data-testid=google-connect-btn); clicking it navigates to accounts.google.com with the correct client_id, offline access_type, consent prompt, and preview backend redirect_uri. On Leads → CRM → Campaigns tab, opening the seeded 'LBS' campaign shows 'Import from Sheets' button (data-testid=campaign-import-sheets-btn) alongside 'Upload CSV'; clicking opens dialog (data-testid=campaign-import-sheets-dialog) which correctly shows the not-connected prompt (data-testid=sheets-not-connected) instructing the user to connect in Settings. Regression: super_admin + office_admin login OK, Settings + Leads/Campaigns load without functional console errors (only benign pre-auth 401s from AuthedImage + recharts width warnings, same as prior iterations).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration62_google_sheets.py",
+    "/app/test_reports/pytest/iteration62.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routers/google_sheets.py::google_status hits db.google_connections for every caller (staff included). That's fine functionally but is an extra query on a hot path for non-admins who cannot use the feature anyway. Consider early-return {configured, connected:false} when user.role is not admin — saves one Mongo hit per settings page load per staff user.",
+    "routers/google_sheets.py::google_connect stores oauth_states without a TTL index. The row is only auto-deleted on successful callback via find_one_and_delete; if the user abandons the flow, the state row lingers forever. Add a Mongo TTL index on oauth_states.expires_at (created_at + 10min), or convert expires_at to an actual datetime and use expireAfterSeconds:0.",
+    "_credentials_for uses HTTPException 404 for 'not connected'. Semantically 409 or 428 would be more accurate ('precondition required'), but 404 is what the frontend + tests are contracted to, so leaving as-is is safest — just document it.",
+    "import_leads: the dedup 'existing' query loads up to 200k lead docs into memory (find(...).to_list(200_000)). For offices with large lead volumes this will spike memory and latency. Prefer an aggregation that projects phone→count into a set on the server, or bound the query by office+campaign scope more tightly; also consider a Mongo index on {office:1, phone:1}.",
+    "GoogleSheetsSettings.jsx reads ?google=connected|error from location.search — good. Ensure the query param is cleared from the URL after the toast fires (window.history.replaceState) so a manual refresh does not re-toast; verify in code if not already done.",
+    "CampaignImportSheetsDialog: not-connected state is text-only. Consider adding a direct 'Go to Settings' anchor (<Link to='/settings#google'>) inside the not-connected block so users don't have to hunt through the sidebar — reduces friction on first use."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration62_google_sheets.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "super=muneer@kmfoundation.co/kmf@0786, office=blr1@finflow.com/Office@123. Test staff user TEST_staff_gs_<epoch>@finflow.com/Staff@123 is auto-created + auto-deleted by test_connect_staff_forbidden.",
+  "seed_data_creation": "One TEST_camp_gs_<epoch> campaign created + deleted (with its imported TEST_GS_A/B/C leads) inside test_import_valid_campaign_dedup_and_invalid — cleaned up in the finally block. No residual TEST_ data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Google OAuth end-to-end (actual sign-in + callback + token exchange) was intentionally NOT tested — requires a real Google Test-user account and human consent. All non-OAuth surfaces are green. If future work touches /api/google/* or CampaignImportSheetsDialog, re-run backend/tests/test_iteration62_google_sheets.py (fast, no external network to google.com needed). For the once-connected path (spreadsheets/worksheets/values/import happy paths), a manual test with a real Google account is still required.",
+  "rca of the issue": "N/A — no defects detected."
+}

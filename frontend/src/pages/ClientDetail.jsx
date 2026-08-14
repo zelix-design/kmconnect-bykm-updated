@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon, IdentificationBadge, MapPin, House, CalendarCheck, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { clientTypeLabel, photoSrc } from "@/pages/Clients";
+import { clientTypeLabel } from "@/pages/Clients";
+import AuthedImage from "@/components/AuthedImage";
 import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
 import StaffQuotaDialog from "@/components/leave/StaffQuotaDialog";
 
@@ -72,7 +73,7 @@ export default function ClientDetail() {
           <div className="flex items-start gap-4">
             <div className="w-16 h-16 rounded-lg bg-muted text-foreground flex items-center justify-center font-medium text-lg overflow-hidden shrink-0">
               {isStaff && c.photo_url ? (
-                <img src={photoSrc(c.photo_url)} alt={c.name} className="w-full h-full object-cover" data-testid="client-photo" />
+                <AuthedImage url={c.photo_url} alt={c.name} className="w-full h-full object-cover" testid="client-photo" fallback={(c.name || "?").slice(0, 2).toUpperCase()} />
               ) : (
                 (c.name || "?").slice(0, 2).toUpperCase()
               )}

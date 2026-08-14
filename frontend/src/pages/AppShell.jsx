@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
 import { buildApplyUrl } from "@/lib/applyUrl";
-import { photoSrc } from "@/pages/Clients";
+import AuthedImage from "@/components/AuthedImage";
 import NotificationsBell from "@/components/NotificationsBell";
 import BottomNav from "@/components/BottomNav";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -203,10 +203,11 @@ function SidebarContent({ onItemClick, user, onLogout }) {
           <div className="flex items-center gap-3 px-2 py-1.5">
             <div className="w-9 h-9 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden">
               {user?.photo_url ? (
-                <img
-                  src={photoSrc(user.photo_url)}
+                <AuthedImage
+                  url={user.photo_url}
                   alt={user?.name || "profile"}
                   className="w-full h-full object-cover"
+                  fallback={initialsOf(user?.name).toUpperCase()}
                 />
               ) : (
                 initialsOf(user?.name).toUpperCase()
@@ -350,11 +351,12 @@ export default function AppShell() {
             <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
               <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden" data-testid="topbar-avatar">
                 {user?.photo_url ? (
-                  <img
-                    src={photoSrc(user.photo_url)}
+                  <AuthedImage
+                    url={user.photo_url}
                     alt={user?.name || "profile"}
                     className="w-full h-full object-cover"
-                    data-testid="topbar-avatar-img"
+                    testid="topbar-avatar-img"
+                    fallback={initialsOf(user?.name).toUpperCase()}
                   />
                 ) : (
                   initialsOf(user?.name).toUpperCase()
