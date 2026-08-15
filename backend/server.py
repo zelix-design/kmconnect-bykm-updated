@@ -260,6 +260,20 @@ async def startup() -> None:
         logger.exception("[storage] init failed — uploads will retry on first use")
     # Background sweep: remind assignees of due lead follow-ups every 10 min.
     asyncio.create_task(_followup_sweep_loop())
+    # Background sweep: auto-import new rows from synced Google Sheets.
+    asyncio.create_task(_sheet_sync_loop())
+
+
+async def _sheet_sync_loop() -> None:
+    # First pass shortly after boot, then every 30 min; each sync respects its
+    # own interval_hours (default 6h) so this tick is just a cheap due-check.
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await google_sheets.sweep_due_syncs()
+        except Exception:
+            logger.exception("[google-sync] sweep failed")
+        await asyncio.sleep(1800)
 
 
 async def _followup_sweep_loop() -> None:

@@ -4,6 +4,7 @@ import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { GoogleLogo, ArrowClockwise, CheckCircle, WarningCircle, CopySimple } from "@phosphor-icons/react";
@@ -22,10 +23,11 @@ export default function CampaignImportSheetsDialog({ open, onOpenChange, campaig
   const [rows, setRows] = useState(null); // parsed preview rows
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [keepSynced, setKeepSynced] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setSheetId(""); setWorksheets([]); setWorksheet(""); setRows(null);
+    setSheetId(""); setWorksheets([]); setWorksheet(""); setRows(null); setKeepSynced(false);
     (async () => {
       try {
         const { data } = await api.get("/google/status");
@@ -91,6 +93,18 @@ export default function CampaignImportSheetsDialog({ open, onOpenChange, campaig
       const msg = `Imported ${data.created_count} lead(s)` +
         (data.duplicate_count ? ` · ${data.duplicate_count} duplicate(s) skipped` : "");
       toast.success(msg);
+      if (keepSynced) {
+        try {
+          const sheetName = sheets.find((s) => s.id === sheetId)?.name || "";
+          await api.post("/google/sync", {
+            campaign_id: campaignId, spreadsheet_id: sheetId,
+            spreadsheet_name: sheetName, worksheet,
+          });
+          toast.success("Auto-sync enabled — new rows will import automatically");
+        } catch {
+          toast.error("Import done, but auto-sync could not be enabled");
+        }
+      }
       onImported?.();
       onOpenChange(false);
     } catch (err) {
@@ -187,14 +201,22 @@ export default function CampaignImportSheetsDialog({ open, onOpenChange, campaig
           </div>
         )}
 
-        <DialogFooter className="gap-2">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          {status?.connected && (
-            <Button type="button" onClick={doImport} disabled={importing || !counts.valid} data-testid="sheets-import-btn" className="btn-amber border-0">
-              <CopySimple size={15} className="mr-1.5" />
-              {importing ? "Importing…" : `Import ${counts.valid} lead(s)`}
-            </Button>
-          )}
+        <DialogFooter className="gap-2 sm:justify-between">
+          {status?.connected && rows && rows.length > 0 ? (
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none" data-testid="sheets-keep-synced-label">
+              <Checkbox checked={keepSynced} onCheckedChange={(v) => setKeepSynced(!!v)} data-testid="sheets-keep-synced" />
+              Keep this sheet synced to this campaign (auto-imports new rows every 6h)
+            </label>
+          ) : <span />}
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            {status?.connected && (
+              <Button type="button" onClick={doImport} disabled={importing || !counts.valid} data-testid="sheets-import-btn" className="btn-amber border-0">
+                <CopySimple size={15} className="mr-1.5" />
+                {importing ? "Importing…" : `Import ${counts.valid} lead(s)`}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

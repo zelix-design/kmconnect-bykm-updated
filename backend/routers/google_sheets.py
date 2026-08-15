@@ -46,6 +46,8 @@ SCOPES = [
 
 LEAD_SOURCES = ("walk_in", "referral", "social", "website", "csv", "google_sheets", "other")
 
+FIELDS = ("name", "phone", "email", "course", "place", "source", "notes")
+
 _fernet = None
 if ENC_KEY:
     from cryptography.fernet import Fernet
@@ -192,6 +194,9 @@ async def _ensure_indexes() -> None:
     try:
         # Abandoned OAuth flows self-expire after 10 min (row never reaches the callback).
         await db.oauth_states.create_index("created_at", expireAfterSeconds=600)
+        await db.sheet_sync_rows.create_index([("sync_id", 1), ("row_hash", 1)], unique=True)
+        await db.sheet_syncs.create_index([("office", 1), ("campaign_id", 1)])
+        await db.sheet_sync_runs.create_index([("sync_id", 1), ("ran_at", -1)])
     except Exception:  # noqa: BLE001 — index may already exist / race
         pass
     _indexes_ready = True
@@ -379,26 +384,40 @@ def _name_place_key(name: str, place: str) -> str:
     return f"{n}|{p}" if n else ""
 
 
-@router.post("/import", status_code=201)
-async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
-    """Import validated rows (from a Google Sheet) into a campaign.
+def _row_hash(row: dict) -> str:
+    """Stable fingerprint of a row's content — used to detect brand-new rows."""
+    import hashlib
+    key = "|".join((str(row.get(f, "")) or "").strip().lower() for f in FIELDS)
+    return hashlib.sha256(key.encode()).hexdigest()
 
-    Server-side dedup is authoritative: rows whose phone (or name+place when no
-    phone) already exist in the caller's lead scope — or repeat within the
-    payload — are skipped. Rows without a name are invalid. Leads land unassigned
-    so they can be distributed afterwards, tagged to the campaign + its office."""
-    _require_admin(user)
-    role = user.get("role")
-    cscope = {} if role == "super_admin" else {"office": user.get("office")}
-    campaign = await db.campaigns.find_one(
-        {**cscope, "id": body.campaign_id}, {"_id": 0, "id": 1, "office": 1}
-    )
-    if not campaign:
-        raise HTTPException(404, "Campaign not found")
-    office = campaign["office"]
 
-    # Dedup scope: super_admin = whole DB; office_admin = own office.
-    dedup_scope = {} if role == "super_admin" else {"office": user.get("office")}
+def _parse_values(values: list) -> list[dict]:
+    """Map a raw Sheets value grid → list of lead-row dicts using the header row.
+
+    Raises 400 when there is no recognisable ``name`` column."""
+    if len(values) < 2:
+        return []
+    headers = [str(h or "").strip().lower() for h in values[0]]
+    pos = {f: headers.index(f) for f in FIELDS if f in headers}
+    if "name" not in pos:
+        raise HTTPException(400, "No 'name' column found in the header row")
+    out: list[dict] = []
+    for raw in values[1:]:
+        row = {f: (str(raw[pos[f]]).strip() if f in pos and pos[f] < len(raw) and raw[pos[f]] is not None else "")
+               for f in FIELDS}
+        if any(row.values()):
+            out.append(row)
+    return out
+
+
+async def _dedup_and_insert(rows: list[dict], *, campaign_id: str, office: str,
+                            role: str, user_office: Optional[str], actor: dict) -> dict:
+    """Shared dedup + insert used by both manual import and auto-sync.
+
+    ``rows`` are plain dicts with FIELDS keys. Dedups by phone (name+place
+    fallback) against the caller's lead scope and within the batch. Returns a
+    summary dict + the list of created lead ids."""
+    dedup_scope = {} if role == "super_admin" else {"office": user_office}
     existing = await db.leads.find(
         dedup_scope, {"_id": 0, "phone": 1, "name": 1, "place": 1}
     ).to_list(200_000)
@@ -419,13 +438,13 @@ async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
     seen_phone: set[str] = set()
     seen_name: set[str] = set()
     now = now_iso()
-    for i, row in enumerate(body.rows):
-        name = (row.name or "").strip()
+    for i, row in enumerate(rows):
+        name = (row.get("name") or "").strip()
         if not name:
             invalids.append({"row": i + 1, "reason": "missing name"})
             continue
-        phone = (row.phone or "").strip()
-        place = (row.place or "").strip()
+        phone = (row.get("phone") or "").strip()
+        place = (row.get("place") or "").strip()
         pk = _phone_key(phone)
         nk = _name_place_key(name, place) if not pk else ""
         reason: Optional[str] = None
@@ -446,23 +465,23 @@ async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
             seen_phone.add(pk)
         elif nk:
             seen_name.add(nk)
-        src = (row.source or "").strip().lower()
+        src = (row.get("source") or "").strip().lower()
         created.append({
             "id": gen_id(),
             "name": name,
             "phone": phone,
-            "email": (row.email or "").strip(),
-            "course": (row.course or "").strip(),
+            "email": (row.get("email") or "").strip(),
+            "course": (row.get("course") or "").strip(),
             "place": place,
             "source": src if src in LEAD_SOURCES else "google_sheets",
             "status": "new",
             "assigned_to_user_id": None,
             "office": office,
-            "campaign_id": body.campaign_id,
+            "campaign_id": campaign_id,
             "next_follow_up": None,
-            "notes": (row.notes or "").strip(),
+            "notes": (row.get("notes") or "").strip(),
             "follow_ups": [],
-            "created_by_user_id": user["id"],
+            "created_by_user_id": actor["id"],
             "created_at": now,
             "updated_at": now,
         })
@@ -470,13 +489,13 @@ async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
     if created:
         await db.leads.insert_many([dict(d) for d in created])
         await log_event(
-            event_type="lead.sheets_import", actor=user,
+            event_type="lead.sheets_import", actor=actor,
             subject_type="lead", subject_label=f"{len(created)} leads",
-            after={"count": len(created), "campaign_id": body.campaign_id},
+            after={"count": len(created), "campaign_id": campaign_id},
             office=office,
             note=f"Imported {len(created)} leads from Google Sheets",
             reversible=True,
-            extras={"lead_ids": [c["id"] for c in created], "campaign_id": body.campaign_id},
+            extras={"lead_ids": [c["id"] for c in created], "campaign_id": campaign_id},
         )
     return {
         "created_count": len(created),
@@ -484,4 +503,297 @@ async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
         "invalid_count": len(invalids),
         "duplicates": duplicates[:200],
         "invalids": invalids[:200],
+        "created_ids": [c["id"] for c in created],
     }
+
+
+async def _campaign_in_scope(campaign_id: str, role: str, user_office: Optional[str]) -> dict:
+    cscope = {} if role == "super_admin" else {"office": user_office}
+    campaign = await db.campaigns.find_one(
+        {**cscope, "id": campaign_id}, {"_id": 0, "id": 1, "name": 1, "office": 1}
+    )
+    if not campaign:
+        raise HTTPException(404, "Campaign not found")
+    return campaign
+
+
+@router.post("/import", status_code=201)
+async def import_leads(body: ImportIn, user: dict = Depends(get_current_user)):
+    """Import validated rows (from a Google Sheet) into a campaign."""
+    _require_admin(user)
+    role = user.get("role")
+    campaign = await _campaign_in_scope(body.campaign_id, role, user.get("office"))
+    summary = await _dedup_and_insert(
+        [r.model_dump() for r in body.rows],
+        campaign_id=body.campaign_id, office=campaign["office"],
+        role=role, user_office=user.get("office"), actor=user,
+    )
+    summary.pop("created_ids", None)
+    return summary
+
+
+# ------------------------------------------------------------------ auto-sync
+SYNC_INTERVAL_HOURS = 6
+
+
+class SyncCreateIn(BaseModel):
+    campaign_id: str
+    spreadsheet_id: str
+    spreadsheet_name: str = ""
+    worksheet: str
+    interval_hours: int = Field(default=SYNC_INTERVAL_HOURS, ge=1, le=168)
+
+
+def _sync_scope(user: dict) -> dict:
+    return {} if user.get("role") == "super_admin" else {"office": user.get("office")}
+
+
+def _sync_public(doc: dict) -> dict:
+    return {
+        "id": doc["id"],
+        "campaign_id": doc["campaign_id"],
+        "campaign_name": doc.get("campaign_name"),
+        "spreadsheet_id": doc["spreadsheet_id"],
+        "spreadsheet_name": doc.get("spreadsheet_name"),
+        "worksheet": doc["worksheet"],
+        "enabled": doc.get("enabled", True),
+        "interval_hours": doc.get("interval_hours", SYNC_INTERVAL_HOURS),
+        "google_email": doc.get("google_email"),
+        "last_synced_at": doc.get("last_synced_at"),
+        "last_status": doc.get("last_status"),
+        "last_run_summary": doc.get("last_run_summary"),
+        "paused_reason": doc.get("paused_reason"),
+        "created_at": doc.get("created_at"),
+    }
+
+
+async def _run_sync(sync: dict, trigger: str) -> dict:
+    """Read the linked worksheet, import only rows not seen before, record a run."""
+    sid = sync["id"]
+    uid = sync["user_id"]
+    now = datetime.now(timezone.utc)
+    try:
+        creds = await _credentials_for(uid)
+    except HTTPException as exc:
+        await db.sheet_syncs.update_one(
+            {"id": sid},
+            {"$set": {"enabled": False, "paused_reason": str(exc.detail),
+                      "last_status": "error", "updated_at": now}},
+        )
+        await _record_run(sync, trigger, error=str(exc.detail))
+        return {"error": str(exc.detail)}
+    try:
+        _, sheets = _services(creds)
+        safe = sync["worksheet"].replace("'", "''")
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=sync["spreadsheet_id"], range=f"'{safe}'!A:Z",
+            majorDimension="ROWS", valueRenderOption="UNFORMATTED_VALUE",
+        ).execute()
+        rows = _parse_values(result.get("values", []))
+    except HTTPException as exc:
+        await db.sheet_syncs.update_one(
+            {"id": sid}, {"$set": {"last_status": "error", "paused_reason": str(exc.detail), "updated_at": now}})
+        await _record_run(sync, trigger, error=str(exc.detail))
+        return {"error": str(exc.detail)}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("[google-sync] read failed for sync=%s", sid)
+        await db.sheet_syncs.update_one(
+            {"id": sid}, {"$set": {"last_status": "error", "updated_at": now}})
+        await _record_run(sync, trigger, error="Could not read the sheet")
+        return {"error": str(exc)}
+
+    hashed = [(_row_hash(r), r) for r in rows]
+    all_hashes = [h for h, _ in hashed]
+    seen_docs = await db.sheet_sync_rows.find(
+        {"sync_id": sid, "row_hash": {"$in": all_hashes}}, {"_id": 0, "row_hash": 1}
+    ).to_list(200_000)
+    seen = {d["row_hash"] for d in seen_docs}
+    new_pairs = [(h, r) for h, r in hashed if h not in seen]
+
+    summary = await _dedup_and_insert(
+        [r for _, r in new_pairs],
+        campaign_id=sync["campaign_id"], office=sync["office"],
+        role="super_admin" if sync.get("scope_all") else "office_admin",
+        user_office=sync.get("office"),
+        actor={"id": sync["user_id"], "name": sync.get("user_name", "Auto-sync"),
+               "role": "office_admin", "office": sync.get("office")},
+    )
+    if new_pairs:
+        try:
+            await db.sheet_sync_rows.insert_many(
+                [{"sync_id": sid, "row_hash": h, "seen_at": now} for h, _ in new_pairs],
+                ordered=False,
+            )
+        except Exception:  # noqa: BLE001 — dup key races are fine
+            pass
+    run_summary = {
+        "new_rows": len(new_pairs),
+        "created_count": summary["created_count"],
+        "duplicate_count": summary["duplicate_count"],
+        "invalid_count": summary["invalid_count"],
+    }
+    await db.sheet_syncs.update_one(
+        {"id": sid},
+        {"$set": {"last_synced_at": now, "last_status": "ok",
+                  "last_run_summary": run_summary, "paused_reason": None, "updated_at": now}},
+    )
+    await _record_run(sync, trigger, summary=run_summary)
+    return run_summary
+
+
+async def _record_run(sync: dict, trigger: str, *, summary: dict | None = None, error: str | None = None) -> None:
+    await db.sheet_sync_runs.insert_one({
+        "id": gen_id(),
+        "sync_id": sync["id"],
+        "campaign_id": sync["campaign_id"],
+        "office": sync.get("office"),
+        "trigger": trigger,
+        "ran_at": datetime.now(timezone.utc),
+        "summary": summary,
+        "error": error,
+    })
+
+
+@router.post("/sync", status_code=201)
+async def create_sync(body: SyncCreateIn, user: dict = Depends(get_current_user)):
+    """Enable auto-sync for a spreadsheet↔campaign pair, then baseline current rows
+    as already-seen so future runs only pick up NEW rows."""
+    _require_admin(user)
+    _guard_configured()
+    role = user.get("role")
+    campaign = await _campaign_in_scope(body.campaign_id, role, user.get("office"))
+    conn = await db.google_connections.find_one(
+        {"user_id": user["id"], "provider": "google_sheets"}, {"_id": 0, "google_email": 1})
+    if not conn:
+        raise HTTPException(404, "Google account is not connected")
+    await _ensure_indexes()
+
+    existing = await db.sheet_syncs.find_one({
+        "campaign_id": body.campaign_id, "spreadsheet_id": body.spreadsheet_id,
+        "worksheet": body.worksheet,
+    })
+    now = datetime.now(timezone.utc)
+    sync_id = existing["id"] if existing else gen_id()
+    doc = {
+        "id": sync_id,
+        "user_id": user["id"],
+        "user_name": user.get("name"),
+        "google_email": conn.get("google_email"),
+        "campaign_id": body.campaign_id,
+        "campaign_name": campaign.get("name"),
+        "office": campaign["office"],
+        "scope_all": role == "super_admin",
+        "spreadsheet_id": body.spreadsheet_id,
+        "spreadsheet_name": body.spreadsheet_name or body.spreadsheet_id,
+        "worksheet": body.worksheet,
+        "interval_hours": body.interval_hours,
+        "enabled": True,
+        "paused_reason": None,
+        "last_synced_at": now,
+        "last_status": "baselined",
+        "updated_at": now,
+    }
+    if not existing:
+        doc["created_at"] = now
+    await db.sheet_syncs.update_one({"id": sync_id}, {"$set": doc}, upsert=True)
+
+    # Baseline: mark all current rows as seen so we don't re-import them.
+    try:
+        creds = await _credentials_for(user["id"])
+        _, sheets = _services(creds)
+        safe = body.worksheet.replace("'", "''")
+        result = sheets.spreadsheets().values().get(
+            spreadsheetId=body.spreadsheet_id, range=f"'{safe}'!A:Z",
+            majorDimension="ROWS", valueRenderOption="UNFORMATTED_VALUE",
+        ).execute()
+        rows = _parse_values(result.get("values", []))
+        if rows:
+            try:
+                await db.sheet_sync_rows.insert_many(
+                    [{"sync_id": sync_id, "row_hash": _row_hash(r), "seen_at": now} for r in rows],
+                    ordered=False,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+    except HTTPException:
+        pass
+    return _sync_public({**doc, "created_at": doc.get("created_at", now)})
+
+
+@router.get("/syncs")
+async def list_syncs(campaign_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    q = _sync_scope(user)
+    if campaign_id:
+        q["campaign_id"] = campaign_id
+    rows = await db.sheet_syncs.find(q).sort("created_at", -1).to_list(200)
+    return {"syncs": [_sync_public(r) for r in rows]}
+
+
+async def _get_sync_scoped(sync_id: str, user: dict) -> dict:
+    sync = await db.sheet_syncs.find_one({"id": sync_id, **_sync_scope(user)})
+    if not sync:
+        raise HTTPException(404, "Sync not found")
+    return sync
+
+
+@router.post("/syncs/{sync_id}/run")
+async def run_sync_now(sync_id: str, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    sync = await _get_sync_scoped(sync_id, user)
+    result = await _run_sync(sync, "manual")
+    return result
+
+
+class SyncPatchIn(BaseModel):
+    enabled: bool
+
+
+@router.patch("/syncs/{sync_id}")
+async def toggle_sync(sync_id: str, body: SyncPatchIn, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    await _get_sync_scoped(sync_id, user)
+    update = {"enabled": body.enabled, "updated_at": datetime.now(timezone.utc)}
+    if body.enabled:
+        update["paused_reason"] = None
+    await db.sheet_syncs.update_one({"id": sync_id}, {"$set": update})
+    return {"enabled": body.enabled}
+
+
+@router.delete("/syncs/{sync_id}")
+async def delete_sync(sync_id: str, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    await _get_sync_scoped(sync_id, user)
+    await db.sheet_syncs.delete_one({"id": sync_id})
+    await db.sheet_sync_rows.delete_many({"sync_id": sync_id})
+    await db.sheet_sync_runs.delete_many({"sync_id": sync_id})
+    return {"deleted": True}
+
+
+@router.get("/syncs/{sync_id}/runs")
+async def sync_history(sync_id: str, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    await _get_sync_scoped(sync_id, user)
+    rows = await db.sheet_sync_runs.find(
+        {"sync_id": sync_id}, {"_id": 0}
+    ).sort("ran_at", -1).to_list(50)
+    return {"runs": rows}
+
+
+async def sweep_due_syncs() -> None:
+    """Background sweep — run enabled syncs whose interval has elapsed."""
+    from datetime import timedelta
+    if not _configured():
+        return
+    now = datetime.now(timezone.utc)
+    cursor = db.sheet_syncs.find({"enabled": True})
+    async for sync in cursor:
+        interval = sync.get("interval_hours", SYNC_INTERVAL_HOURS)
+        last = sync.get("last_synced_at")
+        due = last is None or (now - last) >= timedelta(hours=interval)
+        if not due:
+            continue
+        try:
+            await _run_sync(sync, "auto")
+        except Exception:  # noqa: BLE001
+            log.exception("[google-sync] auto run failed for sync=%s", sync.get("id"))

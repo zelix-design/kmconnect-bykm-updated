@@ -13,6 +13,7 @@ import CampaignDistributeDialog from "./CampaignDistributeDialog";
 import CampaignDeleteDialog from "./CampaignDeleteDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import CampaignImportSheetsDialog from "./CampaignImportSheetsDialog";
+import CampaignSyncedSheets from "./CampaignSyncedSheets";
 import LeadsPipeline from "./LeadsPipeline";
 
 const OFFICE_LABEL = { KM_BLR: "KM BLR", KM_TCR: "KM TCR", KM_KMLY: "KM KMLY" };
@@ -189,6 +190,8 @@ export default function CampaignsPanel({ user }) {
             </div>
           </div>
         )}
+
+        <CampaignSyncedSheets campaignId={selectedId} refreshKey={pipelineKey} />
 
         <div className="pt-1">
           <p className="text-xs font-medium text-muted-foreground mb-3">Campaign pipeline</p>
