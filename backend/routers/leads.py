@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from db import db
@@ -449,6 +449,89 @@ async def list_leads(
             d["assigned_to_name"] = umap.get(uid)
             d["assigned_to_photo_url"] = photo_map.get(uid) or ""
     return docs
+
+
+@router.get("/export")
+async def export_leads(
+    user: dict = Depends(get_current_user),
+    status: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    source: Optional[str] = None,
+    campaign_id: Optional[str] = None,
+    uncategorized: Optional[bool] = None,
+    q: Optional[str] = None,
+    view: Optional[str] = None,  # "missed"
+    office: Optional[str] = None,
+):
+    """Download leads as CSV, honouring the same filters as the list view —
+    most importantly ``status`` so an admin can export just one pipeline stage."""
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    query = _apply_office_override(user, _scope_filter(user), office)
+    if status and status in LEAD_STATUSES:
+        query["status"] = status
+    if assigned_to:
+        query["assigned_to_user_id"] = assigned_to
+    if source and source in LEAD_SOURCES:
+        query["source"] = source
+    if campaign_id:
+        query["campaign_id"] = campaign_id
+    if uncategorized:
+        query["$and"] = [{"$or": [{"campaign_id": None}, {"campaign_id": {"$exists": False}}]}]
+    if q:
+        rx = {"$regex": q.strip(), "$options": "i"}
+        or_clause = [{"name": rx}, {"phone": rx}, {"email": rx}, {"course": rx}, {"place": rx}]
+        if uncategorized:
+            query["$and"].append({"$or": or_clause})
+        else:
+            query["$or"] = or_clause
+    docs = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(20000)
+    now = datetime.now(timezone.utc)
+    if view == "missed":
+        docs = [d for d in docs if _is_missed(d, now)]
+
+    # Resolve assignee + campaign names for human-readable columns.
+    uids = list({d.get("assigned_to_user_id") for d in docs if d.get("assigned_to_user_id")})
+    umap: dict = {}
+    if uids:
+        us = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        umap = {u["id"]: u.get("name") for u in us}
+    cids = list({d.get("campaign_id") for d in docs if d.get("campaign_id")})
+    cmap: dict = {}
+    if cids:
+        cs = await db.campaigns.find({"id": {"$in": cids}}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        cmap = {c["id"]: c.get("name") for c in cs}
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Name", "Phone", "Email", "Course", "Place", "Status", "Source",
+        "Assigned To", "Campaign", "Next Follow-up", "Notes", "Created At",
+    ])
+    label = {s: s.replace("_", " ").title() for s in LEAD_STATUSES}
+    for d in docs:
+        w.writerow([
+            d.get("name", ""),
+            d.get("phone", ""),
+            d.get("email", ""),
+            d.get("course", ""),
+            d.get("place", ""),
+            label.get(d.get("status"), d.get("status", "")),
+            (d.get("source") or "").replace("_", " ").title(),
+            umap.get(d.get("assigned_to_user_id"), "") or "",
+            cmap.get(d.get("campaign_id"), "") or "",
+            d.get("next_follow_up", "") or "",
+            (d.get("notes", "") or "").replace("\n", " ").strip(),
+            d.get("created_at", "") or "",
+        ])
+    fname_status = (status if status in LEAD_STATUSES else ("missed" if view == "missed" else "all"))
+    filename = f"leads-{fname_status}-{now.strftime('%Y%m%d')}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
 
 
 class AssignCampaignIn(BaseModel):

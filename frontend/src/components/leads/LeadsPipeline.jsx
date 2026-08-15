@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   Plus, UploadSimple, MagnifyingGlass, Target, ClockCountdown, CheckCircle, Phone, GraduationCap,
-  ListBullets, Kanban, ArrowRight,
+  ListBullets, Kanban, ArrowRight, DownloadSimple,
 } from "@phosphor-icons/react";
 import { LEAD_STATUSES, LEAD_STATUS_META, sourceLabel, fmtDateTime } from "./constants";
 import LeadFormDialog from "./LeadFormDialog";
@@ -186,6 +186,34 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
 
   const afterChange = () => { fetchLeads(); fetchStats(); onChanged?.(); };
 
+  const [downloading, setDownloading] = useState(false);
+  const downloadCsv = async () => {
+    setDownloading(true);
+    try {
+      const qp = {};
+      if (campaignId) qp.campaign_id = campaignId;
+      if (allLeadsMode && uncategorizedOnly) qp.uncategorized = true;
+      if (statusFilter === "missed") qp.view = "missed";
+      else if (statusFilter !== "all") qp.status = statusFilter;
+      if (sourceFilter !== "all") qp.source = sourceFilter;
+      if (assigneeFilter !== "all") qp.assigned_to = assigneeFilter;
+      if (q.trim()) qp.q = q.trim();
+      if (officeOverride && officeOverride !== "all") qp.office = officeOverride;
+      const res = await api.get("/leads/export", { params: qp, responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `leads-${statusFilter}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Leads exported");
+    } catch {
+      toast.error("Could not export leads");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const visibleIds = useMemo(() => leads.map((l) => l.id), [leads]);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
   const toggleSelectAll = () => {
@@ -288,6 +316,12 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
               className={`h-10 px-3 rounded-lg border text-sm transition-colors ${uncategorizedOnly ? "bg-amber-gradient text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}>
               Uncategorised only
             </button>
+          )}
+          {view === "list" && (
+            <Button variant="outline" onClick={downloadCsv} disabled={downloading || leads.length === 0} data-testid="leads-download-btn" className="h-10">
+              <DownloadSimple size={16} className="mr-1.5" />
+              {downloading ? "Exporting…" : "Download"}
+            </Button>
           )}
           <div className="flex items-center rounded-lg border border-border overflow-hidden ml-auto" data-testid="leads-view-toggle">
             <button type="button" onClick={() => setView("list")} data-testid="leads-view-list"
