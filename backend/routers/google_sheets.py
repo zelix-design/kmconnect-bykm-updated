@@ -37,6 +37,11 @@ REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "").rstrip("/")
 ENC_KEY = os.environ.get("GOOGLE_TOKEN_ENCRYPTION_KEY", "")
 
+# Google returns scopes in a different shape than requested (e.g. "email" vs the
+# full userinfo.email URL), which makes oauthlib raise "Scope has changed".
+# Relaxing this lets the token exchange succeed for our confidential web client.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/spreadsheets",
@@ -208,13 +213,6 @@ async def google_connect(user: dict = Depends(get_current_user)):
     _require_admin(user)
     await _ensure_indexes()
     state = secrets.token_urlsafe(32)
-    await db.oauth_states.insert_one({
-        "state": state,
-        "user_id": user["id"],
-        "provider": "google_sheets",
-        "created_at": datetime.now(timezone.utc),
-        "expires_at": datetime.now(timezone.utc).timestamp() + 600,
-    })
     flow = _new_flow()
     url, _ = flow.authorization_url(
         access_type="offline",
@@ -222,6 +220,17 @@ async def google_connect(user: dict = Depends(get_current_user)):
         include_granted_scopes="true",
         state=state,
     )
+    # Persist the PKCE code_verifier — the callback rebuilds a fresh Flow and
+    # must present the same verifier at token exchange, else Google returns
+    # "invalid_grant: Missing code verifier".
+    await db.oauth_states.insert_one({
+        "state": state,
+        "user_id": user["id"],
+        "provider": "google_sheets",
+        "code_verifier": getattr(flow, "code_verifier", None),
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc).timestamp() + 600,
+    })
     return {"authorization_url": url}
 
 
@@ -255,6 +264,7 @@ async def google_callback(code: Optional[str] = None, state: Optional[str] = Non
         return RedirectResponse(f"{dest}?google=error")
     try:
         flow = _new_flow()
+        flow.code_verifier = row.get("code_verifier")
         flow.fetch_token(code=code)
         creds = flow.credentials
         email = None
