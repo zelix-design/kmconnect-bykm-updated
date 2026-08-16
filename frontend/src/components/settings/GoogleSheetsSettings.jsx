@@ -43,7 +43,10 @@ export default function GoogleSheetsSettings() {
   const connect = async () => {
     setBusy(true);
     try {
-      const { data } = await api.get("/google/connect", { params: { origin: window.location.origin } });
+      // No origin param: the backend uses its GOOGLE_REDIRECT_URI env, which
+      // must point to the BACKEND's own callback (frontend + backend may be on
+      // different domains in production).
+      const { data } = await api.get("/google/connect");
       window.location.assign(data.authorization_url);
     } catch {
       toast.error("Could not start Google sign-in");

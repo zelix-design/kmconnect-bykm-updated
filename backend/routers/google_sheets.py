@@ -284,10 +284,10 @@ async def google_disconnect(user: dict = Depends(get_current_user)):
 async def google_callback(code: Optional[str] = None, state: Optional[str] = None,
                           error: Optional[str] = None):
     row = await db.oauth_states.find_one_and_delete({"state": state, "provider": "google_sheets"}) if state else None
-    # Redirect back to the same app origin the flow started from (preview or prod).
     redirect_uri = (row or {}).get("redirect_uri") or REDIRECT_URI
-    dest_origin = redirect_uri.split("/api/", 1)[0] if "/api/" in redirect_uri else FRONTEND_URL
-    dest = f"{dest_origin}/settings"
+    # Always return the user to the FRONTEND app, which may live on a different
+    # domain than this backend (e.g. kmconnect.co.in ↔ *.up.railway.app).
+    dest = f"{FRONTEND_URL.rstrip('/')}/settings" if FRONTEND_URL else f"{redirect_uri.split('/api/', 1)[0]}/settings"
     if error or not code or not state:
         return RedirectResponse(f"{dest}?google=error")
     if not row or row["expires_at"] < datetime.now(timezone.utc).timestamp():
