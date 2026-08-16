@@ -6,7 +6,7 @@
 //   - Handle Web Push events → show OS-level notifications even when the app
 //     is closed.
 
-const CACHE = "finflow-shell-v4";
+const CACHE = "finflow-shell-v5";
 const SHELL = [
   "/manifest.json",
   "/finflow-icon.png",
@@ -39,7 +39,15 @@ self.addEventListener("fetch", (event) => {
   // We DO fall back to the cached "/" shell if completely offline.
   if (dest === "document" || req.mode === "navigate") {
     event.respondWith(
-      fetch(req).catch(() => caches.match("/") || caches.match(req)),
+      fetch(req).catch(async () =>
+        (await caches.match(req)) ||
+        (await caches.match("/")) ||
+        (await caches.match("/index.html")) ||
+        new Response(
+          "<!doctype html><meta charset='utf-8'><title>Offline</title><body style='font-family:sans-serif;padding:2rem'>You're offline. Reconnect and try again.</body>",
+          { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+        ),
+      ),
     );
     return;
   }
@@ -52,7 +60,7 @@ self.addEventListener("fetch", (event) => {
         }
         return res;
       })
-      .catch(() => caches.match(req).then((r) => r || caches.match("/"))),
+      .catch(async () => (await caches.match(req)) || Response.error()),
   );
 });
 
