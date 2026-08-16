@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
@@ -91,10 +92,35 @@ def _client_config() -> dict:
     }}
 
 
-def _new_flow():
+def _origin_from_request(request) -> str:
+    """Unused for redirect derivation — proxies rewrite Origin to internal hosts.
+    The browser-supplied ``origin`` query param is used instead (reliable)."""
+    o = (request.headers.get("origin") or request.headers.get("referer") or "").strip()
+    if o:
+        parts = o.split("/", 3)
+        o = "/".join(parts[:3])
+    return o
+
+
+_ORIGIN_RE = re.compile(r"^https://[a-zA-Z0-9.-]+(:\d+)?$")
+
+
+def _redirect_uri_for(origin: Optional[str]) -> str:
+    """Build the callback URL from the BROWSER's origin (window.location.origin,
+    passed by the frontend) so the flow works on preview AND production
+    (kmconnect.co.in) without redeploying. Proxy header rewriting makes the
+    server-side Origin header unreliable, so we trust the explicit param — and
+    Google still enforces that the result is a registered redirect URI.
+    Falls back to the env default when the param is missing/malformed."""
+    if origin and _ORIGIN_RE.match(origin.strip()):
+        return f"{origin.strip().rstrip('/')}/api/oauth/sheets/callback"
+    return REDIRECT_URI
+
+
+def _new_flow(redirect_uri: Optional[str] = None):
     from google_auth_oauthlib.flow import Flow
     flow = Flow.from_client_config(_client_config(), scopes=SCOPES)
-    flow.redirect_uri = REDIRECT_URI
+    flow.redirect_uri = redirect_uri or REDIRECT_URI
     return flow
 
 
@@ -208,26 +234,29 @@ async def _ensure_indexes() -> None:
 
 
 @router.get("/connect")
-async def google_connect(user: dict = Depends(get_current_user)):
+async def google_connect(request: Request, origin: Optional[str] = None,
+                        user: dict = Depends(get_current_user)):
     _guard_configured()
     _require_admin(user)
     await _ensure_indexes()
     state = secrets.token_urlsafe(32)
-    flow = _new_flow()
+    redirect_uri = _redirect_uri_for(origin)
+    flow = _new_flow(redirect_uri)
     url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
         include_granted_scopes="true",
         state=state,
     )
-    # Persist the PKCE code_verifier — the callback rebuilds a fresh Flow and
-    # must present the same verifier at token exchange, else Google returns
-    # "invalid_grant: Missing code verifier".
+    # Persist the PKCE code_verifier + the exact redirect_uri used — the callback
+    # rebuilds a fresh Flow and must present BOTH unchanged at token exchange,
+    # else Google returns "invalid_grant" (missing verifier / redirect mismatch).
     await db.oauth_states.insert_one({
         "state": state,
         "user_id": user["id"],
         "provider": "google_sheets",
         "code_verifier": getattr(flow, "code_verifier", None),
+        "redirect_uri": redirect_uri,
         "created_at": datetime.now(timezone.utc),
         "expires_at": datetime.now(timezone.utc).timestamp() + 600,
     })
@@ -254,16 +283,19 @@ async def google_disconnect(user: dict = Depends(get_current_user)):
 @oauth_router.get("/callback")
 async def google_callback(code: Optional[str] = None, state: Optional[str] = None,
                           error: Optional[str] = None):
-    dest = f"{FRONTEND_URL}/settings"
+    row = await db.oauth_states.find_one_and_delete({"state": state, "provider": "google_sheets"}) if state else None
+    # Redirect back to the same app origin the flow started from (preview or prod).
+    redirect_uri = (row or {}).get("redirect_uri") or REDIRECT_URI
+    dest_origin = redirect_uri.split("/api/", 1)[0] if "/api/" in redirect_uri else FRONTEND_URL
+    dest = f"{dest_origin}/settings"
     if error or not code or not state:
         return RedirectResponse(f"{dest}?google=error")
-    row = await db.oauth_states.find_one_and_delete({"state": state, "provider": "google_sheets"})
     if not row or row["expires_at"] < datetime.now(timezone.utc).timestamp():
         return RedirectResponse(f"{dest}?google=error")
     if not _configured():
         return RedirectResponse(f"{dest}?google=error")
     try:
-        flow = _new_flow()
+        flow = _new_flow(redirect_uri)
         flow.code_verifier = row.get("code_verifier")
         flow.fetch_token(code=code)
         creds = flow.credentials

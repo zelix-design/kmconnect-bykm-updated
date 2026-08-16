@@ -43,7 +43,7 @@ export default function GoogleSheetsSettings() {
   const connect = async () => {
     setBusy(true);
     try {
-      const { data } = await api.get("/google/connect");
+      const { data } = await api.get("/google/connect", { params: { origin: window.location.origin } });
       window.location.assign(data.authorization_url);
     } catch {
       toast.error("Could not start Google sign-in");
