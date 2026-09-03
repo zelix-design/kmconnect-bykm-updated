@@ -140,8 +140,7 @@ export default function StudentDetail() {
         kind: a.sub_agent_type === "associate" ? "associate_consultant" : "sub_agent",
       };
     }
-    // legacy paid_to_college rows — surface as KM Foundation (user can re-pick)
-    if (a.kind === "paid_to_college") return { ...base, kind: "km_foundation" };
+    // legacy paid_to_college is a first-class option again — keep it as-is
     return { ...base, kind: a.kind };
   };
 

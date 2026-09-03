@@ -97,7 +97,7 @@ export default function AdjustmentsSection({
         <div className="flex-1">
           <p className="text-sm font-medium">This payment has an adjustment</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Split the amount across KM Foundation account, Sub-Agent or Associate Consultant.
+            Split the amount across KM Foundation account, Sub-Agent, Associate Consultant, or amount paid to the College.
           </p>
         </div>
       </label>
@@ -150,6 +150,13 @@ export default function AdjustmentsSection({
                       )}
                     </SelectContent>
                   </Select>
+                ) : adj.kind === "paid_to_college" ? (
+                  <div
+                    className="col-span-6 h-10 flex items-center px-3 rounded-md border border-border bg-muted/40 text-xs text-muted-foreground"
+                    data-testid={`${testIdPrefix}-college-note-${idx}`}
+                  >
+                    Paid directly to the college
+                  </div>
                 ) : (
                   <Select
                     value={adj.client_id || ""}

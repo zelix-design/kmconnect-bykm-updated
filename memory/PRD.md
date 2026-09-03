@@ -1472,3 +1472,9 @@ admissions per year. It's confidential — only super admin can see it."
 ## 2026-06-15 — CRM Leads status-based CSV export
 - Backend `GET /api/leads/export` (registered before `/{lead_id}`): reuses the exact list_leads filters (status/source/assigned_to/campaign_id/office/q/view/uncategorized) and streams a CSV (cols: Name, Phone, Email, Course, Place, Status, Source, Assigned To, Campaign, Next Follow-up, Notes, Created At). Filename `leads-<status>-<YYYYMMDD>.csv`. Verified via curl: all export = 45 rows; `?status=converted` returns only Converted rows.
 - Frontend `LeadsPipeline.jsx`: a **Download** button (data-testid `leads-download-btn`, list-view only) exports the currently-filtered set — respecting the selected status chip + search + assignee + office + campaign — via authenticated blob fetch. Works in both "All leads" and campaign pipeline views.
+
+## 2026-06-15 — Re-added "PAID to COLLEGE" adjustment option
+- Student Detail → payment dialog → adjustments: added a 4th kind "PAID to COLLEGE" (value `paid_to_college`) to ADJUSTMENT_KIND_OPTIONS.
+- AdjustmentsSection.jsx: for this kind, shows a "Paid directly to the college" note instead of an account/client picker (no target required). Validation only needs date+amount.
+- StudentDetail.jsx `_mapAdjustmentForForm` now preserves `paid_to_college` on edit (previously coerced to KM Foundation); `_mapAdjustmentForApi` passes it through unchanged.
+- Backend already supported `paid_to_college` in AdjustmentKind Literal (no model change). Verified: model accepts it; build passes; dropdown shows all 4 options (screenshot).
