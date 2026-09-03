@@ -1478,3 +1478,9 @@ admissions per year. It's confidential — only super admin can see it."
 - AdjustmentsSection.jsx: for this kind, shows a "Paid directly to the college" note instead of an account/client picker (no target required). Validation only needs date+amount.
 - StudentDetail.jsx `_mapAdjustmentForForm` now preserves `paid_to_college` on edit (previously coerced to KM Foundation); `_mapAdjustmentForApi` passes it through unchanged.
 - Backend already supported `paid_to_college` in AdjustmentKind Literal (no model change). Verified: model accepts it; build passes; dropdown shows all 4 options (screenshot).
+
+## 2026-06-15 — Lead stage notes + "Lost" sub-stages
+- Backend: LeadUpdate gained `status_note`. PATCH /leads/{id} records a status_history entry on stage change (with note + metadata.lost_reason for Lost); a note WITHOUT a stage change appends a note-only journey entry (from==to). Verified via curl.
+- Lost sub-stages (constants.LOST_SUBSTAGES): Already Admitted, Adm. Next Year, Entrance Repeat, Inside KL Only, Other. Stored in lead.lost_reason + status_history metadata. Sub-stage required, note optional.
+- Frontend: new StageChangeDialog.jsx prompts on EVERY stage change (note field like follow-up outcome; + required sub-stage select when target=Lost). Wired into LeadDetailDialog status chips AND LeadsPipeline board drag. Interested/Converted keep their existing capture forms.
+- LeadDetailDialog: always-visible "Add note" box (data-testid lead-note-box/-input/-save-btn) to append a timeline note anytime. LeadJourney shows the note; Lost entries render "Lost: <sub-stage> — <note>".

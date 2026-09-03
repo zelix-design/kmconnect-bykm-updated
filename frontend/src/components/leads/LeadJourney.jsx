@@ -33,7 +33,7 @@ function buildEvents(lead) {
       from: h.from,
       to: h.to,
       who: h.by_name,
-      note: h.note,
+      note: h.metadata?.lost_reason ? `Lost: ${h.metadata.lost_reason}${h.note ? ` — ${h.note}` : ""}` : h.note,
       metadata: h.metadata,
       id: h.id,
     });

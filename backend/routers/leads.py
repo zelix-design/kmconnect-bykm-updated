@@ -76,6 +76,7 @@ class LeadUpdate(BaseModel):
     next_follow_up: Optional[str] = None
     notes: Optional[str] = None
     lost_reason: Optional[str] = None
+    status_note: Optional[str] = None  # conversation note for this stage change / journey
 
 
 class BulkLeadActionIn(BaseModel):
@@ -987,8 +988,17 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
             patch["assigned_to_user_id"] = None
     patch["updated_at"] = now_iso()
     ops: dict = {"$set": patch}
+    note = (data.get("status_note") or "").strip()
     if patch.get("status") and patch["status"] != lead.get("status"):
-        ops["$push"] = {"status_history": _status_event(lead.get("status"), patch["status"], user)}
+        meta = None
+        if patch["status"] == "lost" and patch.get("lost_reason"):
+            meta = {"lost_reason": patch["lost_reason"]}
+        ops["$push"] = {"status_history": _status_event(
+            lead.get("status"), patch["status"], user, note=note, metadata=meta)}
+    elif note:
+        # Note-only entry (no stage change) — a standalone conversation note.
+        cur = lead.get("status")
+        ops["$push"] = {"status_history": _status_event(cur, cur, user, note=note)}
     await db.leads.update_one({"id": lead_id}, ops)
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if new_assignee:

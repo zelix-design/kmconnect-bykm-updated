@@ -18,6 +18,7 @@ import InterestedDialog from "./InterestedDialog";
 import ConvertDialog from "./ConvertDialog";
 import LeadJourney from "./LeadJourney";
 import LeadAttachments from "./LeadAttachments";
+import StageChangeDialog from "./StageChangeDialog";
 import UserAvatar from "@/components/UserAvatar";
 
 function InfoRow({ icon: Icon, children }) {
@@ -43,6 +44,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [slot, setSlot] = useState(null);
   const [interestedOpen, setInterestedOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [stagePrompt, setStagePrompt] = useState(null); // {status} when a stage note popup is open
+  const [noteText, setNoteText] = useState(""); // always-visible add-note box
   const [admins, setAdmins] = useState([]);
   const [resending, setResending] = useState(false);
   const editable = canEdit(user, "leads");
@@ -88,13 +91,38 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     // Interested & Converted have dedicated capture forms
     if (status === "interested") { setInterestedOpen(true); return; }
     if (status === "converted" && !local.converted_student_id) { setConvertOpen(true); return; }
+    // Every other stage change goes through the note/sub-stage popup.
+    setStagePrompt({ status });
+  };
+
+  const confirmStageChange = async ({ status_note, lost_reason }) => {
+    const status = stagePrompt?.status;
+    if (!status) return;
     setBusy(true);
     try {
-      const { data } = await api.patch(`/leads/${local.id}`, { status });
+      const body = { status };
+      if (status_note) body.status_note = status_note;
+      if (lost_reason) body.lost_reason = lost_reason;
+      const { data } = await api.patch(`/leads/${local.id}`, body);
       refresh(data);
+      setStagePrompt(null);
       toast.success(`Marked ${LEAD_STATUS_META[status].label}`);
     } catch (err) {
       toast.error(formatApiError(err?.response?.data?.detail) || "Update failed");
+    } finally { setBusy(false); }
+  };
+
+  const addNote = async () => {
+    const note = noteText.trim();
+    if (!note) return;
+    setBusy(true);
+    try {
+      const { data } = await api.patch(`/leads/${local.id}`, { status_note: note });
+      refresh(data);
+      setNoteText("");
+      toast.success("Note added");
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Could not add note");
     } finally { setBusy(false); }
   };
 
@@ -366,6 +394,15 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             </div>
           )}
 
+          {/* Add a conversation note anytime (no stage change) */}
+          {editable && (
+            <div className="rounded-lg border border-border p-3 space-y-2" data-testid="lead-note-box">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><PencilSimple size={14} /> Add a note</p>
+              <Textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Short conversation summary…" rows={2} data-testid="lead-note-input" />
+              <Button type="button" size="sm" onClick={addNote} disabled={busy || !noteText.trim()} data-testid="lead-note-save-btn" className="btn-amber border-0">Add note</Button>
+            </div>
+          )}
+
           {/* Journey timeline (status transitions, follow-ups, visit, created) */}
           <LeadJourney
             lead={local}
@@ -409,6 +446,13 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
         onOpenChange={setConvertOpen}
         lead={local}
         onDone={(patch) => refresh({ ...local, ...patch })}
+      />
+      <StageChangeDialog
+        open={!!stagePrompt}
+        onOpenChange={(v) => { if (!v) setStagePrompt(null); }}
+        targetStatus={stagePrompt?.status}
+        busy={busy}
+        onConfirm={confirmStageChange}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

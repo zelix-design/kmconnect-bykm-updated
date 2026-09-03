@@ -17,6 +17,7 @@ import LeadFormDialog from "./LeadFormDialog";
 import LeadDetailDialog from "./LeadDetailDialog";
 import LeadsBulkUploadDialog from "./LeadsBulkUploadDialog";
 import LeadsBoard from "./LeadsBoard";
+import StageChangeDialog from "./StageChangeDialog";
 import LeadsBulkActionBar from "./LeadsBulkActionBar";
 import UserAvatar from "@/components/UserAvatar";
 
@@ -97,6 +98,8 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   }, [params, setParams]);
 
   const [formOpen, setFormOpen] = useState(false);
+  const [boardStagePrompt, setBoardStagePrompt] = useState(null);
+  const [boardBusy, setBoardBusy] = useState(false);
   const [editLead, setEditLead] = useState(null);
   const [detailLead, setDetailLead] = useState(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -228,13 +231,25 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       setDetailLead({ ...lead, __autoAction: status });
       return;
     }
+    // Every other move prompts for a conversation note (+ Lost sub-stage).
+    setBoardStagePrompt({ lead, status });
+  };
+
+  const confirmBoardStage = async ({ status_note, lost_reason }) => {
+    const { lead, status } = boardStagePrompt || {};
+    if (!lead) return;
+    setBoardBusy(true);
     try {
-      await api.patch(`/leads/${lead.id}`, { status });
+      const body = { status };
+      if (status_note) body.status_note = status_note;
+      if (lost_reason) body.lost_reason = lost_reason;
+      await api.patch(`/leads/${lead.id}`, body);
       toast.success(`Moved to ${LEAD_STATUS_META[status].label}`);
+      setBoardStagePrompt(null);
       afterChange();
     } catch (err) {
       toast.error("Could not move lead");
-    }
+    } finally { setBoardBusy(false); }
   };
 
   const filterChips = useMemo(() => ([
@@ -461,6 +476,13 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
         onUploaded={afterChange}
         assignable={assignable}
         user={user}
+      />
+      <StageChangeDialog
+        open={!!boardStagePrompt}
+        onOpenChange={(v) => { if (!v) setBoardStagePrompt(null); }}
+        targetStatus={boardStagePrompt?.status}
+        busy={boardBusy}
+        onConfirm={confirmBoardStage}
       />
     </div>
   );
