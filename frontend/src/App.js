@@ -30,6 +30,7 @@ import AdmissionRevenue from "@/pages/AdmissionRevenue";
 import Leads from "@/pages/Leads";
 import StaffStudents from "@/pages/StaffStudents";
 import Leave from "@/pages/Leave";
+import Attendance from "@/pages/Attendance";
 import LinkedUserLedger from "@/pages/LinkedUserLedger";
 import Messages from "@/pages/Messages";
 import OfficeOverview from "@/pages/OfficeOverview";
@@ -92,6 +93,7 @@ function PublicOnly({ children }) {
 const SUPER_ADMIN_ONLY = Object.freeze(["super_admin"]);
 const USER_ONLY = Object.freeze(["user"]);
 const LEADS_ROLES = Object.freeze(["super_admin", "office_admin", "staff"]);
+const ATTENDANCE_ROLES = Object.freeze(["super_admin", "office_admin", "staff"]);
 const STAFF_ONLY = Object.freeze(["staff"]);
 const ADMIN_ROLES = Object.freeze(["super_admin", "office_admin"]);
 
@@ -156,6 +158,7 @@ export default function App() {
             <Route path="/leads" element={<PermGate roles={LEADS_ROLES} page="leads"><Leads /></PermGate>} />
             <Route path="/office-overview" element={<PermGate roles={SUPER_ADMIN_ONLY}><OfficeOverview /></PermGate>} />
             <Route path="/leave" element={<PermGate roles={LEADS_ROLES} page="leave"><Leave /></PermGate>} />
+            <Route path="/attendance" element={<PermGate roles={ATTENDANCE_ROLES} page="attendance"><Attendance /></PermGate>} />
             <Route path="/agents" element={<Agents />} />
             <Route path="/agents/detail" element={<AgentDetail />} />
             <Route path="/categories" element={<Categories />} />

@@ -13,7 +13,7 @@ import {
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
   Target, IdentificationBadge, CalendarCheck, Handshake, UserCircle, CaretRight, FolderSimplePlus,
-  ClockCounterClockwise,
+  ClockCounterClockwise, Clock,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -37,6 +37,7 @@ const ALL_NAV = [
   { to: "/leads", label: "CRM", icon: Target, tid: "nav-leads", roles: ["super_admin", "office_admin", "staff"], perm: "leads", userRoleAllowed: false },
   { to: "/office-overview", label: "Overview", icon: House, tid: "nav-office-overview", roles: ["super_admin"] },
   { to: "/leave", label: "Leave", icon: CalendarCheck, tid: "nav-leave", roles: ["super_admin", "office_admin", "staff"], perm: "leave" },
+  { to: "/attendance", label: "Attendance", icon: Clock, tid: "nav-attendance", roles: ["super_admin", "office_admin", "staff"], perm: "attendance" },
   { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
   { to: "/admission-revenue", label: "Admission Revenue", icon: Coins, tid: "nav-admission-revenue", roles: ["super_admin"] },
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
@@ -64,6 +65,7 @@ const PAGE_TITLES = {
   "/leads": "CRM",
   "/office-overview": "Office overview",
   "/leave": "Leave",
+  "/attendance": "Attendance & Payroll",
   "/colleges": "Colleges",
   "/admission-revenue": "Admission Revenue",
   "/agents": "Sub-agent Ledger",
@@ -84,7 +86,7 @@ function initialsOf(name) {
 // Office / Add details). Every other role keeps a single flat list.
 const GROUP_ROUTES = {
   accounts: ["/accounts", "/transactions", "/agents", "/invoices"],
-  office: ["/office-overview", "/employees", "/leads", "/leave"],
+  office: ["/office-overview", "/employees", "/leads", "/leave", "/attendance"],
   details: ["/colleges", "/categories"],
 };
 

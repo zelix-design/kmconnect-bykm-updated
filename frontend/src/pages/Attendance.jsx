@@ -1,0 +1,370 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import api, { formatApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple } from "@phosphor-icons/react";
+import { formatMoney } from "@/lib/format";
+import { downloadPayslipPdf } from "@/lib/payslipPdf";
+
+const OFFICES = [
+  { value: "all", label: "All offices" },
+  { value: "KM_BLR", label: "KM Bangalore" },
+  { value: "KM_TCR", label: "KM Thrissur" },
+  { value: "KM_KMLY", label: "KM Kollam" },
+];
+
+const STATUS_META = {
+  present: { label: "Present", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+  late: { label: "Late", cls: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  half_day: { label: "Half day", cls: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30" },
+  absent: { label: "Absent", cls: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30" },
+};
+
+function thisMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const fmtTime = (iso) =>
+  iso ? new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—";
+const fmtDate = (d) =>
+  d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { day: "2-digit", month: "short", weekday: "short" }) : "—";
+
+function StatusBadge({ status, tid }) {
+  const meta = STATUS_META[status] || STATUS_META.present;
+  return (
+    <span
+      data-testid={tid}
+      className={`text-[11px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${meta.cls}`}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+/* ---------------- Check-in card (staff + office admin) ---------------- */
+function CheckInCard() {
+  const [today, setToday] = useState(null);
+  const [mine, setMine] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const month = thisMonth();
+
+  const load = useCallback(async () => {
+    try {
+      const [t, m] = await Promise.all([
+        api.get("/attendance/today"),
+        api.get(`/attendance/me?month=${month}`),
+      ]);
+      setToday(t.data.record || null);
+      setMine(m.data.records || []);
+    } catch (e) {
+      console.error("[attendance] load failed:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [month]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const getPosition = () =>
+    new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve({ lat: null, lng: null });
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {
+          toast.warning("Location unavailable — checking in without GPS");
+          resolve({ lat: null, lng: null });
+        },
+        { enableHighAccuracy: true, timeout: 8000 },
+      );
+    });
+
+  const checkIn = async () => {
+    setBusy(true);
+    try {
+      const coords = await getPosition();
+      const { data } = await api.post("/attendance/check-in", coords);
+      setToday(data.record);
+      toast.success(data.record.status === "late" ? "Checked in (marked late)" : "Checked in");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkOut = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post("/attendance/check-out");
+      setToday(data.record);
+      toast.success("Checked out");
+      load();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const checkedIn = !!today?.check_in;
+  const checkedOut = !!today?.check_out;
+
+  return (
+    <div className="space-y-6" data-testid="checkin-card">
+      <Card className="p-6">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Today · shift 10:00 AM – 7:00 PM</p>
+            <h2 className="text-2xl font-semibold text-foreground mt-1">
+              {checkedIn ? (checkedOut ? "Day complete" : "You're checked in") : "Not checked in yet"}
+            </h2>
+            {checkedIn && (
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1"><SignIn size={15} /> In {fmtTime(today.check_in)}</span>
+                {checkedOut && <span className="flex items-center gap-1"><SignOut size={15} /> Out {fmtTime(today.check_out)}</span>}
+                {today.status && <StatusBadge status={today.status} tid="today-status" />}
+              </div>
+            )}
+            {today?.check_in_lat != null && (
+              <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                <MapPin size={12} /> {today.check_in_lat.toFixed(4)}, {today.check_in_lng?.toFixed(4)}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {!checkedIn && (
+              <Button data-testid="btn-check-in" onClick={checkIn} disabled={busy || loading} className="btn-amber">
+                <SignIn size={18} className="mr-1.5" /> Check in
+              </Button>
+            )}
+            {checkedIn && !checkedOut && (
+              <Button data-testid="btn-check-out" onClick={checkOut} disabled={busy} variant="outline">
+                <SignOut size={18} className="mr-1.5" /> Check out
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h3 className="font-semibold text-foreground">My attendance · this month</h3>
+          <span className="text-xs text-muted-foreground">{mine.length} day{mine.length !== 1 ? "s" : ""}</span>
+        </div>
+        {mine.length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground text-center">No check-ins recorded this month.</p>
+        ) : (
+          <div className="divide-y divide-border" data-testid="my-attendance-list">
+            {mine.map((r) => (
+              <div key={r.id} className="px-5 py-3 flex items-center justify-between gap-3" data-testid={`my-att-${r.date}`}>
+                <span className="text-sm text-foreground font-medium">{fmtDate(r.date)}</span>
+                <span className="text-sm text-muted-foreground tabular-nums">{fmtTime(r.check_in)} – {fmtTime(r.check_out)}</span>
+                <StatusBadge status={r.status} />
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------- Payroll (admins) ---------------- */
+function SalaryEditor({ uid, current, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(String(current || ""));
+  const save = async () => {
+    try {
+      await api.put(`/attendance/salary/${uid}`, { monthly_salary: Number(val) || 0 });
+      toast.success("Salary updated");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    }
+  };
+  if (!editing) {
+    return (
+      <button
+        data-testid={`salary-edit-${uid}`}
+        onClick={() => { setVal(String(current || "")); setEditing(true); }}
+        className="inline-flex items-center gap-1 text-primary hover:underline"
+      >
+        <PencilSimple size={13} /> edit
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Input
+        data-testid={`salary-input-${uid}`}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        className="h-7 w-24 text-xs"
+        type="number"
+        autoFocus
+      />
+      <Button size="sm" className="h-7 px-2" data-testid={`salary-save-${uid}`} onClick={save}>Save</Button>
+      <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditing(false)}>×</Button>
+    </span>
+  );
+}
+
+function PayrollSection({ user }) {
+  const isSuper = user.role === "super_admin";
+  const [month, setMonth] = useState(thisMonth());
+  const [office, setOffice] = useState("all");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const currency = user.currency || "INR";
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = new URLSearchParams({ month });
+      if (isSuper && office !== "all") q.set("office", office);
+      const { data } = await api.get(`/attendance/payroll?${q.toString()}`);
+      setRows(data.rows || []);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setLoading(false);
+    }
+  }, [month, office, isSuper]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const totals = useMemo(() => {
+    return rows.reduce(
+      (acc, r) => {
+        acc.salary += r.monthly_salary || 0;
+        acc.deduction += r.deduction || 0;
+        acc.net += r.net_pay || 0;
+        return acc;
+      },
+      { salary: 0, deduction: 0, net: 0 },
+    );
+  }, [rows]);
+
+  return (
+    <Card className="p-0 overflow-hidden" data-testid="payroll-section">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="font-semibold text-foreground flex items-center gap-2"><Clock size={18} /> Payroll</h3>
+        <div className="flex items-center gap-2">
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            data-testid="payroll-month"
+            className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          />
+          {isSuper && (
+            <select
+              value={office}
+              onChange={(e) => setOffice(e.target.value)}
+              data-testid="payroll-office"
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            >
+              {OFFICES.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="p-6 text-sm text-muted-foreground text-center">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="p-6 text-sm text-muted-foreground text-center">No staff / payroll data for this month.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[820px]" data-testid="payroll-table">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
+                <th className="px-4 py-3">Employee</th>
+                <th className="px-3 py-3 text-center">Present</th>
+                <th className="px-3 py-3 text-center">Half</th>
+                <th className="px-3 py-3 text-center">Paid leave</th>
+                <th className="px-3 py-3 text-center">Absent</th>
+                <th className="px-3 py-3 text-right">Salary</th>
+                <th className="px-3 py-3 text-right">Deduction</th>
+                <th className="px-3 py-3 text-right">Net pay</th>
+                <th className="px-3 py-3 text-center">Payslip</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((r) => (
+                <tr key={r.user_id} data-testid={`payroll-row-${r.user_id}`}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-foreground">{r.name}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {r.role === "office_admin" ? "Office Admin" : "Staff"} · {r.office || "—"}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-center tabular-nums">{r.present_days}</td>
+                  <td className="px-3 py-3 text-center tabular-nums">{r.half_days}</td>
+                  <td className="px-3 py-3 text-center tabular-nums text-emerald-600 dark:text-emerald-400">{r.leave_days}</td>
+                  <td className="px-3 py-3 text-center tabular-nums text-rose-600 dark:text-rose-400">{r.absent_days}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">
+                    <div>{formatMoney(r.monthly_salary, currency)}</div>
+                    <SalaryEditor uid={r.user_id} current={r.monthly_salary} onSaved={load} />
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums text-rose-600 dark:text-rose-400">
+                    {r.deduction ? `- ${formatMoney(r.deduction, currency)}` : formatMoney(0, currency)}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground">{formatMoney(r.net_pay, currency)}</td>
+                  <td className="px-3 py-3 text-center">
+                    <button
+                      data-testid={`payslip-${r.user_id}`}
+                      onClick={() => downloadPayslipPdf({ row: r, month, currency })}
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                    >
+                      <DownloadSimple size={15} /> PDF
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-border font-semibold text-foreground bg-muted/40">
+                <td className="px-4 py-3" colSpan={5}>Total · {rows.length} employee{rows.length !== 1 ? "s" : ""}</td>
+                <td className="px-3 py-3 text-right tabular-nums">{formatMoney(totals.salary, currency)}</td>
+                <td className="px-3 py-3 text-right tabular-nums text-rose-600 dark:text-rose-400">- {formatMoney(totals.deduction, currency)}</td>
+                <td className="px-3 py-3 text-right tabular-nums">{formatMoney(totals.net, currency)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      <p className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">
+        Working days = all days except Sundays. Approved leave (non-unpaid) counts as paid; unapproved absence is deducted at the per-day rate.
+      </p>
+    </Card>
+  );
+}
+
+export default function Attendance() {
+  const { user } = useAuth();
+  if (!user) return null;
+  const isAdmin = user.role === "super_admin" || user.role === "office_admin";
+  const canCheckIn = user.role === "staff" || user.role === "office_admin";
+
+  return (
+    <div className="space-y-8 max-w-6xl" data-testid="attendance-page">
+      {canCheckIn && <CheckInCard />}
+      {isAdmin && <PayrollSection user={user} />}
+    </div>
+  );
+}
