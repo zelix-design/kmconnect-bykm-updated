@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { Clock, CaretRight, MapPin, Coffee } from "@phosphor-icons/react";
 import { greetingForNow } from "@/lib/format";
+import EmergencyLeaveDialog from "@/components/attendance/EmergencyLeaveDialog";
 
 const TARGET_H = 9;
 
@@ -55,7 +55,7 @@ function Stat({ label, value, icon: Icon }) {
 // Mobile-only attendance hero + big tappable check-in dial (crimson / near-black brand).
 export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, onBreak, checkedIn, checkedOut, busy, loading, onCheckIn, onCheckOut, onToggleBreak }) {
   const { user } = useAuth();
-  const nav = useNavigate();
+  const [emgOpen, setEmgOpen] = useState(false);
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
@@ -153,13 +153,15 @@ export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, o
         </div>
 
         <button
-          onClick={() => nav("/attendance?tab=leave")}
+          onClick={() => setEmgOpen(true)}
           data-testid="mobile-emergency-leave"
           className="mt-5 w-full rounded-2xl bg-white/10 hover:bg-white/15 transition-colors py-3 flex items-center justify-center gap-1.5 text-sm font-semibold relative"
         >
           Emergency Leave <CaretRight size={15} weight="bold" />
         </button>
       </div>
+
+      <EmergencyLeaveDialog open={emgOpen} onOpenChange={setEmgOpen} />
 
       {/* Big concentric press-and-hold dial */}
       <div className="flex flex-col items-center pt-2 pb-1">
