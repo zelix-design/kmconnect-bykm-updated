@@ -8,8 +8,8 @@ import { toast } from "sonner";
 import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
-import SwipeButton from "@/components/attendance/SwipeButton";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
+import MobileCheckIn from "@/components/attendance/MobileCheckIn";
 
 // Shift = 9h total (8h work + 1h break). Warn 5 min before completion.
 const WORK_TARGET_SECONDS = 9 * 3600;
@@ -174,7 +174,22 @@ function CheckInCard() {
 
   return (
     <div className="space-y-6" data-testid="checkin-card">
-      <Card className="p-6">
+      {/* Mobile: app-style hero + big check-in dial */}
+      <div className="sm:hidden">
+        <MobileCheckIn
+          today={today}
+          elapsed={elapsed}
+          checkedIn={checkedIn}
+          checkedOut={checkedOut}
+          busy={busy}
+          loading={loading}
+          onCheckIn={doCheckIn}
+          onCheckOut={checkOut}
+        />
+      </div>
+
+      {/* Desktop card */}
+      <Card className="p-6 hidden sm:block">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-widest text-muted-foreground">Today · shift 10:00 AM – 7:00 PM · 9h</p>
@@ -210,7 +225,7 @@ function CheckInCard() {
         </div>
 
         {/* Desktop buttons */}
-        <div className="hidden sm:flex gap-2 mt-5">
+        <div className="flex gap-2 mt-5">
           {!checkedIn && (
             <Button data-testid="btn-check-in" onClick={doCheckIn} disabled={busy || loading} className="btn-amber">
               <SignIn size={18} className="mr-1.5" /> Check in
@@ -223,19 +238,6 @@ function CheckInCard() {
           )}
           {checkedOut && (
             <p className="text-sm text-muted-foreground">Great work today — see you tomorrow.</p>
-          )}
-        </div>
-
-        {/* Mobile swipe controls */}
-        <div className="sm:hidden mt-5">
-          {!checkedIn && (
-            <SwipeButton tid="swipe-check-in" label="Swipe to check in" confirmedLabel="Checking in…" tone="amber" disabled={busy || loading} onConfirm={doCheckIn} />
-          )}
-          {checkedIn && !checkedOut && (
-            <SwipeButton tid="swipe-check-out" label="Swipe to check out" confirmedLabel="Checking out…" tone="muted" disabled={busy} onConfirm={checkOut} />
-          )}
-          {checkedOut && (
-            <p className="text-sm text-muted-foreground text-center py-2">Great work today — see you tomorrow.</p>
           )}
         </div>
       </Card>
