@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 64 retest of Attendance & Payroll module. Verified (a) the permission-default fix in auth_lib.require_edit (staff can now check-in), (b) leave integration math (paid vs unpaid), and (c) regression for office admin + super admin views. 10/10 backend pytest cases pass; UI verified for all 3 roles.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration64_attendance_retest.py",
+    "/app/test_reports/pytest/iteration64.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "auth_lib.require_edit fallback is correct: it now consults STAFF_DEFAULT_PERMISSIONS / USER_DEFAULT_PERMISSIONS / DEFAULT_PERMISSIONS before defaulting to 'none'. Good; this pattern should be reused for any new PERMISSION_PAGES entry going forward.",
+    "attendance._paid_leave_dates does not honor requester_role filter — every approved non-unpaid leave whose office matches is counted. Currently harmless because staff/office_admin are the only roles receiving payroll; if leave for other roles (e.g. 'user') ever lands in leave_requests with an office, it would still be correctly ignored because the payroll staff list restricts to role in ['staff','office_admin']. OK.",
+    "attendance._paid_leave_dates uses office equality when scoping; if a user's office field changes after leave approval, the doc will still hit the payroll based on the leave doc's office, not the current user office. Minor edge case, worth a comment.",
+    "Frontend perm.js still defaults missing perms to 'edit' while backend defaults to role-specific fallback. Now aligned for staff (both edit) but philosophy differs — worth a doc note."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration64_attendance_retest.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786 (super), blr1@finflow.com / Office@123 (office admin), staff.blr@kmfoundation.online / Staff@123 (staff). All logins OK.",
+  "seed_data_creation": "During pytest, temporarily inserted 3 leave_requests (marker=TEST_iter64_leave) and 1 staff_salaries row (30000) + 1 attendance row for the staff user. All removed in test_zzz_cleanup at end of run. Post-run DB is clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend covered by /app/backend/tests/test_iteration64_attendance_retest.py: staff check-in 200 (was 403), duplicate 400, staff→payroll still 403, baseline no-leave math, paid leave (non-unpaid) reduces deduction by exactly N*per_day, unpaid leave DOES NOT reduce deduction, office-admin scoped rows, super-admin office filter, payslip endpoint. Frontend UI verified: staff sees only check-in card; clicking Check-in shows toast 'Checked in (marked late)' and flips button to 'Check out'. Office admin (blr1) sees both check-in card + payroll table (no office dropdown, only month picker; all rows scoped to KM_BLR). Super admin (muneer) sees NO check-in card + payroll table + office dropdown with values ['all','KM_BLR','KM_TCR','KM_KMLY'] under data-testid=payroll-office; PDF payslip buttons work.",
+  "rca of the issue": "Original bug (iteration 63): STAFF_DEFAULT_PERMISSIONS gained 'attendance' key but persisted staff users in DB had permissions dict without that key; require_edit defaulted missing keys to 'none' for staff/user roles → 403 'You have none-only access to attendance'. Fix in auth_lib.require_edit now looks up role-specific default map (STAFF_DEFAULT_PERMISSIONS/USER_DEFAULT_PERMISSIONS/DEFAULT_PERMISSIONS) before falling back to 'none'. Retest confirms POST /api/attendance/check-in now returns 200 for legacy staff row without needing DB migration. Same fix is future-proof for any new PERMISSION_PAGES entry."
+}
