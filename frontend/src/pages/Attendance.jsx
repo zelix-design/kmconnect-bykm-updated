@@ -5,9 +5,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple } from "@phosphor-icons/react";
+import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
+import SwipeButton from "@/components/attendance/SwipeButton";
+import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
+
+// Shift = 9h total (8h work + 1h break). Warn 5 min before completion.
+const WORK_TARGET_SECONDS = 9 * 3600;
+const NOTIFY_BEFORE_SECONDS = 5 * 60;
+
+function fmtDuration(secs) {
+  const s = Math.max(0, Math.floor(secs));
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+  const sec = String(s % 60).padStart(2, "0");
+  return `${h}:${m}:${sec}`;
+}
+
+function fireWorkAlmostDone() {
+  const msg = "5 minutes left to complete your work hours (9h). Wrap up & check out.";
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("Work hours almost complete", { body: msg, icon: "/km-mark.png" });
+    }
+  } catch (e) {
+    console.error("[attendance] notification failed:", e);
+  }
+  toast.info(msg, { duration: 10000 });
+}
 
 const OFFICES = [
   { value: "all", label: "All offices" },
@@ -30,8 +56,6 @@ function thisMonth() {
 
 const fmtTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "—";
-const fmtDate = (d) =>
-  d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { day: "2-digit", month: "short", weekday: "short" }) : "—";
 
 function StatusBadge({ status, tid }) {
   const meta = STATUS_META[status] || STATUS_META.present;
@@ -117,17 +141,48 @@ function CheckInCard() {
   const checkedIn = !!today?.check_in;
   const checkedOut = !!today?.check_out;
 
+  // Live work timer + "5 min before 9h" notification (only while checked in, not out).
+  const [elapsed, setElapsed] = useState(0);
+  const notifiedRef = React.useRef(false);
+  useEffect(() => {
+    if (!checkedIn || checkedOut) return;
+    const start = new Date(today.check_in).getTime();
+    const dayKey = `att-notified-${today.date}`;
+    notifiedRef.current = typeof localStorage !== "undefined" && localStorage.getItem(dayKey) === "1";
+    const tick = () => {
+      const e = (Date.now() - start) / 1000;
+      setElapsed(e);
+      if (!notifiedRef.current && e >= WORK_TARGET_SECONDS - NOTIFY_BEFORE_SECONDS && e < WORK_TARGET_SECONDS) {
+        notifiedRef.current = true;
+        try { localStorage.setItem(dayKey, "1"); } catch { /* ignore */ }
+        fireWorkAlmostDone();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [checkedIn, checkedOut, today?.check_in, today?.date]);
+
+  const requestNotifyPermission = () => {
+    try {
+      if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+    } catch { /* ignore */ }
+  };
+  const doCheckIn = async () => { requestNotifyPermission(); await checkIn(); };
+
+  const remaining = Math.max(0, WORK_TARGET_SECONDS - elapsed);
+
   return (
     <div className="space-y-6" data-testid="checkin-card">
       <Card className="p-6">
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Today · shift 10:00 AM – 7:00 PM</p>
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Today · shift 10:00 AM – 7:00 PM · 9h</p>
             <h2 className="text-2xl font-semibold text-foreground mt-1">
               {checkedIn ? (checkedOut ? "Day complete" : "You're checked in") : "Not checked in yet"}
             </h2>
             {checkedIn && (
-              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground flex-wrap">
                 <span className="flex items-center gap-1"><SignIn size={15} /> In {fmtTime(today.check_in)}</span>
                 {checkedOut && <span className="flex items-center gap-1"><SignOut size={15} /> Out {fmtTime(today.check_out)}</span>}
                 {today.status && <StatusBadge status={today.status} tid="today-status" />}
@@ -139,39 +194,58 @@ function CheckInCard() {
               </p>
             )}
           </div>
-          <div className="flex gap-2">
-            {!checkedIn && (
-              <Button data-testid="btn-check-in" onClick={checkIn} disabled={busy || loading} className="btn-amber">
-                <SignIn size={18} className="mr-1.5" /> Check in
-              </Button>
-            )}
-            {checkedIn && !checkedOut && (
-              <Button data-testid="btn-check-out" onClick={checkOut} disabled={busy} variant="outline">
-                <SignOut size={18} className="mr-1.5" /> Check out
-              </Button>
-            )}
-          </div>
+
+          {/* Live work timer while checked in */}
+          {checkedIn && !checkedOut && (
+            <div className="text-right" data-testid="work-timer">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground flex items-center gap-1 justify-end">
+                <Timer size={13} /> Worked
+              </p>
+              <p className="text-3xl font-bold tabular-nums text-foreground leading-tight">{fmtDuration(elapsed)}</p>
+              <p className={`text-[11px] flex items-center gap-1 justify-end mt-0.5 ${remaining <= NOTIFY_BEFORE_SECONDS ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
+                {remaining > 0 ? <>{fmtDuration(remaining)} to 9h</> : <><BellRinging size={12} /> Target reached</>}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop buttons */}
+        <div className="hidden sm:flex gap-2 mt-5">
+          {!checkedIn && (
+            <Button data-testid="btn-check-in" onClick={doCheckIn} disabled={busy || loading} className="btn-amber">
+              <SignIn size={18} className="mr-1.5" /> Check in
+            </Button>
+          )}
+          {checkedIn && !checkedOut && (
+            <Button data-testid="btn-check-out" onClick={checkOut} disabled={busy} variant="outline">
+              <SignOut size={18} className="mr-1.5" /> Check out
+            </Button>
+          )}
+          {checkedOut && (
+            <p className="text-sm text-muted-foreground">Great work today — see you tomorrow.</p>
+          )}
+        </div>
+
+        {/* Mobile swipe controls */}
+        <div className="sm:hidden mt-5">
+          {!checkedIn && (
+            <SwipeButton tid="swipe-check-in" label="Swipe to check in" confirmedLabel="Checking in…" tone="amber" disabled={busy || loading} onConfirm={doCheckIn} />
+          )}
+          {checkedIn && !checkedOut && (
+            <SwipeButton tid="swipe-check-out" label="Swipe to check out" confirmedLabel="Checking out…" tone="muted" disabled={busy} onConfirm={checkOut} />
+          )}
+          {checkedOut && (
+            <p className="text-sm text-muted-foreground text-center py-2">Great work today — see you tomorrow.</p>
+          )}
         </div>
       </Card>
 
-      <Card className="p-0 overflow-hidden">
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+      <Card className="p-5">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-foreground">My attendance · this month</h3>
           <span className="text-xs text-muted-foreground">{mine.length} day{mine.length !== 1 ? "s" : ""}</span>
         </div>
-        {mine.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground text-center">No check-ins recorded this month.</p>
-        ) : (
-          <div className="divide-y divide-border" data-testid="my-attendance-list">
-            {mine.map((r) => (
-              <div key={r.id} className="px-5 py-3 flex items-center justify-between gap-3" data-testid={`my-att-${r.date}`}>
-                <span className="text-sm text-foreground font-medium">{fmtDate(r.date)}</span>
-                <span className="text-sm text-muted-foreground tabular-nums">{fmtTime(r.check_in)} – {fmtTime(r.check_out)}</span>
-                <StatusBadge status={r.status} />
-              </div>
-            ))}
-          </div>
-        )}
+        <AttendanceCalendar month={month} records={mine} />
       </Card>
     </div>
   );
