@@ -1514,3 +1514,6 @@ admissions per year. It's confidential — only super admin can see it."
 
 ## Implementation status — 2026-06 (iteration 68: Emergency Leave popup)
 - [x] **Emergency Leave (mobile)**: the hero "Emergency Leave" button now opens a popup (`EmergencyLeaveDialog`) instead of navigating. Applies for TODAY only (IST), type = Sick / Half day / Other (Other requires a mentioned reason). Submits through the normal leave flow (pending approval + admin notification). Backend `POST /api/leave` extended with `emergency` (enforces from_date==to_date==today IST) and `half_day` (days=0.5) fields. Verified: today half-day → 201 (days 0.5); past date → 400.
+
+## Implementation status — 2026-06 (iteration 69: moved calendar to Regularize tab)
+- [x] Moved the "My attendance · this month" calendar from the Attendance tab into the **Regularize tab** (RegularizationPanel now loads the user's own month records and renders `AttendanceCalendar`). Clicking a past day opens the regularization request dialog directly (prefilled). Removed the calendar + `onRegularizeDate` deep-link plumbing from CheckInCard/Attendance. Verified: calendar present in Regularize tab, absent from Attendance tab.

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CalendarPlus, Check, X, ArrowsClockwise } from "@phosphor-icons/react";
+import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 
 const KIND_LABEL = { weekoff: "Week-off", leave: "Leave" };
 const LEAVE_TYPES = ["casual", "sick", "earned"];
@@ -24,6 +25,10 @@ const yesterdayISO = () => {
   const d = new Date();
   d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+const thisMonthISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
 function ReqCard({ r, canDecide, onDecide, busy }) {
@@ -63,19 +68,19 @@ export default function RegularizationPanel({ user }) {
   const isAdmin = user.role === "super_admin" || user.role === "office_admin";
   const canRequest = user.role === "staff" || user.role === "office_admin";
   const [rows, setRows] = useState([]);
+  const [records, setRecords] = useState([]);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const [fromCalendar, setFromCalendar] = useState(false);
   const [form, setForm] = useState({ date: yesterdayISO(), kind: "weekoff", leave_type: "casual", reason: "" });
   const [params, setParams] = useSearchParams();
+  const month = thisMonthISO();
 
-  // Deep-link from the calendar: ?tab=regularize&date=YYYY-MM-DD auto-opens the dialog.
+  // Optional deep-link: ?tab=regularize&date=YYYY-MM-DD auto-opens the dialog.
   useEffect(() => {
     const d = params.get("date");
     if (d && canRequest) {
       setForm((f) => ({ ...f, date: d }));
       setOpen(true);
-      setFromCalendar(true);
       const next = new URLSearchParams(params);
       next.delete("date");
       setParams(next, { replace: true });
@@ -83,23 +88,27 @@ export default function RegularizationPanel({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Closing a calendar-opened dialog returns the user to the calendar (Attendance tab).
-  const handleOpenChange = (v) => {
-    setOpen(v);
-    if (!v && fromCalendar) {
-      setFromCalendar(false);
-      setParams({ tab: "attendance" }, { replace: true });
-    }
+  const handleOpenChange = (v) => setOpen(v);
+
+  // Clicking a past day in the calendar opens the request dialog prefilled.
+  const pickDate = (date) => {
+    setForm((f) => ({ ...f, date }));
+    setOpen(true);
   };
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/attendance/regularizations");
-      setRows(data.requests || []);
+      const reqs = { promise: api.get("/attendance/regularizations") };
+      const [rq, rec] = await Promise.all([
+        reqs.promise,
+        canRequest ? api.get(`/attendance/me?month=${month}`) : Promise.resolve({ data: { records: [] } }),
+      ]);
+      setRows(rq.data.requests || []);
+      setRecords(rec.data.records || []);
     } catch (e) {
       toast.error(formatApiError(e?.response?.data?.detail));
     }
-  }, []);
+  }, [canRequest, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -213,6 +222,16 @@ export default function RegularizationPanel({ user }) {
           </Dialog>
         )}
       </div>
+
+      {canRequest && (
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-foreground">My attendance · this month</h3>
+            <span className="text-xs text-muted-foreground">{records.length} day{records.length !== 1 ? "s" : ""}</span>
+          </div>
+          <AttendanceCalendar month={month} records={records} onPickDate={pickDate} />
+        </Card>
+      )}
 
       {isAdmin && (
         <div>

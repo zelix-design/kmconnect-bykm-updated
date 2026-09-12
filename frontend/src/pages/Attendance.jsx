@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
-import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
 import RegularizationPanel from "@/components/attendance/RegularizationPanel";
 import WhosInBoard from "@/components/attendance/WhosInBoard";
@@ -75,27 +74,21 @@ function StatusBadge({ status, tid }) {
 }
 
 /* ---------------- Check-in card (staff + office admin) ---------------- */
-function CheckInCard({ onRegularizeDate }) {
+function CheckInCard() {
   const [today, setToday] = useState(null);
-  const [mine, setMine] = useState([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const month = thisMonth();
 
   const load = useCallback(async () => {
     try {
-      const [t, m] = await Promise.all([
-        api.get("/attendance/today"),
-        api.get(`/attendance/me?month=${month}`),
-      ]);
+      const t = await api.get("/attendance/today");
       setToday(t.data.record || null);
-      setMine(m.data.records || []);
     } catch (e) {
       console.error("[attendance] load failed:", e);
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -284,14 +277,6 @@ function CheckInCard({ onRegularizeDate }) {
             </p>
           )}
         </div>
-      </Card>
-
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-foreground">My attendance · this month</h3>
-          <span className="text-xs text-muted-foreground">{mine.length} day{mine.length !== 1 ? "s" : ""}</span>
-        </div>
-        <AttendanceCalendar month={month} records={mine} onPickDate={onRegularizeDate} />
       </Card>
     </div>
   );
@@ -493,10 +478,6 @@ export default function Attendance() {
   const active = tabs.some((t) => t.v === requested) ? requested : tabs[0].v;
   const setActive = (v) => setParams(v === tabs[0].v ? {} : { tab: v }, { replace: true });
 
-  const openRegularize = (date) => {
-    setParams({ tab: "regularize", date }, { replace: true });
-  };
-
   return (
     <div className="space-y-6 max-w-6xl" data-testid="attendance-page">
       <Tabs value={active} onValueChange={setActive}>
@@ -508,7 +489,7 @@ export default function Attendance() {
 
         {canCheckIn && (
           <TabsContent value="attendance" className="mt-6">
-            <CheckInCard onRegularizeDate={openRegularize} />
+            <CheckInCard />
           </TabsContent>
         )}
         <TabsContent value="regularize" className="mt-6">
