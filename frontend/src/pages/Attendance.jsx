@@ -13,6 +13,7 @@ import { downloadPayslipPdf } from "@/lib/payslipPdf";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
 import RegularizationPanel from "@/components/attendance/RegularizationPanel";
+import WhosInBoard from "@/components/attendance/WhosInBoard";
 import Leave from "@/pages/Leave";
 
 // Shift = 9h total (8h work + 1h break). Warn 5 min before completion.
@@ -483,6 +484,7 @@ export default function Attendance() {
 
   const tabs = [];
   if (canCheckIn) tabs.push({ v: "attendance", label: "Attendance" });
+  if (isAdmin) tabs.push({ v: "board", label: "Who's in" });
   tabs.push({ v: "regularize", label: "Regularize" });
   tabs.push({ v: "leave", label: "Leave" });
   if (isAdmin) tabs.push({ v: "payroll", label: "Payroll" });
@@ -512,6 +514,11 @@ export default function Attendance() {
         <TabsContent value="regularize" className="mt-6">
           <RegularizationPanel user={user} />
         </TabsContent>
+        {isAdmin && (
+          <TabsContent value="board" className="mt-6">
+            <WhosInBoard user={user} />
+          </TabsContent>
+        )}
         <TabsContent value="leave" className="mt-6">
           <Leave />
         </TabsContent>

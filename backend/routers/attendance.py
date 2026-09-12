@@ -266,6 +266,51 @@ async def my_month(month: str, user: dict = Depends(get_current_user)):
     return {"records": rows}
 
 
+@router.get("/board")
+async def whos_in_board(office: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Live per-office roster for admins: who is in / on break / checked out / on leave / absent today."""
+    _require_admin(user)
+    scope = user.get("office") if user.get("role") == "office_admin" else (office if office and office != "all" else None)
+    today = _today()
+    uq: dict = {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved",
+                "deleted_at": {"$in": [None, ""]}}
+    if scope:
+        uq["office"] = scope
+    users = await db.users.find(uq, {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1}).to_list(5000)
+    att = await db.attendance.find({"date": today, **({"office": scope} if scope else {})}, {"_id": 0}).to_list(20000)
+    by_user = {a["user_id"]: a for a in att}
+    leaves = await db.leave_requests.find(
+        {"status": "approved", "from_date": {"$lte": today}, "to_date": {"$gte": today}},
+        {"_id": 0, "requester_user_id": 1},
+    ).to_list(5000)
+    on_leave = {leave["requester_user_id"] for leave in leaves}
+    rows = []
+    counts = {"in": 0, "on_break": 0, "checked_out": 0, "leave": 0, "absent": 0}
+    for u in users:
+        rec = by_user.get(u["id"])
+        if rec and rec.get("status") in ("leave", "weekoff"):
+            state = "leave"
+        elif rec and rec.get("check_out"):
+            state = "checked_out"
+        elif rec and rec.get("on_break"):
+            state = "on_break"
+        elif rec and rec.get("check_in"):
+            state = "in"
+        elif u["id"] in on_leave:
+            state = "leave"
+        else:
+            state = "absent"
+        counts[state] += 1
+        rows.append({
+            "user_id": u["id"], "name": u.get("name"), "office": u.get("office"), "role": u.get("role"),
+            "state": state, "check_in": rec.get("check_in") if rec else None,
+            "check_out": rec.get("check_out") if rec else None,
+            "attendance_status": rec.get("status") if rec else None,
+        })
+    rows.sort(key=lambda r: (r["state"] != "in", r["state"] != "on_break", r.get("name") or ""))
+    return {"date": today, "counts": counts, "rows": rows}
+
+
 @router.get("")
 async def list_attendance(month: str, office: Optional[str] = None,
                           user_id: Optional[str] = None, user: dict = Depends(get_current_user)):

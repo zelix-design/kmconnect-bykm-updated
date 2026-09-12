@@ -65,6 +65,7 @@ export default function RegularizationPanel({ user }) {
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
+  const [fromCalendar, setFromCalendar] = useState(false);
   const [form, setForm] = useState({ date: yesterdayISO(), kind: "weekoff", leave_type: "casual", reason: "" });
   const [params, setParams] = useSearchParams();
 
@@ -74,12 +75,22 @@ export default function RegularizationPanel({ user }) {
     if (d && canRequest) {
       setForm((f) => ({ ...f, date: d }));
       setOpen(true);
+      setFromCalendar(true);
       const next = new URLSearchParams(params);
       next.delete("date");
       setParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Closing a calendar-opened dialog returns the user to the calendar (Attendance tab).
+  const handleOpenChange = (v) => {
+    setOpen(v);
+    if (!v && fromCalendar) {
+      setFromCalendar(false);
+      setParams({ tab: "attendance" }, { replace: true });
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -106,7 +117,7 @@ export default function RegularizationPanel({ user }) {
         reason: form.reason,
       });
       toast.success("Request submitted for approval");
-      setOpen(false);
+      handleOpenChange(false);
       setForm({ date: yesterdayISO(), kind: "weekoff", leave_type: "casual", reason: "" });
       load();
     } catch (e) {
@@ -137,7 +148,7 @@ export default function RegularizationPanel({ user }) {
           <p className="text-xs text-muted-foreground mt-0.5">Convert an absent day into a Week-off or Leave. Approved days count as paid.</p>
         </div>
         {canRequest && (
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogTrigger asChild>
               <Button className="btn-amber" data-testid="reg-new-btn"><CalendarPlus size={16} className="mr-1.5" /> New request</Button>
             </DialogTrigger>
@@ -195,7 +206,7 @@ export default function RegularizationPanel({ user }) {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
                 <Button className="btn-amber" onClick={submit} disabled={busy} data-testid="reg-submit">Submit</Button>
               </DialogFooter>
             </DialogContent>
