@@ -1517,3 +1517,6 @@ admissions per year. It's confidential — only super admin can see it."
 
 ## Implementation status — 2026-06 (iteration 69: moved calendar to Regularize tab)
 - [x] Moved the "My attendance · this month" calendar from the Attendance tab into the **Regularize tab** (RegularizationPanel now loads the user's own month records and renders `AttendanceCalendar`). Clicking a past day opens the regularization request dialog directly (prefilled). Removed the calendar + `onRegularizeDate` deep-link plumbing from CheckInCard/Attendance. Verified: calendar present in Regularize tab, absent from Attendance tab.
+
+## Implementation status — 2026-06 (iteration 70: responsive calendar placement)
+- [x] Calendar placement is now responsive: **desktop** shows "My attendance · this month" inside the Attendance tab (`hidden sm:block`; clicking a past day jumps to Regularize with dialog prefilled); **mobile** shows it inside the Regularize tab (`sm:hidden`; clicking a past day opens the dialog in place). Verified desktop Attendance-tab calendar visible.

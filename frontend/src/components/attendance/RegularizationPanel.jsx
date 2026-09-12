@@ -224,7 +224,7 @@ export default function RegularizationPanel({ user }) {
       </div>
 
       {canRequest && (
-        <Card className="p-5">
+        <Card className="p-5 sm:hidden">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-foreground">My attendance · this month</h3>
             <span className="text-xs text-muted-foreground">{records.length} day{records.length !== 1 ? "s" : ""}</span>

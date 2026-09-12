@@ -11,6 +11,7 @@ import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, Be
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
+import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 import RegularizationPanel from "@/components/attendance/RegularizationPanel";
 import WhosInBoard from "@/components/attendance/WhosInBoard";
 import Leave from "@/pages/Leave";
@@ -74,21 +75,27 @@ function StatusBadge({ status, tid }) {
 }
 
 /* ---------------- Check-in card (staff + office admin) ---------------- */
-function CheckInCard() {
+function CheckInCard({ onRegularizeDate }) {
   const [today, setToday] = useState(null);
+  const [mine, setMine] = useState([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const month = thisMonth();
 
   const load = useCallback(async () => {
     try {
-      const t = await api.get("/attendance/today");
+      const [t, m] = await Promise.all([
+        api.get("/attendance/today"),
+        api.get(`/attendance/me?month=${month}`),
+      ]);
       setToday(t.data.record || null);
+      setMine(m.data.records || []);
     } catch (e) {
       console.error("[attendance] load failed:", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [month]);
 
   useEffect(() => {
     load();
@@ -277,6 +284,15 @@ function CheckInCard() {
             </p>
           )}
         </div>
+      </Card>
+
+      {/* Desktop-only calendar (on mobile it lives in the Regularize tab). */}
+      <Card className="p-5 hidden sm:block">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-foreground">My attendance · this month</h3>
+          <span className="text-xs text-muted-foreground">{mine.length} day{mine.length !== 1 ? "s" : ""}</span>
+        </div>
+        <AttendanceCalendar month={month} records={mine} onPickDate={onRegularizeDate} />
       </Card>
     </div>
   );
@@ -478,6 +494,10 @@ export default function Attendance() {
   const active = tabs.some((t) => t.v === requested) ? requested : tabs[0].v;
   const setActive = (v) => setParams(v === tabs[0].v ? {} : { tab: v }, { replace: true });
 
+  // Desktop: clicking a past day in the Attendance-tab calendar jumps to the
+  // Regularize tab with the dialog prefilled.
+  const openRegularize = (date) => setParams({ tab: "regularize", date }, { replace: true });
+
   return (
     <div className="space-y-6 max-w-6xl" data-testid="attendance-page">
       <Tabs value={active} onValueChange={setActive}>
@@ -489,7 +509,7 @@ export default function Attendance() {
 
         {canCheckIn && (
           <TabsContent value="attendance" className="mt-6">
-            <CheckInCard />
+            <CheckInCard onRegularizeDate={openRegularize} />
           </TabsContent>
         )}
         <TabsContent value="regularize" className="mt-6">
