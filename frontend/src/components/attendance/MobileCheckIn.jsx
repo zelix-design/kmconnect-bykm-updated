@@ -153,7 +153,7 @@ export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, o
         </div>
 
         <button
-          onClick={() => nav("/leave")}
+          onClick={() => nav("/attendance?tab=leave")}
           data-testid="mobile-emergency-leave"
           className="mt-5 w-full rounded-2xl bg-white/10 hover:bg-white/15 transition-colors py-3 flex items-center justify-center gap-1.5 text-sm font-semibold relative"
         >

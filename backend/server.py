@@ -263,6 +263,18 @@ async def startup() -> None:
     asyncio.create_task(_followup_sweep_loop())
     # Background sweep: auto-import new rows from synced Google Sheets.
     asyncio.create_task(_sheet_sync_loop())
+    # Background sweep: ping admins about staff not checked in by 10:30 IST.
+    asyncio.create_task(_late_alert_loop())
+
+
+async def _late_alert_loop() -> None:
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await attendance.sweep_late_checkins()
+        except Exception:
+            logger.exception("[attendance] late-alert sweep failed")
+        await asyncio.sleep(900)
 
 
 async def _sheet_sync_loop() -> None:

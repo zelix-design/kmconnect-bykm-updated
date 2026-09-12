@@ -130,7 +130,7 @@ export default function StaffDashboard() {
         <StatTile icon={GraduationCap} label="Students referred" value={referrals.length} tone="emerald"
           testid="staff-stat-referrals" onClick={() => nav("/my-students")} />
         <StatTile icon={CalendarCheck} label="Pending leave" value={leaveStats.pending_mine} tone="sky"
-          testid="staff-stat-leave" onClick={() => nav("/leave")} />
+          testid="staff-stat-leave" onClick={() => nav("/attendance?tab=leave")} />
       </div>
 
       {/* Quick actions */}

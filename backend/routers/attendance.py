@@ -87,6 +87,63 @@ async def _notify_admins_attendance(actor: dict, action: str, when_local: dateti
     )
 
 
+LATE_ALERT = (10, 30)  # ping office admins if not checked in by 10:30 IST
+
+
+async def sweep_late_checkins() -> None:
+    """Once past 10:30 IST on a working day, notify admins about staff/office
+    admins who still haven't checked in (idempotent per person per day)."""
+    local = datetime.now(TZ)
+    if local.weekday() == 6:  # Sunday
+        return
+    cutoff = local.replace(hour=LATE_ALERT[0], minute=LATE_ALERT[1], second=0, microsecond=0)
+    end = local.replace(hour=OFFICE_END[0], minute=OFFICE_END[1], second=0, microsecond=0)
+    if local < cutoff or local > end:
+        return
+    today = local.strftime("%Y-%m-%d")
+    users = await db.users.find(
+        {"role": {"$in": ["staff", "office_admin"]}, "approval_status": "approved",
+         "deleted_at": {"$in": [None, ""]}},
+        {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1},
+    ).to_list(5000)
+    att = await db.attendance.find({"date": today}, {"_id": 0, "user_id": 1, "check_in": 1, "status": 1}).to_list(20000)
+    ok = {a["user_id"] for a in att if a.get("check_in") or a.get("status") in ("weekoff", "leave")}
+    leaves = await db.leave_requests.find(
+        {"status": "approved", "from_date": {"$lte": today}, "to_date": {"$gte": today}},
+        {"_id": 0, "requester_user_id": 1},
+    ).to_list(5000)
+    on_leave = {leave["requester_user_id"] for leave in leaves}
+    alerted = {a["user_id"] for a in await db.attendance_alerts.find({"date": today}, {"_id": 0, "user_id": 1}).to_list(20000)}
+    supers = [s["id"] for s in await db.users.find(
+        {"role": "super_admin", "approval_status": "approved"}, {"_id": 0, "id": 1}).to_list(50)]
+    oa_by_office: dict = {}
+    for u in users:
+        uid = u["id"]
+        if uid in ok or uid in on_leave or uid in alerted:
+            continue
+        office = u.get("office")
+        if office and office not in oa_by_office:
+            oa_by_office[office] = [o["id"] for o in await db.users.find(
+                {"role": "office_admin", "approval_status": "approved", "office": office},
+                {"_id": 0, "id": 1}).to_list(200)]
+        recips = set(supers) | set(oa_by_office.get(office, []))
+        recips.discard(uid)
+        if recips:
+            await notify_users(
+                list(recips),
+                type="attendance_no_show",
+                title=f"{u.get('name') or 'A staff member'} not checked in",
+                message=f"{u.get('name') or 'Staff'} ({office or '—'}) hasn't checked in by 10:30 AM today.",
+                link="/attendance?tab=payroll",
+                metadata={"office": office, "user_id": uid, "date": today},
+            )
+        await db.attendance_alerts.update_one(
+            {"user_id": uid, "date": today},
+            {"$set": {"user_id": uid, "date": today, "created_at": now_iso()}},
+            upsert=True,
+        )
+
+
 @router.get("/today")
 async def my_today(user: dict = Depends(get_current_user)):
     rec = await db.attendance.find_one({"user_id": user["id"], "date": _today()}, {"_id": 0})
