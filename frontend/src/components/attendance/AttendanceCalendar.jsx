@@ -6,6 +6,8 @@ const STATUS_DOT = {
   present: "bg-emerald-500",
   late: "bg-amber-500",
   half_day: "bg-orange-500",
+  leave: "bg-sky-500",
+  weekoff: "bg-violet-500",
   absent: "bg-rose-500",
 };
 
@@ -13,10 +15,15 @@ const STATUS_CELL = {
   present: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
   late: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30",
   half_day: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30",
+  leave: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30",
+  weekoff: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
 };
 
+const STATUS_SHORT = { present: "P", late: "L", half_day: "½", leave: "LV", weekoff: "WO", absent: "A" };
+
 // Monthly calendar grid for the signed-in user's own attendance.
-export default function AttendanceCalendar({ month, records }) {
+// Clicking a PAST day (when onPickDate is provided) starts a regularization request.
+export default function AttendanceCalendar({ month, records, onPickDate }) {
   const [y, m] = month.split("-").map(Number);
   const byDate = useMemo(() => {
     const map = {};
@@ -54,14 +61,25 @@ export default function AttendanceCalendar({ month, records }) {
           const status = c.rec?.status;
           const cellCls = status ? (STATUS_CELL[status] || "bg-muted border-border") : "border-transparent";
           const isToday = c.ds === todayIso;
+          const isPast = c.ds < todayIso;
+          const clickable = !!onPickDate && isPast;
           return (
             <div
               key={c.ds}
               data-testid={`cal-day-${c.ds}`}
-              className={`aspect-square rounded-lg border flex flex-col items-center justify-center text-xs relative ${cellCls} ${c.isSunday && !status ? "opacity-45" : ""} ${isToday ? "ring-2 ring-primary" : ""}`}
+              role={clickable ? "button" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={clickable ? () => onPickDate(c.ds, c.rec) : undefined}
+              onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") onPickDate(c.ds, c.rec); } : undefined}
+              title={clickable ? "Regularize this day" : undefined}
+              className={`aspect-square rounded-lg border flex flex-col items-center justify-center text-xs relative ${cellCls} ${c.isSunday && !status ? "opacity-50" : ""} ${isToday ? "ring-2 ring-primary" : ""} ${clickable ? "cursor-pointer hover:border-primary/60 hover:bg-primary/5" : ""}`}
             >
               <span className={`tabular-nums ${status ? "font-semibold" : "text-muted-foreground"}`}>{c.d}</span>
-              {status && <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${STATUS_DOT[status] || "bg-muted-foreground"}`} />}
+              {status ? (
+                <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${STATUS_DOT[status] || "bg-muted-foreground"}`} title={STATUS_SHORT[status]} />
+              ) : (
+                <span className="mt-0.5 h-1.5 w-1.5" />
+              )}
             </div>
           );
         })}
@@ -70,8 +88,12 @@ export default function AttendanceCalendar({ month, records }) {
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Present</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" /> Late</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-500" /> Half day</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Sunday / off</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Leave</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> Week-off</span>
       </div>
+      {onPickDate && (
+        <p className="text-[11px] text-muted-foreground mt-2">Tip: tap any past day to request a Week-off or Leave regularization.</p>
+      )}
     </div>
   );
 }

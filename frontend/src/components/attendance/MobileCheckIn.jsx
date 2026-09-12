@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
-import { Clock, CaretRight, MapPin } from "@phosphor-icons/react";
+import { Clock, CaretRight, MapPin, Coffee } from "@phosphor-icons/react";
 import { greetingForNow } from "@/lib/format";
 
 const TARGET_H = 9;
@@ -19,12 +19,6 @@ const fmtClockTime = (d) => {
   h = h % 12 || 12;
   return { hm: `${h}:${m}`, ap };
 };
-const initialsOf = (name) => {
-  if (!name) return "?";
-  const p = name.trim().split(/\s+/);
-  return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase();
-};
-
 function GoalRing({ progress }) {
   const r = 26;
   const c = 2 * Math.PI * r;
@@ -59,7 +53,7 @@ function Stat({ label, value, icon: Icon }) {
 }
 
 // Mobile-only attendance hero + big tappable check-in dial (crimson / near-black brand).
-export default function MobileCheckIn({ today, elapsed, checkedIn, checkedOut, busy, loading, onCheckIn, onCheckOut }) {
+export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, onBreak, checkedIn, checkedOut, busy, loading, onCheckIn, onCheckOut, onToggleBreak }) {
   const { user } = useAuth();
   const nav = useNavigate();
   const [now, setNow] = useState(new Date());
@@ -85,21 +79,46 @@ export default function MobileCheckIn({ today, elapsed, checkedIn, checkedOut, b
     ? (() => { const d = new Date(today.check_in); const t = fmtClockTime(d); return `${t.hm} ${t.ap}`; })()
     : "--:--";
 
-  const dialLabel = checkedOut ? "Done" : checkedIn ? "Check Out" : "Check In";
-  const dialDisabled = busy || loading || checkedOut;
+  const dialLabel = checkedOut ? "Done" : onBreak ? "On Break" : checkedIn ? "Check Out" : "Check In";
+  const dialDisabled = busy || loading || checkedOut || onBreak;
   const onDial = () => {
     if (dialDisabled) return;
     if (!checkedIn) onCheckIn();
     else if (!checkedOut) onCheckOut();
   };
 
+  // Press-and-hold to confirm (avoids accidental taps).
+  const HOLD_MS = 1000;
+  const [holdPct, setHoldPct] = useState(0);
+  const holdRef = React.useRef(null);
+  const firedRef = React.useRef(false);
+  const startHold = () => {
+    if (dialDisabled) return;
+    firedRef.current = false;
+    const start = Date.now();
+    holdRef.current = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - start) / HOLD_MS) * 100);
+      setHoldPct(pct);
+      if (pct >= 100 && !firedRef.current) {
+        firedRef.current = true;
+        clearInterval(holdRef.current);
+        holdRef.current = null;
+        setHoldPct(0);
+        onDial();
+      }
+    }, 30);
+  };
+  const endHold = () => {
+    if (holdRef.current) { clearInterval(holdRef.current); holdRef.current = null; }
+    setHoldPct(0);
+  };
+  useEffect(() => () => { if (holdRef.current) clearInterval(holdRef.current); }, []);
+  const showHoldHint = !dialDisabled;
+
   return (
-    <div className="space-y-6" data-testid="mobile-checkin">
+    <div className="space-y-6 pb-24" data-testid="mobile-checkin">
       {/* Greeting */}
       <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-full bg-gradient-to-br from-rose-500 to-red-700 text-white flex items-center justify-center font-bold shrink-0">
-          {initialsOf(user?.name)}
-        </div>
         <div className="min-w-0">
           <p className="text-base font-semibold text-foreground truncate">{greetingForNow()}, {user?.name?.split(" ")[0] || "there"}</p>
           <p className="text-xs text-muted-foreground">Have a productive day</p>
@@ -128,9 +147,9 @@ export default function MobileCheckIn({ today, elapsed, checkedIn, checkedOut, b
         </div>
 
         <div className="grid grid-cols-3 gap-3 mt-5 relative">
-          <Stat label="Worked Hrs" value={fmtHM(elapsed)} icon={Clock} />
+          <Stat label="Worked Hrs" value={fmtHM(checkedIn ? (netWorked ?? elapsed) : 0)} icon={Clock} />
           <Stat label="Check In" value={checkInTime} icon={Clock} />
-          <Stat label="Lunch Break" value="01:00h" icon={Clock} />
+          <Stat label="Lunch Break" value={fmtHM(breakTotal || 0)} icon={Clock} />
         </div>
 
         <button
@@ -142,28 +161,51 @@ export default function MobileCheckIn({ today, elapsed, checkedIn, checkedOut, b
         </button>
       </div>
 
-      {/* Big concentric check-in dial */}
+      {/* Big concentric press-and-hold dial */}
       <div className="flex flex-col items-center pt-2 pb-1">
         <button
-          onClick={onDial}
+          onPointerDown={startHold}
+          onPointerUp={endHold}
+          onPointerLeave={endHold}
+          onPointerCancel={endHold}
           disabled={dialDisabled}
           data-testid="mobile-dial-btn"
-          className={`relative h-64 w-64 rounded-full flex items-center justify-center transition-transform active:scale-95 ${dialDisabled ? "opacity-70" : ""}`}
+          className={`relative h-64 w-64 rounded-full flex items-center justify-center transition-transform select-none touch-none ${holdPct > 0 ? "scale-95" : ""} ${dialDisabled ? "opacity-70" : ""}`}
           aria-label={dialLabel}
         >
           <span className="absolute inset-0 rounded-full bg-rose-500/10" />
           <span className="absolute inset-8 rounded-full bg-rose-500/15" />
+          {/* hold-progress fill */}
           <span
-            className="relative h-32 w-32 rounded-full flex items-center justify-center text-white text-lg font-semibold shadow-lg"
+            className="absolute inset-0 rounded-full"
+            style={{ background: `conic-gradient(#e11d48 ${holdPct * 3.6}deg, transparent 0deg)`, opacity: 0.35 }}
+          />
+          <span
+            className="relative h-32 w-32 rounded-full flex flex-col items-center justify-center text-white text-lg font-semibold shadow-lg text-center px-2"
             style={{ background: checkedIn && !checkedOut ? "linear-gradient(150deg,#e11d48,#9f1239)" : "linear-gradient(150deg,#f43f5e,#be123c)" }}
           >
             {dialLabel}
+            {showHoldHint && <span className="block text-[10px] font-normal opacity-80 mt-0.5">press &amp; hold</span>}
           </span>
         </button>
         {today?.check_in_lat != null && (
           <p className="text-[11px] text-muted-foreground mt-3 flex items-center gap-1">
             <MapPin size={12} /> {today.check_in_lat.toFixed(4)}, {today.check_in_lng?.toFixed(4)}
           </p>
+        )}
+        {checkedIn && !checkedOut && (
+          <button
+            onClick={onToggleBreak}
+            disabled={busy}
+            data-testid="mobile-break-btn"
+            className={`mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-colors ${
+              onBreak
+                ? "bg-amber-500 text-white"
+                : "bg-muted text-foreground hover:bg-muted/70"
+            }`}
+          >
+            <Coffee size={16} weight="bold" /> {onBreak ? "End break" : "Start break"}
+          </button>
         )}
       </div>
     </div>

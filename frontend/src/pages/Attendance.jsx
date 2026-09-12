@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api, { formatApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging } from "@phosphor-icons/react";
+import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
+import RegularizationPanel from "@/components/attendance/RegularizationPanel";
+import Leave from "@/pages/Leave";
 
 // Shift = 9h total (8h work + 1h break). Warn 5 min before completion.
 const WORK_TARGET_SECONDS = 9 * 3600;
@@ -70,7 +74,7 @@ function StatusBadge({ status, tid }) {
 }
 
 /* ---------------- Check-in card (staff + office admin) ---------------- */
-function CheckInCard() {
+function CheckInCard({ onRegularizeDate }) {
   const [today, setToday] = useState(null);
   const [mine, setMine] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -138,20 +142,40 @@ function CheckInCard() {
     }
   };
 
+  const toggleBreak = async () => {
+    setBusy(true);
+    try {
+      const path = today?.on_break ? "/attendance/break/end" : "/attendance/break/start";
+      const { data } = await api.post(path);
+      setToday(data.record);
+      toast.success(today?.on_break ? "Break ended" : "Break started");
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const checkedIn = !!today?.check_in;
   const checkedOut = !!today?.check_out;
+  const onBreak = !!today?.on_break;
 
-  // Live work timer + "5 min before 9h" notification (only while checked in, not out).
+  // Live work timer + break tracking + "5 min before 9h" notification.
   const [elapsed, setElapsed] = useState(0);
+  const [breakTotal, setBreakTotal] = useState(0);
   const notifiedRef = React.useRef(false);
   useEffect(() => {
     if (!checkedIn || checkedOut) return;
     const start = new Date(today.check_in).getTime();
     const dayKey = `att-notified-${today.date}`;
     notifiedRef.current = typeof localStorage !== "undefined" && localStorage.getItem(dayKey) === "1";
+    const completed = (today.breaks || []).reduce((s, b) => s + (Number(b.seconds) || 0), 0);
+    const openBreak = (today.breaks || []).find((b) => !b.end);
     const tick = () => {
       const e = (Date.now() - start) / 1000;
       setElapsed(e);
+      const live = openBreak ? (Date.now() - new Date(openBreak.start).getTime()) / 1000 : 0;
+      setBreakTotal(completed + live);
       if (!notifiedRef.current && e >= WORK_TARGET_SECONDS - NOTIFY_BEFORE_SECONDS && e < WORK_TARGET_SECONDS) {
         notifiedRef.current = true;
         try { localStorage.setItem(dayKey, "1"); } catch { /* ignore */ }
@@ -161,7 +185,7 @@ function CheckInCard() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [checkedIn, checkedOut, today?.check_in, today?.date]);
+  }, [checkedIn, checkedOut, today]);
 
   const requestNotifyPermission = () => {
     try {
@@ -170,6 +194,7 @@ function CheckInCard() {
   };
   const doCheckIn = async () => { requestNotifyPermission(); await checkIn(); };
 
+  const netWorked = Math.max(0, elapsed - breakTotal);
   const remaining = Math.max(0, WORK_TARGET_SECONDS - elapsed);
 
   return (
@@ -179,12 +204,16 @@ function CheckInCard() {
         <MobileCheckIn
           today={today}
           elapsed={elapsed}
+          netWorked={netWorked}
+          breakTotal={breakTotal}
+          onBreak={onBreak}
           checkedIn={checkedIn}
           checkedOut={checkedOut}
           busy={busy}
           loading={loading}
           onCheckIn={doCheckIn}
           onCheckOut={checkOut}
+          onToggleBreak={toggleBreak}
         />
       </div>
 
@@ -214,30 +243,44 @@ function CheckInCard() {
           {checkedIn && !checkedOut && (
             <div className="text-right" data-testid="work-timer">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground flex items-center gap-1 justify-end">
-                <Timer size={13} /> Worked
+                <Timer size={13} /> Worked (net)
               </p>
-              <p className="text-3xl font-bold tabular-nums text-foreground leading-tight">{fmtDuration(elapsed)}</p>
-              <p className={`text-[11px] flex items-center gap-1 justify-end mt-0.5 ${remaining <= NOTIFY_BEFORE_SECONDS ? "text-amber-600 dark:text-amber-400 font-medium" : "text-muted-foreground"}`}>
-                {remaining > 0 ? <>{fmtDuration(remaining)} to 9h</> : <><BellRinging size={12} /> Target reached</>}
+              <p className="text-3xl font-bold tabular-nums text-foreground leading-tight">{fmtDuration(netWorked)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Break {fmtDuration(breakTotal)} · {remaining > 0 ? <>{fmtDuration(remaining)} to 9h</> : <span className="text-amber-600 dark:text-amber-400 inline-flex items-center gap-1"><BellRinging size={12} /> Target reached</span>}
               </p>
             </div>
           )}
         </div>
 
         {/* Desktop buttons */}
-        <div className="flex gap-2 mt-5">
+        <div className="flex flex-wrap gap-2 mt-5">
           {!checkedIn && (
             <Button data-testid="btn-check-in" onClick={doCheckIn} disabled={busy || loading} className="btn-amber">
               <SignIn size={18} className="mr-1.5" /> Check in
             </Button>
           )}
           {checkedIn && !checkedOut && (
-            <Button data-testid="btn-check-out" onClick={checkOut} disabled={busy} variant="outline">
-              <SignOut size={18} className="mr-1.5" /> Check out
-            </Button>
+            <>
+              <Button
+                data-testid="btn-toggle-break"
+                onClick={toggleBreak}
+                disabled={busy}
+                variant={onBreak ? "default" : "outline"}
+                className={onBreak ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}
+              >
+                <Coffee size={18} className="mr-1.5" /> {onBreak ? "End break" : "Start break"}
+              </Button>
+              <Button data-testid="btn-check-out" onClick={checkOut} disabled={busy || onBreak} variant="outline">
+                <SignOut size={18} className="mr-1.5" /> Check out
+              </Button>
+              {onBreak && <span className="self-center text-xs text-amber-600 dark:text-amber-400">On break — end it before checking out</span>}
+            </>
           )}
           {checkedOut && (
-            <p className="text-sm text-muted-foreground">Great work today — see you tomorrow.</p>
+            <p className="text-sm text-muted-foreground">
+              Great work today — see you tomorrow. {today?.break_seconds ? `(Break: ${fmtDuration(today.break_seconds)})` : ""}
+            </p>
           )}
         </div>
       </Card>
@@ -247,7 +290,7 @@ function CheckInCard() {
           <h3 className="font-semibold text-foreground">My attendance · this month</h3>
           <span className="text-xs text-muted-foreground">{mine.length} day{mine.length !== 1 ? "s" : ""}</span>
         </div>
-        <AttendanceCalendar month={month} records={mine} />
+        <AttendanceCalendar month={month} records={mine} onPickDate={onRegularizeDate} />
       </Card>
     </div>
   );
@@ -433,14 +476,51 @@ function PayrollSection({ user }) {
 
 export default function Attendance() {
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
   if (!user) return null;
   const isAdmin = user.role === "super_admin" || user.role === "office_admin";
   const canCheckIn = user.role === "staff" || user.role === "office_admin";
 
+  const tabs = [];
+  if (canCheckIn) tabs.push({ v: "attendance", label: "Attendance" });
+  tabs.push({ v: "regularize", label: "Regularize" });
+  tabs.push({ v: "leave", label: "Leave" });
+  if (isAdmin) tabs.push({ v: "payroll", label: "Payroll" });
+
+  const requested = params.get("tab");
+  const active = tabs.some((t) => t.v === requested) ? requested : tabs[0].v;
+  const setActive = (v) => setParams(v === tabs[0].v ? {} : { tab: v }, { replace: true });
+
+  const openRegularize = (date) => {
+    setParams({ tab: "regularize", date }, { replace: true });
+  };
+
   return (
-    <div className="space-y-8 max-w-6xl" data-testid="attendance-page">
-      {canCheckIn && <CheckInCard />}
-      {isAdmin && <PayrollSection user={user} />}
+    <div className="space-y-6 max-w-6xl" data-testid="attendance-page">
+      <Tabs value={active} onValueChange={setActive}>
+        <TabsList data-testid="attendance-tabs" className="flex-wrap h-auto">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.v} value={t.v} data-testid={`tab-${t.v}`}>{t.label}</TabsTrigger>
+          ))}
+        </TabsList>
+
+        {canCheckIn && (
+          <TabsContent value="attendance" className="mt-6">
+            <CheckInCard onRegularizeDate={openRegularize} />
+          </TabsContent>
+        )}
+        <TabsContent value="regularize" className="mt-6">
+          <RegularizationPanel user={user} />
+        </TabsContent>
+        <TabsContent value="leave" className="mt-6">
+          <Leave />
+        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="payroll" className="mt-6">
+            <PayrollSection user={user} />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

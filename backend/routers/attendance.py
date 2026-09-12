@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
+from routers.notifications import notify_users
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 
@@ -57,6 +58,35 @@ def _public(rec: dict) -> dict:
     return rec
 
 
+async def _notify_admins_attendance(actor: dict, action: str, when_local: datetime, extra: str = "") -> None:
+    """Push + in-app notify super admins and the actor's office admins on check-in/out."""
+    office = actor.get("office")
+    ids: set[str] = set()
+    sups = await db.users.find(
+        {"role": "super_admin", "approval_status": "approved"}, {"_id": 0, "id": 1}
+    ).to_list(50)
+    ids.update(s["id"] for s in sups)
+    if office:
+        oas = await db.users.find(
+            {"role": "office_admin", "approval_status": "approved", "office": office}, {"_id": 0, "id": 1}
+        ).to_list(200)
+        ids.update(o["id"] for o in oas)
+    ids.discard(actor["id"])
+    if not ids:
+        return
+    tstr = when_local.strftime("%I:%M %p")
+    verb = "checked in" if action == "check_in" else "checked out"
+    await notify_users(
+        list(ids),
+        type=f"attendance_{action}",
+        title=f"{actor.get('name') or 'A staff member'} {verb}",
+        message=f"{actor.get('name') or 'Staff'} · {office or ''} {verb} at {tstr}{extra}".strip(),
+        link="/attendance?tab=payroll",
+        actor_user_id=actor["id"],
+        metadata={"office": office, "action": action},
+    )
+
+
 @router.get("/today")
 async def my_today(user: dict = Depends(get_current_user)):
     rec = await db.attendance.find_one({"user_id": user["id"], "date": _today()}, {"_id": 0})
@@ -85,9 +115,53 @@ async def check_in(body: CheckInIn, user: dict = Depends(require_edit("attendanc
         "check_in_lng": body.lng,
         "status": status,
         "work_seconds": 0,
+        "break_seconds": 0,
+        "breaks": [],
+        "on_break": False,
         "created_at": now_iso(),
     }
     await db.attendance.update_one({"user_id": user["id"], "date": today}, {"$set": rec}, upsert=True)
+    await _notify_admins_attendance(user, "check_in", local, extra=(" · LATE" if status == "late" else ""))
+    return {"record": _public(rec)}
+
+
+@router.post("/break/start")
+async def break_start(user: dict = Depends(require_edit("attendance"))):
+    today = _today()
+    rec = await db.attendance.find_one({"user_id": user["id"], "date": today})
+    if not rec or not rec.get("check_in"):
+        raise HTTPException(400, "You haven't checked in today")
+    if rec.get("check_out"):
+        raise HTTPException(400, "You've already checked out")
+    if rec.get("on_break"):
+        raise HTTPException(400, "You're already on a break")
+    now = datetime.now(timezone.utc)
+    breaks = rec.get("breaks") or []
+    breaks.append({"start": now.isoformat(), "end": None, "seconds": 0})
+    await db.attendance.update_one({"id": rec["id"]}, {"$set": {"on_break": True, "breaks": breaks}})
+    rec.update({"on_break": True, "breaks": breaks})
+    return {"record": _public(rec)}
+
+
+@router.post("/break/end")
+async def break_end(user: dict = Depends(require_edit("attendance"))):
+    today = _today()
+    rec = await db.attendance.find_one({"user_id": user["id"], "date": today})
+    if not rec or not rec.get("on_break"):
+        raise HTTPException(400, "You're not on a break")
+    now = datetime.now(timezone.utc)
+    breaks = rec.get("breaks") or []
+    total = 0
+    for b in breaks:
+        if b.get("end") is None and b.get("start"):
+            secs = max(0, int((now - datetime.fromisoformat(b["start"])).total_seconds()))
+            b["end"] = now.isoformat()
+            b["seconds"] = secs
+        total += int(b.get("seconds") or 0)
+    await db.attendance.update_one(
+        {"id": rec["id"]}, {"$set": {"on_break": False, "breaks": breaks, "break_seconds": total}}
+    )
+    rec.update({"on_break": False, "breaks": breaks, "break_seconds": total})
     return {"record": _public(rec)}
 
 
@@ -102,14 +176,28 @@ async def check_out(user: dict = Depends(require_edit("attendance"))):
     now = datetime.now(timezone.utc)
     ci = datetime.fromisoformat(rec["check_in"])
     work = max(0, int((now - ci).total_seconds()))
+    # Auto-close any open break at checkout.
+    breaks = rec.get("breaks") or []
+    break_total = 0
+    for b in breaks:
+        if b.get("end") is None and b.get("start"):
+            secs = max(0, int((now - datetime.fromisoformat(b["start"])).total_seconds()))
+            b["end"] = now.isoformat()
+            b["seconds"] = secs
+        break_total += int(b.get("seconds") or 0)
+    net_work = max(0, work - break_total)
     status = rec.get("status") or "present"
-    if work < HALF_DAY_SECONDS:
+    if net_work < HALF_DAY_SECONDS:
         status = "half_day"
     await db.attendance.update_one(
         {"id": rec["id"]},
-        {"$set": {"check_out": now.isoformat(), "work_seconds": work, "status": status}},
+        {"$set": {"check_out": now.isoformat(), "work_seconds": work, "break_seconds": break_total,
+                  "breaks": breaks, "on_break": False, "status": status}},
     )
-    rec.update({"check_out": now.isoformat(), "work_seconds": work, "status": status})
+    rec.update({"check_out": now.isoformat(), "work_seconds": work, "break_seconds": break_total,
+                "breaks": breaks, "on_break": False, "status": status})
+    await _notify_admins_attendance(user, "check_out", now.astimezone(TZ),
+                                    extra=f" · {round(net_work / 3600, 1)}h net")
     return {"record": _public(rec)}
 
 
@@ -233,7 +321,7 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
     half: dict = {}
     for a in att:
         uid, ds, st = a["user_id"], a.get("date"), a.get("status")
-        if st in ("present", "late"):
+        if st in ("present", "late", "weekoff", "leave"):
             present.setdefault(uid, set()).add(ds)
         elif st == "half_day":
             half.setdefault(uid, set()).add(ds)
@@ -281,3 +369,121 @@ async def payslip(uid: str, month: str, user: dict = Depends(get_current_user)):
     if not row:
         raise HTTPException(404, "No payroll for this staff/month")
     return {"month": month, "staff": target, "payslip": row}
+
+
+# ---------- Regularization: fix a PAST day (Absent → Week-off / Leave) ----------
+REG_KINDS = ("weekoff", "leave")
+
+
+class RegularizeIn(BaseModel):
+    date: str                              # YYYY-MM-DD (must be in the past)
+    kind: str = "weekoff"                  # weekoff | leave
+    leave_type: Optional[str] = None       # casual/sick/earned when kind=leave
+    reason: str = ""
+
+
+class RegDecision(BaseModel):
+    status: str                            # approved | rejected
+    note: Optional[str] = ""
+
+
+@router.post("/regularize", status_code=201)
+async def create_regularization(body: RegularizeIn, user: dict = Depends(require_edit("attendance"))):
+    if body.kind not in REG_KINDS:
+        raise HTTPException(400, "Invalid kind")
+    if body.date >= _today():
+        raise HTTPException(400, "You can only regularize a past date")
+    existing = await db.attendance_regularizations.find_one(
+        {"user_id": user["id"], "date": body.date, "status": "pending"}
+    )
+    if existing:
+        raise HTTPException(400, "A pending request already exists for this date")
+    now = now_iso()
+    doc = {
+        "id": gen_id(),
+        "user_id": user["id"],
+        "user_name": user.get("name"),
+        "user_role": user.get("role"),
+        "office": user.get("office"),
+        "date": body.date,
+        "kind": body.kind,
+        "leave_type": body.leave_type if body.kind == "leave" else None,
+        "reason": (body.reason or "").strip(),
+        "status": "pending",
+        "approver_user_id": None,
+        "approver_name": None,
+        "decided_at": None,
+        "decision_note": "",
+        "created_at": now,
+    }
+    await db.attendance_regularizations.insert_one(doc)
+    doc.pop("_id", None)
+    return {"request": doc}
+
+
+@router.get("/regularizations")
+async def list_regularizations(status: Optional[str] = None, month: Optional[str] = None,
+                               user: dict = Depends(get_current_user)):
+    q: dict = {}
+    role = user.get("role")
+    if role == "super_admin":
+        pass
+    elif role == "office_admin":
+        # own requests + team requests in their office
+        q["$or"] = [{"user_id": user["id"]}, {"office": user.get("office")}]
+    else:
+        q["user_id"] = user["id"]
+    if status:
+        q["status"] = status
+    if month:
+        q["date"] = {"$regex": f"^{month}"}
+    rows = await db.attendance_regularizations.find(q, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    return {"requests": rows}
+
+
+@router.patch("/regularizations/{req_id}")
+async def decide_regularization(req_id: str, body: RegDecision, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    if body.status not in ("approved", "rejected"):
+        raise HTTPException(400, "Invalid status")
+    req = await db.attendance_regularizations.find_one({"id": req_id})
+    if not req:
+        raise HTTPException(404, "Request not found")
+    if req.get("status") != "pending":
+        raise HTTPException(400, "This request has already been decided")
+    if req.get("user_id") == user["id"]:
+        raise HTTPException(403, "You can't approve your own request")
+    # office_admin decides only staff requests in their own office
+    if user.get("role") == "office_admin":
+        if req.get("office") != user.get("office") or req.get("user_role") != "staff":
+            raise HTTPException(403, "Out of scope")
+    await db.attendance_regularizations.update_one(
+        {"id": req_id},
+        {"$set": {"status": body.status, "approver_user_id": user["id"],
+                  "approver_name": user.get("name"), "decided_at": now_iso(),
+                  "decision_note": (body.note or "").strip()}},
+    )
+    if body.status == "approved":
+        # Upsert an attendance record for that date marked as a paid day.
+        status = "leave" if req.get("kind") == "leave" else "weekoff"
+        await db.attendance.update_one(
+            {"user_id": req["user_id"], "date": req["date"]},
+            {
+                "$set": {
+                    "user_name": req.get("user_name"),
+                    "office": req.get("office"),
+                    "status": status,
+                    "regularized": True,
+                    "regularization_id": req_id,
+                    "leave_type": req.get("leave_type"),
+                },
+                "$setOnInsert": {
+                    "id": gen_id(),
+                    "user_id": req["user_id"],
+                    "date": req["date"],
+                    "created_at": now_iso(),
+                },
+            },
+            upsert=True,
+        )
+    return {"ok": True}

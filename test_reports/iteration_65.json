@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 65 — Tested the NEW break tracker + regularization + combined attendance hub. Backend: 13/13 pytest cases pass (break start/end lifecycle, double-start 400, break auto-close on check-out with net-based half_day, regularization CRUD with permission checks, approved reg counts as PAID in payroll). Frontend: office admin desktop break UI (Start→End flip, Check out disabled with hint, work-timer shows 'Worked (net)'+'Break …'), regularization dialog fields, combined tabs (attendance/regularize/leave/payroll), super_admin sees Regularize/Leave/Payroll (no Attendance/check-in tab) and ?tab=leave activates Leave tab, staff bottom nav has Attendance and NO Leave, StaffDashboard staff-action-attendance, mobile hero (Worked Hrs + Lunch Break labels, live clock, Goal 9h ring), and mobile-break-btn toggles dial to 'On Break' disabled and back.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile /attendance", "issues": ["mobile-break-btn sits close to the fixed bottom-nav (button center y≈798 in a 844px viewport, ~46px above the bottom nav). Playwright's force-click hit-tests the elementFromPoint and returned an SVG path from an underlying element on the first attempt. Real-user finger taps still work (verified with a scroll-into-view regular click); consider adding a bit of bottom padding to the mobile hero container to avoid edge overlap on smaller phones."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration65_break_and_regularization.py",
+    "/app/test_reports/pytest/iteration65.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "attendance.check_out uses `rec.get('status') or 'present'` before overriding with half_day if net<4h. This means a 'late' morning check-in remains 'late' unless net<4h (then it becomes half_day). Correct behavior, but the half_day override discards the 'late' flag — payroll only cares about status categories so it's OK; keep in mind if you ever want to surface 'late-and-half' distinctly.",
+    "regularizations decide endpoint: office_admin scope check is (office match) AND (user_role=='staff'). If an office_admin ever needs to approve their own peer office_admin's regularization, they will get 403. Currently intentional (per spec 'office_admin non-staff → 403'), just documenting.",
+    "_payroll_rows counts status in ('present','late','weekoff','leave') into `present_days`. That's fine for payroll math (present_eq), but the returned column named `present_days` now includes regularized weekoff/leave days, which double-counts if a viewer also reads `leave_days` (leave_map). Currently `lset` subtracts pset/hset so no double count in totals; still, the JSON field naming may confuse UI. UI uses present/half/paid-leave/absent separately so it renders correctly. Consider renaming or splitting for clarity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration65_break_and_regularization.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786 (super), blr1@finflow.com / Office@123 (office admin, KM_BLR), staff.blr@kmfoundation.online / Staff@123 (staff, KM_BLR). All logins OK via cookie auth.",
+  "seed_data_creation": "During pytest: 2 regularization requests + 1 attendance record for staff on past working days, 1 fake regularization (id=TEST_reg_other_office_65) for a different office, 1 staff_salaries doc (30000) for staff user, and today attendance rows for staff / office admin from UI checks. All rows removed by test_zzz_cleanup + a follow-up ad-hoc cleanup for the office admin today row. Post-run DB is clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests: /app/backend/tests/test_iteration65_break_and_regularization.py covers break lifecycle (start/double-start-400/end/end-400/auto-close-on-checkout with net-based half_day), regularization (past-only 400, duplicate pending 400, office-admin sees office-scoped list, approve creates attendance status weekoff/leave with regularized:true, reject leaves no attendance row, staff-can't-approve-own 403, office-admin out-of-office 403, approved weekoff counts paid_days≥1 and reduces deduction). Uses a fresh motor client per DB call to avoid asyncio-loop mismatch. Frontend: UI verified for office-admin desktop (btn-toggle-break flip + btn-check-out disabled while on_break + work-timer 'Worked (net)'+'Break …'), reg-dialog fields, all 4 tabs on office admin, super admin has 3 tabs (no Attendance) and ?tab=leave query works, staff mobile has bottom-nav-attendance (no bottom-nav-leave), staff-action-attendance on StaffDashboard, and mobile-break-btn correctly transitions the dial to 'On Break' (disabled). One test-only quirk: force-click on mobile-break-btn without scroll-into-view can hit the fixed bottom-nav; use regular click after scrollIntoView.",
+  "rca of the issue": "N/A — no regressions or bugs found in the new break/regularization features."
+}

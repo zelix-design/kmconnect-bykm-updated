@@ -18,7 +18,7 @@ import {
   Coins,
   ChatCircleDots,
   Target,
-  CalendarCheck,
+  Clock,
 } from "@phosphor-icons/react";
 
 // Bottom nav side items, ranked. We render up to 4 visible items + the center FAB.
@@ -36,12 +36,12 @@ const ALL_SIDE_NAV = [
   { to: "/expense-requests", label: "Expenses", icon: ReceiptX, tid: "bottom-nav-expenses", perm: "expense_requests" },
 ];
 
-// Staff get a fixed, CRM-focused bottom bar: Home · My Leads · [＋] · Messages · Leave
+// Staff get a fixed, CRM-focused bottom bar: Home · My Leads · [＋] · Attendance · Messages
 const STAFF_SIDE_NAV = [
   { to: "/", label: "Home", icon: House, end: true, tid: "bottom-nav-home" },
   { to: "/leads", label: "My Leads", icon: Target, tid: "bottom-nav-my-leads" },
+  { to: "/attendance", label: "Attendance", icon: Clock, tid: "bottom-nav-attendance" },
   { to: "/messages", label: "Messages", icon: ChatCircleDots, tid: "bottom-nav-messages" },
-  { to: "/leave", label: "Leave", icon: CalendarCheck, tid: "bottom-nav-leave" },
 ];
 
 const ALL_QUICK_ACTIONS = [

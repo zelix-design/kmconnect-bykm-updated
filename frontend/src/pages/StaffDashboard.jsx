@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   Target, ClockCountdown, GraduationCap, CalendarCheck, UserPlus, PaperPlaneTilt,
-  Copy, ShareNetwork, ArrowRight, Student as StudentIcon,
+  Copy, ShareNetwork, ArrowRight, Student as StudentIcon, Clock,
 } from "@phosphor-icons/react";
 import LeaveRequestDialog from "@/components/leave/LeaveRequestDialog";
 
@@ -136,7 +136,9 @@ export default function StaffDashboard() {
       {/* Quick actions */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick actions</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ActionButton icon={Clock} label="Attendance" sub="Check in / out · breaks · payroll" testid="staff-action-attendance"
+            onClick={() => nav("/attendance")} />
           <ActionButton icon={UserPlus} label="Add student" sub="Open your referral application form" testid="staff-action-add-student"
             onClick={() => navigateToApply(nav, user?.id)} />
           <ActionButton icon={CalendarCheck} label="Request leave" sub="Casual / sick / earned / unpaid" testid="staff-action-leave"
