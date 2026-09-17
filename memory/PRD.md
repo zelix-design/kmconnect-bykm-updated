@@ -1529,3 +1529,9 @@ admissions per year. It's confidential — only super admin can see it."
 
 ## Implementation status — 2026-06 (iteration 72: bulk-upload preview)
 - [x] **Bulk upload preview**: `POST /api/attendance/bulk` now accepts `preview:true` — parses/validates/resolves users and returns per-row `rows[]` ({line, name, date/status or salary, action: create|update|error, message}) plus counts, WITHOUT writing. `BulkUploadDialog` gained a **Preview** button that renders a color-coded row-by-row table; **Apply** is enabled only after a preview and applies just the valid rows (errors skipped). Verified: preview returns actions + writes nothing (0 records after preview); apply persists.
+
+
+## Bug fix — 2026-06 (Employees → Create/Reset login blank page)
+- [x] **Create login blank page fixed**: `Clients.jsx` `submitCreateLogin` was POSTing only `{ password }` to `/api/staff/members/{id}/login`, but the backend requires `email` too → 422 whose `detail` (array of objects) was passed to `toast.error(...)`, crashing React ("Objects are not valid as a React child") → white screen. Now sends `{ email: loginFor.email, password }`.
+- [x] **Reset password wired**: the Reset-password dialog called `/api/staff/members/{id}/login/reset` which did not exist (404). Added `POST /api/staff/members/{client_id}/login/reset` in `staff.py` (manager-only, office-scoped) — resets the linked login's bcrypt password + clears brute-force lockout.
+- [x] **Verified** via curl: create-login succeeds with email, reset succeeds, new password logs in (200). Test staff profile cleaned up.

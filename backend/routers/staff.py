@@ -303,6 +303,35 @@ async def add_login_to_profile(client_id: str, payload: AddLoginIn, user: dict =
     return {"ok": True, "login_user_id": uid}
 
 
+class ResetLoginIn(BaseModel):
+    password: str = Field(min_length=6)
+
+
+@router.post("/members/{client_id}/login/reset")
+async def reset_login_password(client_id: str, payload: ResetLoginIn, user: dict = Depends(get_current_user)):
+    """Reset the password of the login account linked to a staff profile."""
+    _require_manager(user)
+    c = await db.clients.find_one(_client_scope_filter(client_id, user), {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Staff member not found")
+    lu_id = c.get("login_user_id")
+    if not lu_id:
+        raise HTTPException(400, "This staff member has no login yet")
+    target = await db.users.find_one({"id": lu_id}, {"_id": 0, "id": 1, "email": 1})
+    if not target:
+        raise HTTPException(404, "Login account not found")
+    await db.login_attempts.delete_one({"email": target.get("email")})
+    await db.users.update_one(
+        {"id": lu_id},
+        {"$set": {
+            "password_hash": hash_password(payload.password),
+            "password_reset_at": now_iso(),
+            "password_reset_by": user["id"],
+        }},
+    )
+    return {"ok": True, "login_user_id": lu_id}
+
+
 # ---------- Staff self-service profile ----------
 async def _resolve_staff_client(user: dict) -> Optional[dict]:
     """Find the staff's own profile (clients) record — by explicit link first,

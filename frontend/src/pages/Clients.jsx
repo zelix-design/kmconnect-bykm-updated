@@ -190,7 +190,7 @@ function SuperAdminPeople({ pageScope }) {
     if (!loginPw || loginPw.length < 8) { toast.error("Password must be at least 8 characters"); return; }
     setLoginBusy(true);
     try {
-      await api.post(`/staff/members/${loginFor.id}/login`, { password: loginPw });
+      await api.post(`/staff/members/${loginFor.id}/login`, { email: loginFor.email, password: loginPw });
       toast.success(`Login created for ${loginFor.name}`);
       closeLoginDialogs();
       load();
