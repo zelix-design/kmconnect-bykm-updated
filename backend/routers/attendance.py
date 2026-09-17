@@ -426,6 +426,7 @@ async def admin_upsert(body: AdminUpsertIn, user: dict = Depends(get_current_use
 class BulkIn(BaseModel):
     kind: str   # "attendance" | "salaries"
     csv: str
+    preview: bool = False
 
 
 async def _resolve_user(ref: str, cache: dict) -> Optional[dict]:
@@ -457,41 +458,57 @@ async def bulk_upload(body: BulkIn, user: dict = Depends(get_current_user)):
         return ""
 
     scope = user.get("office") if user.get("role") == "office_admin" else None
+    preview = body.preview
     cache: dict = {}
     created = updated = 0
     errors: list[str] = []
+    out_rows: list[dict] = []
+
+    def add(line, ref, action, message="", **extra):
+        nonlocal created, updated
+        if action == "create":
+            created += 1
+        elif action == "update":
+            updated += 1
+        else:
+            errors.append(f"Row {line}: {message}")
+        out_rows.append({"line": line, "ref": ref, "action": action, "message": message, **extra})
 
     for i, row in enumerate(reader, start=2):
+        ref = col(row, "email", "user_id", "user", "id")
         try:
-            u = await _resolve_user(col(row, "email", "user_id", "user", "id"), cache)
+            u = await _resolve_user(ref, cache)
             if not u:
-                errors.append(f"Row {i}: staff not found")
+                add(i, ref, "error", "staff not found")
                 continue
             if scope and u.get("office") != scope:
-                errors.append(f"Row {i}: staff outside your office")
+                add(i, ref, "error", "staff outside your office", name=u.get("name"), office=u.get("office"))
                 continue
 
             if body.kind == "salaries":
                 sal = col(row, "monthly_salary", "salary")
-                await db.staff_salaries.update_one(
-                    {"user_id": u["id"]},
-                    {"$set": {"user_id": u["id"], "monthly_salary": float(sal or 0),
-                              "office": u.get("office"), "updated_at": now_iso()}},
-                    upsert=True,
-                )
-                updated += 1
+                if not preview:
+                    await db.staff_salaries.update_one(
+                        {"user_id": u["id"]},
+                        {"$set": {"user_id": u["id"], "monthly_salary": float(sal or 0),
+                                  "office": u.get("office"), "updated_at": now_iso()}},
+                        upsert=True,
+                    )
+                exists = await db.staff_salaries.find_one({"user_id": u["id"]}, {"_id": 1})
+                add(i, ref, "update" if exists else "create", "",
+                    name=u.get("name"), office=u.get("office"), salary=float(sal or 0))
                 continue
 
             # attendance
             d = col(row, "date")
             if not d:
-                errors.append(f"Row {i}: missing date")
+                add(i, ref, "error", "missing date", name=u.get("name"))
                 continue
             st = (col(row, "status") or "present").lower().replace(" ", "_")
             if st == "halfday":
                 st = "half_day"
             if st not in VALID_STATUS:
-                errors.append(f"Row {i}: invalid status '{st}'")
+                add(i, ref, "error", f"invalid status '{st}'", name=u.get("name"), date=d)
                 continue
             ci = _to_iso_ist(d, col(row, "check_in", "checkin", "in"))
             co = _to_iso_ist(d, col(row, "check_out", "checkout", "out"))
@@ -501,23 +518,23 @@ async def bulk_upload(body: BulkIn, user: dict = Depends(get_current_user)):
                     work = max(0, int((datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds()))
                 except Exception:
                     work = 0
-            res = await db.attendance.update_one(
-                {"user_id": u["id"], "date": d},
-                {"$set": {"user_name": u.get("name"), "office": u.get("office"), "status": st,
-                          "check_in": ci, "check_out": co, "work_seconds": work,
-                          "edited_by": user["id"]},
-                 "$setOnInsert": {"id": gen_id(), "user_id": u["id"], "date": d, "created_at": now_iso()}},
-                upsert=True,
-            )
-            if res.upserted_id:
-                created += 1
-            else:
-                updated += 1
+            existing = await db.attendance.find_one({"user_id": u["id"], "date": d}, {"_id": 1})
+            if not preview:
+                await db.attendance.update_one(
+                    {"user_id": u["id"], "date": d},
+                    {"$set": {"user_name": u.get("name"), "office": u.get("office"), "status": st,
+                              "check_in": ci, "check_out": co, "work_seconds": work,
+                              "edited_by": user["id"]},
+                     "$setOnInsert": {"id": gen_id(), "user_id": u["id"], "date": d, "created_at": now_iso()}},
+                    upsert=True,
+                )
+            add(i, ref, "update" if existing else "create", "",
+                name=u.get("name"), office=u.get("office"), date=d, status=st)
         except Exception as e:  # noqa: BLE001
-            errors.append(f"Row {i}: {e}")
+            add(i, ref, "error", str(e))
 
-    return {"kind": body.kind, "created": created, "updated": updated,
-            "errors": errors[:50], "error_count": len(errors)}
+    return {"kind": body.kind, "preview": preview, "created": created, "updated": updated,
+            "errors": errors[:50], "error_count": len(errors), "rows": out_rows[:500]}
 
 
 class SalaryIn(BaseModel):
