@@ -87,15 +87,18 @@ export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, o
     else if (!checkedOut) onCheckOut();
   };
 
-  // Press-and-hold to confirm (avoids accidental taps).
+  // Press-and-hold to confirm (avoids accidental taps). Uses pointer capture so
+  // small finger movements on touch devices don't cancel the hold.
   const HOLD_MS = 1000;
   const [holdPct, setHoldPct] = useState(0);
   const holdRef = React.useRef(null);
   const firedRef = React.useRef(false);
-  const startHold = () => {
+  const startHold = (e) => {
     if (dialDisabled) return;
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     firedRef.current = false;
     const start = Date.now();
+    if (holdRef.current) clearInterval(holdRef.current);
     holdRef.current = setInterval(() => {
       const pct = Math.min(100, ((Date.now() - start) / HOLD_MS) * 100);
       setHoldPct(pct);
@@ -168,11 +171,12 @@ export default function MobileCheckIn({ today, elapsed, netWorked, breakTotal, o
         <button
           onPointerDown={startHold}
           onPointerUp={endHold}
-          onPointerLeave={endHold}
           onPointerCancel={endHold}
+          onContextMenu={(e) => e.preventDefault()}
           disabled={dialDisabled}
           data-testid="mobile-dial-btn"
           className={`relative h-64 w-64 rounded-full flex items-center justify-center transition-transform select-none touch-none ${holdPct > 0 ? "scale-95" : ""} ${dialDisabled ? "opacity-70" : ""}`}
+          style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", touchAction: "none" }}
           aria-label={dialLabel}
         >
           <span className="absolute inset-0 rounded-full bg-rose-500/10" />

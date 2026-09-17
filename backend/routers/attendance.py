@@ -7,6 +7,8 @@ Working days = all days of the month except Sundays. Half-day counts as 0.5.
 from __future__ import annotations
 
 import calendar
+import csv
+import io
 from datetime import datetime, timezone, date
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -349,6 +351,173 @@ async def adjust(rec_id: str, body: AdjustIn, user: dict = Depends(get_current_u
             pass
     await db.attendance.update_one({"id": rec_id}, {"$set": patch})
     return {"ok": True}
+
+
+@router.delete("/{rec_id}")
+async def delete_attendance(rec_id: str, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    rec = await db.attendance.find_one({"id": rec_id})
+    if not rec:
+        raise HTTPException(404, "Not found")
+    if user.get("role") == "office_admin" and rec.get("office") != user.get("office"):
+        raise HTTPException(403, "Out of scope")
+    await db.attendance.delete_one({"id": rec_id})
+    return {"ok": True}
+
+
+VALID_STATUS = ("present", "late", "half_day", "absent", "leave", "weekoff")
+
+
+def _to_iso_ist(date_str: str, val: Optional[str]) -> Optional[str]:
+    """Normalise a check-in/out value to an ISO timestamp. Accepts 'HH:MM',
+    'HH:MM:SS' (assumed IST on `date_str`) or a full ISO string."""
+    if not val:
+        return None
+    val = val.strip()
+    if not val:
+        return None
+    if "T" in val or " " in val:
+        return val
+    parts = val.split(":")
+    hh = parts[0].zfill(2)
+    mm = (parts[1] if len(parts) > 1 else "00").zfill(2)
+    ss = (parts[2] if len(parts) > 2 else "00").zfill(2)
+    return f"{date_str}T{hh}:{mm}:{ss}+05:30"
+
+
+class AdminUpsertIn(BaseModel):
+    user_id: str
+    date: str
+    status: str = "present"
+    check_in: Optional[str] = None
+    check_out: Optional[str] = None
+
+
+@router.post("/admin/upsert")
+async def admin_upsert(body: AdminUpsertIn, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    if body.status not in VALID_STATUS:
+        raise HTTPException(400, "Invalid status")
+    target = await db.users.find_one({"id": body.user_id}, {"_id": 0, "id": 1, "name": 1, "office": 1})
+    if not target:
+        raise HTTPException(404, "Staff not found")
+    if user.get("role") == "office_admin" and target.get("office") != user.get("office"):
+        raise HTTPException(403, "Out of scope")
+    ci = _to_iso_ist(body.date, body.check_in)
+    co = _to_iso_ist(body.date, body.check_out)
+    work = 0
+    if ci and co:
+        try:
+            work = max(0, int((datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds()))
+        except Exception:
+            work = 0
+    await db.attendance.update_one(
+        {"user_id": body.user_id, "date": body.date},
+        {"$set": {"user_name": target.get("name"), "office": target.get("office"),
+                  "status": body.status, "check_in": ci, "check_out": co,
+                  "work_seconds": work, "edited_by": user["id"]},
+         "$setOnInsert": {"id": gen_id(), "user_id": body.user_id, "date": body.date,
+                          "created_at": now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True}
+
+
+class BulkIn(BaseModel):
+    kind: str   # "attendance" | "salaries"
+    csv: str
+
+
+async def _resolve_user(ref: str, cache: dict) -> Optional[dict]:
+    ref = (ref or "").strip()
+    if not ref:
+        return None
+    if ref in cache:
+        return cache[ref]
+    q = {"email": ref.lower()} if "@" in ref else {"id": ref}
+    u = await db.users.find_one(q, {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1})
+    cache[ref] = u
+    return u
+
+
+@router.post("/bulk")
+async def bulk_upload(body: BulkIn, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    if body.kind not in ("attendance", "salaries"):
+        raise HTTPException(400, "Invalid kind")
+    reader = csv.DictReader(io.StringIO(body.csv))
+    if not reader.fieldnames:
+        raise HTTPException(400, "Empty or invalid CSV")
+    norm = {(f or "").strip().lower(): f for f in reader.fieldnames}
+
+    def col(row, *names):
+        for n in names:
+            if n in norm:
+                return (row.get(norm[n]) or "").strip()
+        return ""
+
+    scope = user.get("office") if user.get("role") == "office_admin" else None
+    cache: dict = {}
+    created = updated = 0
+    errors: list[str] = []
+
+    for i, row in enumerate(reader, start=2):
+        try:
+            u = await _resolve_user(col(row, "email", "user_id", "user", "id"), cache)
+            if not u:
+                errors.append(f"Row {i}: staff not found")
+                continue
+            if scope and u.get("office") != scope:
+                errors.append(f"Row {i}: staff outside your office")
+                continue
+
+            if body.kind == "salaries":
+                sal = col(row, "monthly_salary", "salary")
+                await db.staff_salaries.update_one(
+                    {"user_id": u["id"]},
+                    {"$set": {"user_id": u["id"], "monthly_salary": float(sal or 0),
+                              "office": u.get("office"), "updated_at": now_iso()}},
+                    upsert=True,
+                )
+                updated += 1
+                continue
+
+            # attendance
+            d = col(row, "date")
+            if not d:
+                errors.append(f"Row {i}: missing date")
+                continue
+            st = (col(row, "status") or "present").lower().replace(" ", "_")
+            if st == "halfday":
+                st = "half_day"
+            if st not in VALID_STATUS:
+                errors.append(f"Row {i}: invalid status '{st}'")
+                continue
+            ci = _to_iso_ist(d, col(row, "check_in", "checkin", "in"))
+            co = _to_iso_ist(d, col(row, "check_out", "checkout", "out"))
+            work = 0
+            if ci and co:
+                try:
+                    work = max(0, int((datetime.fromisoformat(co) - datetime.fromisoformat(ci)).total_seconds()))
+                except Exception:
+                    work = 0
+            res = await db.attendance.update_one(
+                {"user_id": u["id"], "date": d},
+                {"$set": {"user_name": u.get("name"), "office": u.get("office"), "status": st,
+                          "check_in": ci, "check_out": co, "work_seconds": work,
+                          "edited_by": user["id"]},
+                 "$setOnInsert": {"id": gen_id(), "user_id": u["id"], "date": d, "created_at": now_iso()}},
+                upsert=True,
+            )
+            if res.upserted_id:
+                created += 1
+            else:
+                updated += 1
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"Row {i}: {e}")
+
+    return {"kind": body.kind, "created": created, "updated": updated,
+            "errors": errors[:50], "error_count": len(errors)}
 
 
 class SalaryIn(BaseModel):

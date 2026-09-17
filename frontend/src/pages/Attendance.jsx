@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee } from "@phosphor-icons/react";
+import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee, UploadSimple, CalendarBlank } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { downloadPayslipPdf } from "@/lib/payslipPdf";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
+import BulkUploadDialog from "@/components/attendance/BulkUploadDialog";
+import EditDaysDialog from "@/components/attendance/EditDaysDialog";
 import RegularizationPanel from "@/components/attendance/RegularizationPanel";
 import WhosInBoard from "@/components/attendance/WhosInBoard";
 import Leave from "@/pages/Leave";
@@ -345,6 +347,8 @@ function PayrollSection({ user }) {
   const [office, setOffice] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [editStaff, setEditStaff] = useState(null);
   const currency = user.currency || "INR";
 
   const load = useCallback(async () => {
@@ -381,7 +385,10 @@ function PayrollSection({ user }) {
     <Card className="p-0 overflow-hidden" data-testid="payroll-section">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
         <h3 className="font-semibold text-foreground flex items-center gap-2"><Clock size={18} /> Payroll</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="h-9" data-testid="bulk-upload-btn" onClick={() => setBulkOpen(true)}>
+            <UploadSimple size={15} className="mr-1.5" /> Bulk upload
+          </Button>
           <input
             type="month"
             value={month}
@@ -422,6 +429,7 @@ function PayrollSection({ user }) {
                 <th className="px-3 py-3 text-right">Deduction</th>
                 <th className="px-3 py-3 text-right">Net pay</th>
                 <th className="px-3 py-3 text-center">Payslip</th>
+                <th className="px-3 py-3 text-center">Edit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -454,6 +462,15 @@ function PayrollSection({ user }) {
                       <DownloadSimple size={15} /> PDF
                     </button>
                   </td>
+                  <td className="px-3 py-3 text-center">
+                    <button
+                      data-testid={`edit-days-${r.user_id}`}
+                      onClick={() => setEditStaff(r)}
+                      className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <CalendarBlank size={15} /> Days
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -464,6 +481,7 @@ function PayrollSection({ user }) {
                 <td className="px-3 py-3 text-right tabular-nums text-rose-600 dark:text-rose-400">- {formatMoney(totals.deduction, currency)}</td>
                 <td className="px-3 py-3 text-right tabular-nums">{formatMoney(totals.net, currency)}</td>
                 <td />
+                <td />
               </tr>
             </tfoot>
           </table>
@@ -472,6 +490,15 @@ function PayrollSection({ user }) {
       <p className="px-5 py-3 text-[11px] text-muted-foreground border-t border-border">
         Working days = all days except Sundays. Approved leave (non-unpaid) counts as paid; unapproved absence is deducted at the per-day rate.
       </p>
+
+      <BulkUploadDialog open={bulkOpen} onOpenChange={setBulkOpen} onDone={load} />
+      <EditDaysDialog
+        open={!!editStaff}
+        onOpenChange={(v) => !v && setEditStaff(null)}
+        staff={editStaff}
+        month={month}
+        onChanged={load}
+      />
     </Card>
   );
 }
