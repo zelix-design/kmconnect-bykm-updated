@@ -44,6 +44,7 @@ function DayRow({ userId, rec, isNew, onSaved, onRemoveNew }) {
 
   const remove = async () => {
     if (isNew) return onRemoveNew?.();
+    if (!window.confirm(`Delete the ${rec.date} record for this staff? This can affect payroll.`)) return;
     setBusy(true);
     try {
       await api.delete(`/attendance/${rec.id}`);
@@ -90,7 +91,10 @@ export default function EditDaysDialog({ open, onOpenChange, staff, month, onCha
 
   useEffect(() => {
     if (open) { setNewRows([]); load(); }
+    else { setRecords([]); setNewRows([]); }
   }, [open, load]);
+
+  if (!staff) return null;
 
   const afterChange = () => { load(); onChanged?.(); };
 

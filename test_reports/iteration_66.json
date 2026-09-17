@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 66 — Tested the NEW Attendance bulk upload + admin upsert/delete + payroll recompute + Payroll-tab admin UI (BulkUploadDialog + EditDaysDialog). Backend: 13/13 pytest cases pass (bulk attendance create/overwrite/invalid status/office-scope error, office-admin can upload own office, bulk salaries upsert reflected in payroll, admin/upsert create+invalid+out-of-scope 403, delete own-office ok / cross-office 403, payroll recompute after edits). Frontend: office admin & super admin see bulk-upload-btn on Payroll tab; the dialog exposes bulk-kind-attendance/salaries toggles, bulk-template, bulk-csv, bulk-submit, and bulk-result summary (verified salary CSV → '0 added · 1 updated · 0 errors' and cross-office attendance CSV → '0 added · 0 updated · 1 errors  Row 2: staff outside your office'). Each payroll row shows edit-days-{uid} and salary-edit-{uid}; opening EditDaysDialog exposes edit-day-add / edit-day-date/status/in/out / edit-day-save / edit-day-delete. Regression: Leave tab, Regularize tab, Who's-in board still load with no runtime errors. Fixed one UI bug I encountered along the way (details below).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EditDaysDialog", "issue": "Runtime TypeError 'Cannot read properties of null (reading user_id)' when the parent unmounts/re-renders with staff=null while records/newRows still hold items — records.map dereferences staff.user_id. Reproduced by opening the dialog on a row, adding a day + Save, then closing. Fixed by clearing records/newRows on close and early-returning null when !staff.", "selector": "[data-testid=\"edit-days-dialog\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration66_bulk_and_admin_upsert.py",
+    "/app/test_reports/pytest/iteration66.xml"
+  ],
+  "action_items": [
+    "Please review the small null-guard in EditDaysDialog.jsx (clear state on close + early return when !staff). Consider adding a `disabled` state on Save while `date` is empty in the new-row (currently only toasts). Consider showing a confirm before edit-day-delete since it's destructive and one click away."
+  ],
+  "critical_code_review_comments": [
+    "attendance.bulk_upload's staff-outside-office check uses only office equality — good. But for kind='salaries' the same check is applied AFTER _resolve_user; if an office_admin uploads a staff email that doesn't exist we return 'staff not found' (not 'outside your office'). Acceptable but slightly leaks existence. Consider unifying to a generic 'not allowed' for office_admin to avoid enumeration.",
+    "attendance.admin_upsert always sets edited_by=user['id']; but on inserts, $setOnInsert.gen_id() creates the id — good. However `check_in`/`check_out` when only date is passed (no times) result in ci=co=None which then wipes prior times if the record existed. That means an admin toggling status='leave' from the UI unintentionally clears any previous check_in/out. The EditDaysDialog passes null when empty which triggers this. If preserving prior times is desired, only $set fields that were provided (send undefined instead of null from the client) or accept a 'clear_times' flag.",
+    "attendance.bulk_upload salaries branch counts 'updated' for every row, including brand-new insertions (motor upsert doesn't distinguish here). Cosmetic — the toast says 'X added · Y updated' but salaries always report 0 added. Minor UX confusion.",
+    "EditDaysDialog fetched records for a month that defaults to CURRENT month (`month` prop from PayrollSection). If an admin adds a day for a different month via the date input, load() won't show it because the query is scoped to the currently-selected payroll month. Not a bug, just note for users.",
+    "BulkUploadDialog CSV parsing on the server uses csv.DictReader — a CSV with quoted values containing commas will parse fine, but rows missing the trailing check_in/check_out columns still work because col() defaults to ''. Good."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration66_bulk_and_admin_upsert.py",
+    "/app/frontend/src/components/attendance/EditDaysDialog.jsx"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "Super: muneer@kmfoundation.co / kmf@0786 · Office Admin (KM_BLR): blr1@finflow.com / Office@123 · Staff (KM_BLR): staff.blr@kmfoundation.online / Staff@123. Cross-office target found: test_tcr_admin@finflow.com (KM_TCR office_admin) — used for scope tests.",
+  "seed_data_creation": "During pytest and UI runs: created/overwrote attendance rows for staff.blr on ~3 working days two months back, one weekoff row, one half_day row, upserted staff_salaries doc (monthly_salary=28000, then bumped to 32000 via UI), and briefly created 2025-10-02/03 rows for office admin during UI edit-day tests. All attendance rows were removed by the cleanup test + a follow-up ad-hoc DELETE script; staff_salaries doc for staff.blr and office-admin remains (there is no DELETE endpoint for staff_salaries — value now 32000).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live in /app/backend/tests/test_iteration66_bulk_and_admin_upsert.py and are fully idempotent (auto-picks a month 2 back so it doesn't collide with today's realtime rules; cleans up its attendance rows in TestZZZCleanup). Cross-office scope tests use test_tcr_admin@finflow.com (KM_TCR office_admin) — if that user is removed, those two tests will skip. UI: the edit-days-{uid}/salary-edit-{uid} testids are on the Payroll tab desktop layout; on smaller viewports the payroll row may collapse to a card variant. EditDaysDialog now clears its state on close and early-returns when staff prop is null (prevents the null user_id crash observed during rapid open/close). Salary edits via PayrollSection use PUT /api/attendance/salary/{uid}; admin upsert wipes check_in/out if you pass null — see review comment #2.",
+  "rca of the issue": "EditDaysDialog crash — records state persisted after dialog close, then a parent re-render passed staff=null momentarily. records.map dereferenced staff.user_id → TypeError. Fix: clear records/newRows on !open and early-return null when !staff. Verified: no page errors on the repeat run (super admin add/save/delete/close cycle)."
+}
