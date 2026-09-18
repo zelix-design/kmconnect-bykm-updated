@@ -1,0 +1,27 @@
+{
+  "summary": "Tested Suspend/Reactivate login + Salary Hold + Salary Breakup feature on Employees page (/employees) and Attendance→Payroll tab as super_admin (muneer@kmfoundation.co). Created a temporary staff (TEST TEMP TEST1789709964, KM_BLR) via /api/clients, verified full UI + backend flows end-to-end, then cleaned up. All 7 flows pass: Create login (no blank page), Suspend (rose badge + auto Salary-on-hold badge + button switch to Reactivate/Release), Suspended user login returns 403 with correct message, Reactivate restores 200 login, Hold/Release toggles salary independently of login status, Payroll UI shows 'On hold' amber pill with struck-through pre-hold amount and net_pay=0 in totals, salary tooltip shows correct 50/25/15/10 breakup (Basic Salary / HRA / Special Allowance / LTA), Reset password flow accepts new pw and login succeeds. Backend payroll GET /api/attendance/payroll?month&office=KM_BLR returns {month, rows:[...]} with salary_hold, suspended, net_before_hold, salary_breakup fields populated correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend routers/attendance.py _payroll_rows: filter {'deleted_at': {'$in': [None, '']}} works because Mongo treats missing field as null in $in, but explicit {'$or': [{'deleted_at': None}, {'deleted_at': {'$exists': false}}, {'deleted_at': ''}]} would be less fragile.",
+    "Backend routers/staff.py suspend_login sets patch['suspended_at']=None on un-suspend but keeps salary_hold=true — this matches the requested UX (admin releases pay explicitly), which is correct; UI reflects it via distinct badges.",
+    "DELETE /api/clients/{id} only removes the staff CLIENT profile, not the linked login user (users.delete requires /api/staff/members/{id} or /api/users/{id}). When main agent's UI 'Delete employee' is used, ensure it calls the staff endpoint so the login user is cleaned up too."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co / kmf@0786 (present in /app/memory/test_credentials.md).",
+  "seed_data_creation": "Created temp staff+login (TEST TEMP TEST1789709964 / test1789709964@testfinflow.com) during test; both client profile and login user were deleted at end of test run. No lingering test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature is fully working end-to-end. Test flow: (1) POST /api/clients to seed a staff card, (2) UI POST via cli-create-login-{id} → dialog employee-create-login-submit, (3) cli-suspend-{id} then confirm(window.confirm), (4) verify /api/auth/login returns 403 for suspended, (5) cli-reactivate-{id}, (6) cli-salary-hold-{id} toggles, (7) GET /api/attendance/payroll returns {month, rows:[...]} — note it's wrapped in a dict, not a bare list. Payroll row shape includes salary_hold, suspended, net_before_hold, salary_breakup (labels: 'Basic Salary','HRA','Special Allowance','LTA'; pcts 50/25/15/10). Cleanup: DELETE /api/clients/{id} removes profile but NOT login user; DELETE /api/users/{login_user_id} finishes cleanup.",
+  "rca of the issue": "No bugs found."
+}
