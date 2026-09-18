@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only verification of Staff My-Leads campaign filter + badge and Admin All-leads campaign filter. Created a KM_BLR test campaign as super admin, bulk-uploaded a 2-row CSV (employee=Fathima Telecaller, campaign_id=<test>), then verified UI as both roles and cleaned up. All acceptance criteria pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadsPipeline.jsx line 187 useEffect deps include allLeadsMode but not campaignId — minor: campaign list won't refetch if campaignId prop changes at runtime. Non-blocking (campaignId doesn't change for a mounted pipeline in current usage).",
+    "Staff campaign badge is only rendered when isStaff && l.campaign_id (line 463). Admin non-allLeadsMode view (e.g. inside a specific campaign pipeline) intentionally hides the badge — correct.",
+    "The `[data-testid^=\"lead-card-\"]` prefix also matches child `lead-card-open-<id>` — not a bug but worth noting for test authors so counts appear doubled."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "muneer@kmfoundation.co/kmf@0786, staff.blr@kmfoundation.online/Staff@123",
+  "seed_data_creation": "Created a temporary campaign TEST_STAFF_CAMPAIGN_<ts> in KM_BLR + 2 leads (TEST_Alice, TEST_Bob) assigned to Fathima Telecaller. Deleted via DELETE /api/campaigns/{id}?delete_leads=true after tests (returned 200).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login button testid is `auth-submit-btn` (not `auth-submit`). Staff route is /leads; admin /leads has crm-tab-all for the All-leads view. `[data-testid^=\"lead-card-\"]` also matches the inner `lead-card-open-<id>` button, so raw counts double — use `[data-testid^=\"lead-card-\"]:not([data-testid^=\"lead-card-open-\"])` or check `[data-testid^=\"lead-campaign-badge-\"]` for lead count in filtered results.",
+  "verified_scenarios": {
+    "staff_my_leads_title": "PASS (h1='My Leads')",
+    "staff_campaign_filter_visible": "PASS ([data-testid=leads-campaign-filter] shown)",
+    "staff_campaign_filter_populated_from_my-campaigns": "PASS (/api/leads/my-campaigns returns [{id,name,count:2}]; option [data-testid=leads-campaign-opt-<id>] present and selectable; filters cards to that campaign)",
+    "staff_forbidden_from_campaigns_list": "PASS (GET /api/campaigns => 403 for staff)",
+    "staff_campaign_badge_on_each_lead": "PASS (2 leads => 2 badges with correct campaign name)",
+    "admin_all_leads_campaign_filter": "PASS (filter visible on CRM > All leads; selecting test campaign shows only its 2 leads; badge shows campaign name)",
+    "admin_uncategorised_option": "PASS ('Uncategorised' option filters to leads without campaign_id; all badges read 'Uncategorised')",
+    "cleanup": "PASS (test campaign + leads deleted)"
+  },
+  "rca of the issue": "n/a — feature verification only"
+}
