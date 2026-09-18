@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning, Prohibit, ArrowCounterClockwise, Pause, Play } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import OfficeStaff from "@/pages/OfficeStaff";
 
@@ -211,6 +211,24 @@ function SuperAdminPeople({ pageScope }) {
     } finally { setLoginBusy(false); }
   };
 
+  const toggleSuspend = async (c) => {
+    const next = !c.suspended;
+    if (next && !window.confirm(`Suspend ${c.name}'s login? They won't be able to sign in, and their salary will be put on hold. You can reactivate anytime.`)) return;
+    try {
+      await api.post(`/staff/members/${c.id}/suspend`, { suspended: next });
+      toast.success(next ? `${c.name} suspended` : `${c.name} reactivated`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not update login"); }
+  };
+  const toggleHold = async (c) => {
+    const next = !c.salary_hold;
+    try {
+      await api.post(`/staff/members/${c.id}/salary-hold`, { hold: next });
+      toast.success(next ? `Salary put on hold for ${c.name}` : `Salary released for ${c.name}`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Could not update salary hold"); }
+  };
+
   const isStaff = form.client_type === "staff";
 
   return (
@@ -375,6 +393,8 @@ function SuperAdminPeople({ pageScope }) {
           isEmployees={isEmployees}
           onCreateLogin={openCreateLogin}
           onResetLogin={openResetLogin}
+          onToggleSuspend={toggleSuspend}
+          onToggleHold={toggleHold}
         />
       )}
 
@@ -450,7 +470,7 @@ const OFFICE_OPTIONS = [
   { value: "_none", label: "No office set" },
 ];
 
-function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
+function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
   const nav = useNavigate();
   const goDetail = () => nav(`/clients/${c.id}`);
   const onKey = (e) => {
@@ -514,29 +534,84 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
       {/* Login access controls — Employees view only, only for staff-type rows */}
       {isEmployees && c.client_type === "staff" && allowEdit && (
         <div
-          className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2"
+          className="mt-4 pt-3 border-t border-border space-y-2.5"
           onClick={(e) => e.stopPropagation()}
           data-testid={`cli-login-block-${c.id}`}
         >
           {c.has_login ? (
             <>
-              <span
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                data-testid={`cli-login-status-${c.id}`}
-              >
-                <LinkSimple size={11} weight="duotone" /> Login active
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => { e.stopPropagation(); onResetLogin?.(c); }}
-                data-testid={`cli-reset-login-${c.id}`}
-              >
-                <Key size={13} className="mr-1" /> Reset password
-              </Button>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {c.suspended ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                      data-testid={`cli-login-status-${c.id}`}
+                    >
+                      <Prohibit size={11} weight="duotone" /> Suspended
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                      data-testid={`cli-login-status-${c.id}`}
+                    >
+                      <LinkSimple size={11} weight="duotone" /> Login active
+                    </span>
+                  )}
+                  {c.salary_hold && (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                      data-testid={`cli-salary-status-${c.id}`}
+                    >
+                      <Pause size={11} weight="duotone" /> Salary on hold
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); onResetLogin?.(c); }}
+                  data-testid={`cli-reset-login-${c.id}`}
+                >
+                  <Key size={13} className="mr-1" /> Reset password
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {c.suspended ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); onToggleSuspend?.(c); }}
+                    className="border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+                    data-testid={`cli-reactivate-${c.id}`}
+                  >
+                    <ArrowCounterClockwise size={13} className="mr-1" /> Reactivate login
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); onToggleSuspend?.(c); }}
+                    className="border-rose-500/40 text-rose-700 dark:text-rose-300 hover:bg-rose-500/10"
+                    data-testid={`cli-suspend-${c.id}`}
+                  >
+                    <Prohibit size={13} className="mr-1" /> Suspend login
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); onToggleHold?.(c); }}
+                  className={c.salary_hold ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10" : ""}
+                  data-testid={`cli-salary-hold-${c.id}`}
+                >
+                  {c.salary_hold
+                    ? (<><Play size={13} className="mr-1" /> Release salary</>)
+                    : (<><Pause size={13} className="mr-1" /> Hold salary</>)}
+                </Button>
+              </div>
             </>
           ) : (
-            <>
+            <div className="flex items-center justify-between gap-2">
               <span
                 className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
                 data-testid={`cli-login-status-${c.id}`}
@@ -553,7 +628,7 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
               >
                 <Key size={13} className="mr-1" /> Create login
               </Button>
-            </>
+            </div>
           )}
         </div>
       )}
@@ -561,7 +636,7 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
   );
 }
 
-function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
+function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {clients.map((c) => (
@@ -571,6 +646,8 @@ function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreat
           isEmployees={isEmployees}
           onCreateLogin={onCreateLogin}
           onResetLogin={onResetLogin}
+          onToggleSuspend={onToggleSuspend}
+          onToggleHold={onToggleHold}
         />
       ))}
     </div>
@@ -587,7 +664,7 @@ function CategoryHeader({ label, count }) {
   );
 }
 
-function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin }) {
+function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
   // When a specific type filter is selected, just show that category (with Staff sub-grouping)
   const groups = CLIENT_TYPES
     .filter((t) => scopeTypes.includes(t.value))
@@ -620,6 +697,8 @@ function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remo
                       isEmployees={isEmployees}
                       onCreateLogin={onCreateLogin}
                       onResetLogin={onResetLogin}
+                      onToggleSuspend={onToggleSuspend}
+                      onToggleHold={onToggleHold}
                     />
                   </div>
                 );
@@ -632,6 +711,8 @@ function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remo
               isEmployees={isEmployees}
               onCreateLogin={onCreateLogin}
               onResetLogin={onResetLogin}
+              onToggleSuspend={onToggleSuspend}
+              onToggleHold={onToggleHold}
             />
           )}
         </section>

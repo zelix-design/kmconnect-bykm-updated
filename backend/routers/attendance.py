@@ -564,6 +564,21 @@ async def _salary_map(office_scope: Optional[str]) -> dict:
     return {r["user_id"]: r.get("monthly_salary", 0) for r in rows}
 
 
+# CTC → component breakup (matches HR salary structure). Percentages of CTC.
+SALARY_COMPONENTS = [
+    {"key": "basic", "label": "Basic Salary", "pct": 50, "taxable": "Yes"},
+    {"key": "hra", "label": "HRA", "pct": 25, "taxable": "Partially"},
+    {"key": "special", "label": "Special Allowance", "pct": 15, "taxable": "Yes"},
+    {"key": "lta", "label": "LTA", "pct": 10, "taxable": "Yes"},
+]
+
+
+def _salary_breakup(ctc: float) -> list[dict]:
+    """Split a monthly CTC into its fixed-percentage components."""
+    ctc = float(ctc or 0)
+    return [{**c, "amount": round(ctc * c["pct"] / 100, 2)} for c in SALARY_COMPONENTS]
+
+
 def _working_days_set(y: int, m: int) -> set[str]:
     ndays = calendar.monthrange(y, m)[1]
     return {f"{y:04d}-{m:02d}-{d:02d}" for d in range(1, ndays + 1) if date(y, m, d).weekday() != 6}
@@ -598,7 +613,7 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
     uq: dict = {"role": {"$in": ["staff", "office_admin"]}, "deleted_at": {"$in": [None, ""]}}
     if office_scope:
         uq["office"] = office_scope
-    staff = await db.users.find(uq, {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1}).to_list(5000)
+    staff = await db.users.find(uq, {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1, "suspended": 1, "salary_hold": 1}).to_list(5000)
     salaries = await _salary_map(office_scope)
     att = await db.attendance.find(
         {"date": {"$regex": f"^{month}"}, **({"office": office_scope} if office_scope else {})},
@@ -625,13 +640,19 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
         salary = float(salaries.get(uid, 0) or 0)
         per_day = round(salary / working_days, 2) if working_days else 0
         deduction = round(per_day * absent, 2)
+        net = round(salary - deduction, 2)
+        held = bool(s.get("salary_hold"))
         out.append({
             "user_id": uid, "name": s.get("name"), "office": s.get("office"), "role": s.get("role"),
             "monthly_salary": salary, "working_days": working_days,
             "present_days": present_days, "half_days": half_days, "leave_days": leave_days,
             "paid_days": round(present_eq, 1), "absent_days": round(absent, 1),
             "per_day": per_day, "deduction": deduction,
-            "net_pay": round(salary - deduction, 2),
+            "net_pay": 0 if held else net,
+            "net_before_hold": net,
+            "salary_hold": held,
+            "suspended": bool(s.get("suspended")),
+            "salary_breakup": _salary_breakup(salary),
         })
     return out
 

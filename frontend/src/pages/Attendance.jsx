@@ -446,13 +446,27 @@ function PayrollSection({ user }) {
                   <td className="px-3 py-3 text-center tabular-nums text-emerald-600 dark:text-emerald-400">{r.leave_days}</td>
                   <td className="px-3 py-3 text-center tabular-nums text-rose-600 dark:text-rose-400">{r.absent_days}</td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    <div>{formatMoney(r.monthly_salary, currency)}</div>
+                    <div
+                      title={(r.salary_breakup || []).map((b) => `${b.label}: ${formatMoney(b.amount, currency)} (${b.pct}%)`).join("\n")}
+                      data-testid={`payroll-salary-${r.user_id}`}
+                    >
+                      {formatMoney(r.monthly_salary, currency)}
+                    </div>
                     <SalaryEditor uid={r.user_id} current={r.monthly_salary} onSaved={load} />
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-rose-600 dark:text-rose-400">
                     {r.deduction ? `- ${formatMoney(r.deduction, currency)}` : formatMoney(0, currency)}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground">{formatMoney(r.net_pay, currency)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground">
+                    {r.salary_hold ? (
+                      <span className="inline-flex flex-col items-end gap-0.5" data-testid={`payroll-hold-${r.user_id}`}>
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                          On hold
+                        </span>
+                        <span className="text-[11px] font-normal text-muted-foreground line-through">{formatMoney(r.net_before_hold, currency)}</span>
+                      </span>
+                    ) : formatMoney(r.net_pay, currency)}
+                  </td>
                   <td className="px-3 py-3 text-center">
                     <button
                       data-testid={`payslip-${r.user_id}`}

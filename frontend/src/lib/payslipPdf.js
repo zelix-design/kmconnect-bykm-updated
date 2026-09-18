@@ -71,23 +71,52 @@ export function downloadPayslipPdf({ row, month, currency = "INR", org = "KM Fou
     margin: { left: margin, right: margin },
   });
 
+  // Salary structure (CTC breakup)
+  const breakup = Array.isArray(row.salary_breakup) ? row.salary_breakup : [];
+  if (breakup.length) {
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 18,
+      theme: "grid",
+      head: [["Salary component", "% of CTC", "Taxable", "Amount"]],
+      body: breakup.map((b) => [b.label, `${b.pct}%`, b.taxable, fmt(b.amount, currency)]),
+      foot: [["Monthly CTC", "100%", "", fmt(row.monthly_salary, currency)]],
+      styles: { fontSize: 10, cellPadding: 6 },
+      headStyles: { fillColor: [244, 244, 245], textColor: [28, 25, 23], fontStyle: "bold" },
+      footStyles: { fillColor: [244, 244, 245], textColor: [28, 25, 23], fontStyle: "bold" },
+      columnStyles: { 1: { halign: "center" }, 2: { halign: "center" }, 3: { halign: "right" } },
+      margin: { left: margin, right: margin },
+    });
+  }
+
   // Earnings / deductions
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 18,
     theme: "grid",
     head: [["Salary computation", "Amount"]],
     body: [
-      ["Monthly fixed salary", fmt(row.monthly_salary, currency)],
+      ["Monthly fixed salary (CTC)", fmt(row.monthly_salary, currency)],
       ["Per-day rate", fmt(row.per_day, currency)],
       [`Absent deduction (${row.absent_days} × ${fmt(row.per_day, currency)})`, `- ${fmt(row.deduction, currency)}`],
     ],
-    foot: [["Net payable", fmt(row.net_pay, currency)]],
+    foot: [[row.salary_hold ? "Net payable (ON HOLD)" : "Net payable", row.salary_hold ? fmt(0, currency) : fmt(row.net_pay, currency)]],
     styles: { fontSize: 10, cellPadding: 6 },
     headStyles: { fillColor: [244, 244, 245], textColor: [28, 25, 23], fontStyle: "bold" },
     footStyles: { fillColor: [190, 24, 60], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 12 },
     columnStyles: { 1: { halign: "right" } },
     margin: { left: margin, right: margin },
   });
+
+  if (row.salary_hold) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(180, 83, 9);
+    doc.text(
+      `Salary is currently ON HOLD. Computed net before hold: ${fmt(row.net_before_hold ?? row.net_pay, currency)}.`,
+      margin,
+      doc.lastAutoTable.finalY + 18,
+    );
+    doc.setFont("helvetica", "normal");
+  }
 
   doc.setFontSize(8);
   doc.setTextColor(150, 143, 138);

@@ -48,22 +48,37 @@ async def list_clients(user: dict = Depends(get_current_user)):
                 if u and u.get("role") == "office_admin":
                     d["_creator_name"] = u.get("name")
                     d["_creator_office"] = u.get("office")
-        _enrich_login_status(docs)
+        await _enrich_login_status(docs)
         return docs
     docs = await db.clients.find(
         _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
-    _enrich_login_status(docs)
+    await _enrich_login_status(docs)
     return docs
 
 
-def _enrich_login_status(docs: list[dict]) -> None:
-    """Mutates each row to add ``has_login`` — used by the Employees UI to
-    decide whether to show "Create login" or "Reset password". ``login_user_id``
-    is already on the row when the login exists."""
+async def _enrich_login_status(docs: list[dict]) -> None:
+    """Mutates each staff row to add ``has_login`` (plus ``suspended`` /
+    ``salary_hold`` read from the linked login account) — used by the
+    Employees UI to render inline login + access controls."""
+    login_ids = [
+        d.get("login_user_id")
+        for d in docs
+        if d.get("client_type") == "staff" and d.get("login_user_id")
+    ]
+    umap: dict = {}
+    if login_ids:
+        us = await db.users.find(
+            {"id": {"$in": login_ids}},
+            {"_id": 0, "id": 1, "suspended": 1, "salary_hold": 1},
+        ).to_list(5000)
+        umap = {u["id"]: u for u in us}
     for d in docs:
         if d.get("client_type") == "staff":
+            lu = umap.get(d.get("login_user_id"))
             d["has_login"] = bool(d.get("login_user_id"))
+            d["suspended"] = bool((lu or {}).get("suspended"))
+            d["salary_hold"] = bool((lu or {}).get("salary_hold"))
 
 
 async def _next_employee_id(office: str | None) -> str:

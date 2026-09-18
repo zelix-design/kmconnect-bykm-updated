@@ -137,6 +137,11 @@ async def login(payload: LoginIn, response: Response):
             raise HTTPException(status_code=403, detail="Your account is awaiting super-admin approval.")
         if status == "rejected":
             raise HTTPException(status_code=403, detail="Your access request was rejected. Please contact the super admin.")
+        if user.get("suspended"):
+            raise HTTPException(
+                status_code=403,
+                detail="Your account has been suspended. Please contact your admin.",
+            )
         # Successful login → wipe the failed-attempt counter
         await clear_failed_attempts(email)
         token = create_access_token(user["id"], email)
