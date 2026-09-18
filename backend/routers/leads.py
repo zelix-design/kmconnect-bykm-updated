@@ -449,7 +449,40 @@ async def list_leads(
             uid = d.get("assigned_to_user_id")
             d["assigned_to_name"] = umap.get(uid)
             d["assigned_to_photo_url"] = photo_map.get(uid) or ""
+    # Enrich campaign names so every client (incl. staff, who can't list
+    # campaigns) can render a "which campaign" badge on each lead card.
+    cids = list({d.get("campaign_id") for d in docs if d.get("campaign_id")})
+    if cids:
+        cs = await db.campaigns.find({"id": {"$in": cids}}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)
+        cmap = {c["id"]: c.get("name") for c in cs}
+        for d in docs:
+            d["campaign_name"] = cmap.get(d.get("campaign_id"))
     return docs
+
+
+@router.get("/my-campaigns")
+async def my_campaigns(user: dict = Depends(get_current_user)):
+    """Distinct campaigns present among the caller's visible leads, with a
+    lead count each. Available to staff too (unlike /api/campaigns), so the
+    'My Leads' view can offer a campaign filter."""
+    if user.get("role") not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+    scope = {**_scope_filter(user), "campaign_id": {"$nin": [None, ""]}}
+    docs = await db.leads.find(scope, {"_id": 0, "campaign_id": 1}).to_list(200_000)
+    counts: dict = {}
+    for d in docs:
+        cid = d.get("campaign_id")
+        if cid:
+            counts[cid] = counts.get(cid, 0) + 1
+    if not counts:
+        return []
+    cs = await db.campaigns.find(
+        {"id": {"$in": list(counts)}}, {"_id": 0, "id": 1, "name": 1}
+    ).to_list(1000)
+    cmap = {c["id"]: c.get("name") for c in cs}
+    out = [{"id": cid, "name": cmap.get(cid) or "Campaign", "count": n} for cid, n in counts.items()]
+    out.sort(key=lambda x: (-x["count"], x["name"].lower()))
+    return out
 
 
 @router.get("/export")
@@ -1901,7 +1934,11 @@ async def bulk_upload(
     # ``existing_phone_keys`` / ``existing_name_keys`` sets so each CSV row is
     # deduped in O(1). ``_scope_filter`` already handles staff / office_admin
     # scoping; super_admin sees the whole database.
-    dedup_scope = _scope_filter(user)
+    # Duplicate detection scope: when uploading INTO a campaign, only skip rows
+    # that already exist in THAT SAME campaign (the same person may legitimately
+    # belong to multiple campaigns). Non-campaign uploads keep the broader
+    # visibility scope so global/uncategorised duplicates are still caught.
+    dedup_scope = {"campaign_id": campaign_id} if campaign_id else _scope_filter(user)
     existing_docs = await db.leads.find(
         dedup_scope, {"_id": 0, "phone": 1, "name": 1, "place": 1}
     ).to_list(200_000)

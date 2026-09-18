@@ -79,6 +79,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   const [statusFilter, setStatusFilter] = useState(initialFilter);
   const [sourceFilter] = useState("all");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [campaignFilter, setCampaignFilter] = useState("all");
   const [q, setQ] = useState("");
   const [view, setView] = useState("list");
 
@@ -128,6 +129,11 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       }
       if (sourceFilter !== "all") qp.source = sourceFilter;
       if (assigneeFilter !== "all") qp.assigned_to = assigneeFilter;
+      // Campaign filter (only when we're not already locked to one campaign).
+      if (!campaignId) {
+        if (campaignFilter === "__uncat__") qp.uncategorized = true;
+        else if (campaignFilter !== "all") qp.campaign_id = campaignFilter;
+      }
       if (q.trim()) qp.q = q.trim();
       if (officeOverride && officeOverride !== "all") qp.office = officeOverride;
       const { data } = await api.get("/leads", { params: qp });
@@ -137,7 +143,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, allLeadsMode, uncategorizedOnly, officeOverride]);
+  }, [statusFilter, sourceFilter, assigneeFilter, campaignFilter, q, view, campaignId, allLeadsMode, uncategorizedOnly, officeOverride]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -157,7 +163,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
 
   // Reset the selection whenever the underlying lead list refreshes so
   // stale ids don't linger (deleted leads etc.).
-  useEffect(() => { setSelectedIds(new Set()); }, [statusFilter, sourceFilter, assigneeFilter, q, view, campaignId, uncategorizedOnly]);
+  useEffect(() => { setSelectedIds(new Set()); }, [statusFilter, sourceFilter, assigneeFilter, campaignFilter, q, view, campaignId, uncategorizedOnly]);
 
   // Parent (Leads.jsx) bumps refreshKey after the shared deep-link dialog
   // mutates a lead — refetch so the pipeline reflects the change even when
@@ -174,8 +180,10 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
   }, [isStaff]);
 
   useEffect(() => {
-    if (isStaff) return;
-    api.get("/campaigns").then(({ data }) => setCampaigns(data)).catch(() => {});
+    // Admins can list every campaign; staff use a lightweight endpoint that
+    // returns only the campaigns present among their own leads.
+    const url = isStaff ? "/leads/my-campaigns" : "/campaigns";
+    api.get(url).then(({ data }) => setCampaigns(data)).catch(() => {});
   }, [isStaff, allLeadsMode]);
 
   useEffect(() => {
@@ -326,6 +334,20 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
               </SelectContent>
             </Select>
           )}
+          {!campaignId && campaigns.length > 0 && (
+            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+              <SelectTrigger className="w-48 h-10 bg-card" data-testid="leads-campaign-filter"><SelectValue placeholder="Campaign" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All campaigns</SelectItem>
+                {campaigns.map((c) => (
+                  <SelectItem key={c.id} value={c.id} data-testid={`leads-campaign-opt-${c.id}`}>
+                    {c.name}{typeof c.count === "number" ? ` · ${c.count}` : ""}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__uncat__">Uncategorised</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           {allLeadsMode && (
             <button type="button" onClick={() => setUncategorizedOnly((v) => !v)} data-testid="leads-uncategorized-toggle"
               className={`h-10 px-3 rounded-lg border text-sm transition-colors ${uncategorizedOnly ? "bg-amber-gradient text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}>
@@ -434,11 +456,15 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                           {l.assigned_to_name}
                         </span>
                       )}
-                      {allLeadsMode && (
+                      {allLeadsMode ? (
                         <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
-                          {l.campaign_id ? (campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
+                          {l.campaign_id ? (l.campaign_name || campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
                         </span>
-                      )}
+                      ) : (isStaff && l.campaign_id) ? (
+                        <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" data-testid={`lead-campaign-badge-${l.id}`}>
+                          {l.campaign_name || campaignMap[l.campaign_id] || "Campaign"}
+                        </span>
+                      ) : null}
                       {l.next_follow_up && (
                         <span className={`px-2 py-0.5 rounded-full flex items-center gap-1 ${l.is_missed ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-blue-500/10 text-blue-700 dark:text-blue-300"}`} data-testid={l.is_missed ? `lead-missed-${l.id}` : undefined}>
                           <ClockCountdown size={11} /> {fmtDateTime(l.next_follow_up)}{l.is_missed ? " · Missed" : ""}

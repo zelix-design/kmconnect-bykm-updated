@@ -459,7 +459,7 @@ async def _dedup_and_insert(rows: list[dict], *, campaign_id: str, office: str,
     ``rows`` are plain dicts with FIELDS keys. Dedups by phone (name+place
     fallback) against the caller's lead scope and within the batch. Returns a
     summary dict + the list of created lead ids."""
-    dedup_scope = {} if role == "super_admin" else {"office": user_office}
+    dedup_scope = {"campaign_id": campaign_id}
     existing = await db.leads.find(
         dedup_scope, {"_id": 0, "phone": 1, "name": 1, "place": 1}
     ).to_list(200_000)
