@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only verification of new Payslip feature: Company Profile dialog, per-row PDF/Email buttons, Download-all, and staff form 'Payslip details' section. All 8 acceptance criteria pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Attendance > Payroll", "issues": ["Fathima Telecaller row shows Deduction ‑₹32,000.02 and Net ‑₹0.02 (float rounding when all 26 days are absent) — cosmetic float-precision issue, pre-existing, unrelated to new payslip feature."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Configure/verify Resend sender domain (kmfoundation.online) to enable actual payslip email delivery — currently returns clean 400 as expected in preview."
+  ],
+  "critical_code_review_comments": [
+    "payslipPdf.js loadLogoDataUri correctly handles auth-protected relative URLs by using api.get with blob responseType — good.",
+    "PayrollSection.downloadAll iterates rows sequentially with await inside for loop — safe but slow for large offices; consider Promise.all with concurrency cap.",
+    "downloadAll catch block only shows a generic toast; if one row's payslip endpoint fails, remaining downloads are aborted. Minor."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786 (super admin)",
+  "seed_data_creation": "Temporarily edited SOURAV RAJ CM staff (id=e256d021-…) with TEST_QA_ designation/department/bank/ifsc to verify persistence; cleaned up (fields cleared) at end of test. Company profile PUT saved the pre-filled KM FOUNDATION defaults back to the collection.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Payroll tab route: /attendance?tab=payroll (super_admin/office_admin only). Add-employee dialog on /employees pre-selects Type='Our Staff' → all cli-designation/department/doj/leave-balance/bank-acct/ifsc/tax-regime fields render immediately. On /clients the Add dialog defaults to Sub Agent — payslip fields only appear once Type is switched to Staff. Email toast text is exactly 'Email could not be sent — the sender domain isn't verified in Resend yet. Verify it at resend.com/domains, then try again.' (clean 400, no page blank). Company profile GET default legal_name='KM FOUNDATION (Zelix Ventures LLP)'.",
+  "verified_scenarios": {
+    "payroll_header_three_buttons": "PASS (company-profile-btn, payroll-download-all, bulk-upload-btn all visible)",
+    "company_profile_dialog_prefill_and_save": "PASS (legal name + full address prefilled; Save closes dialog + success toast 'Saved')",
+    "payslip_pdf_download_per_row": "PASS (jsPDF file 'BLR-Office-Admin-payslip-2026-09.pdf' downloaded, no JS errors, no blank page)",
+    "email_button_error_toast": "PASS (400 returned; toast: 'Email could not be sent — the sender domain isn't verified in Resend yet. Verify it at resend.com/domains, then try again.')",
+    "download_all": "PASS (12/12 payslip PDFs downloaded for 12 payroll rows; no crash)",
+    "staff_form_payslip_fields_present": "PASS (cli-designation/department/doj/leave-balance/bank-acct/ifsc/tax-regime all present in Add employee dialog on /employees)",
+    "staff_payslip_fields_persist_after_edit": "PASS (designation='TEST_QA_Designation', department='TEST_QA_Dept', bank='1234567890', ifsc='HDFC0001234' persisted after Save + reopen)",
+    "regression_salary_breakup_tooltip_and_hold_badge_and_suspend_reset_controls": "PASS (payroll-salary-<uid> title tooltip retained; suspend-login/hold-salary/reset-password buttons still render on staff cards)"
+  },
+  "rca of the issue": "n/a — feature verification only. Email delivery is functionally blocked because Resend sender domain kmfoundation.online isn't verified in this preview — that is a config task, not a code bug; UI wiring and error handling are correct."
+}

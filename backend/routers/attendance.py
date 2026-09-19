@@ -639,8 +639,8 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
         absent = max(0, working_days - present_eq)
         salary = float(salaries.get(uid, 0) or 0)
         per_day = round(salary / working_days, 2) if working_days else 0
-        deduction = round(per_day * absent, 2)
-        net = round(salary - deduction, 2)
+        deduction = min(salary, round(per_day * absent, 2))
+        net = max(0.0, round(salary - deduction, 2))
         held = bool(s.get("salary_hold"))
         out.append({
             "user_id": uid, "name": s.get("name"), "office": s.get("office"), "role": s.get("role"),
