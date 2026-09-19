@@ -17,6 +17,7 @@ const STATUS_CELL = {
   half_day: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30",
   leave: "bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30",
   weekoff: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30",
+  absent: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30",
 };
 
 const STATUS_SHORT = { present: "P", late: "L", half_day: "½", leave: "LV", weekoff: "WO", absent: "A" };
@@ -39,8 +40,7 @@ export default function AttendanceCalendar({ month, records, onPickDate }) {
     for (let i = 0; i < lead; i++) out.push(null);
     for (let d = 1; d <= daysInMonth; d++) {
       const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      const isSunday = new Date(y, m - 1, d).getDay() === 0;
-      out.push({ d, ds, rec: byDate[ds] || null, isSunday });
+      out.push({ d, ds, rec: byDate[ds] || null });
     }
     return out;
   }, [y, m, byDate]);
@@ -58,10 +58,12 @@ export default function AttendanceCalendar({ month, records, onPickDate }) {
       <div className="grid grid-cols-7 gap-1.5">
         {cells.map((c, i) => {
           if (!c) return <div key={`b${i}`} />;
-          const status = c.rec?.status;
-          const cellCls = status ? (STATUS_CELL[status] || "bg-muted border-border") : "border-transparent";
           const isToday = c.ds === todayIso;
           const isPast = c.ds < todayIso;
+          // Rotational week-off: a past day with no record = a forgotten
+          // check-in, shown as Absent (and convertible by an admin).
+          const status = c.rec?.status || (isPast ? "absent" : null);
+          const cellCls = status ? (STATUS_CELL[status] || "bg-muted border-border") : "border-transparent";
           const clickable = !!onPickDate && isPast;
           return (
             <div
@@ -72,7 +74,7 @@ export default function AttendanceCalendar({ month, records, onPickDate }) {
               onClick={clickable ? () => onPickDate(c.ds, c.rec) : undefined}
               onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") onPickDate(c.ds, c.rec); } : undefined}
               title={clickable ? "Regularize this day" : undefined}
-              className={`aspect-square rounded-lg border flex flex-col items-center justify-center text-xs relative ${cellCls} ${c.isSunday && !status ? "opacity-50" : ""} ${isToday ? "ring-2 ring-primary" : ""} ${clickable ? "cursor-pointer hover:border-primary/60 hover:bg-primary/5" : ""}`}
+              className={`aspect-square rounded-lg border flex flex-col items-center justify-center text-xs relative ${cellCls} ${isToday ? "ring-2 ring-primary" : ""} ${clickable ? "cursor-pointer hover:border-primary/60 hover:bg-primary/5" : ""}`}
             >
               <span className={`tabular-nums ${status ? "font-semibold" : "text-muted-foreground"}`}>{c.d}</span>
               {status ? (
@@ -90,6 +92,7 @@ export default function AttendanceCalendar({ month, records, onPickDate }) {
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-500" /> Half day</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-500" /> Leave</span>
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-500" /> Week-off</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" /> Absent</span>
       </div>
       {onPickDate && (
         <p className="text-[11px] text-muted-foreground mt-2">Tip: tap any past day to request a Week-off or Leave regularization.</p>

@@ -8,7 +8,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CalendarPlus, Check, X, ArrowsClockwise } from "@phosphor-icons/react";
+import { CalendarPlus, Check, X, ArrowsClockwise, CaretLeft, CaretRight } from "@phosphor-icons/react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 
 const KIND_LABEL = { weekoff: "Week-off", leave: "Leave" };
@@ -58,6 +59,151 @@ function ReqCard({ r, canDecide, onDecide, busy }) {
           </Button>
         </div>
       )}
+    </Card>
+  );
+}
+
+const CONVERT_LEAVE_TYPES = ["casual", "sick", "paid", "earned"];
+const shiftMonth = (month, delta) => {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const monthLabel = (month) => {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+};
+
+// Admin-only: pick an employee, view their month-wise attendance, and convert
+// any past day (e.g. a forgotten check-in shown as Absent) into Present /
+// Week-off / Leave. Applied instantly and counts as paid.
+function AdminEmployeeAttendance({ user, onChanged }) {
+  const [staff, setStaff] = useState([]);
+  const [uid, setUid] = useState("");
+  const [month, setMonth] = useState(thisMonthISO());
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [dlg, setDlg] = useState(null); // { date, rec, status, leave_type }
+
+  useEffect(() => {
+    api.get("/attendance/staff")
+      .then(({ data }) => { setStaff(data); if (data.length && !uid) setUid(data[0].user_id); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadRecords = useCallback(async () => {
+    if (!uid) { setRecords([]); return; }
+    setLoading(true);
+    try {
+      const { data } = await api.get(`/attendance?month=${month}&user_id=${uid}`);
+      setRecords(data.records || []);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setLoading(false);
+    }
+  }, [uid, month]);
+
+  useEffect(() => { loadRecords(); }, [loadRecords]);
+
+  const openConvert = (date, rec) => setDlg({ date, rec, status: "weekoff", leave_type: "casual" });
+
+  const applyConvert = async () => {
+    setBusy(true);
+    try {
+      await api.post("/attendance/admin/upsert", {
+        user_id: uid,
+        date: dlg.date,
+        status: dlg.status,
+        leave_type: dlg.status === "leave" ? dlg.leave_type : null,
+      });
+      toast.success("Day updated");
+      setDlg(null);
+      loadRecords();
+      onChanged?.();
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const selected = staff.find((s) => s.user_id === uid);
+
+  return (
+    <Card className="p-5" data-testid="admin-emp-attendance">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-foreground">Employee attendance</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Pick an employee, then tap any past day to convert it to Present, Week-off or Leave. Applied instantly — counts as paid.</p>
+        </div>
+        <Select value={uid} onValueChange={setUid}>
+          <SelectTrigger className="w-full sm:w-64 h-10" data-testid="admin-emp-select"><SelectValue placeholder="Select employee" /></SelectTrigger>
+          <SelectContent>
+            {staff.map((s) => (
+              <SelectItem key={s.user_id} value={s.user_id} data-testid={`admin-emp-opt-${s.user_id}`}>
+                {s.name}{s.role === "office_admin" ? " · Office Admin" : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-center gap-3 mb-4">
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setMonth((mo) => shiftMonth(mo, -1))} data-testid="admin-emp-prev"><CaretLeft size={15} /></Button>
+        <span className="text-sm font-medium text-foreground min-w-[140px] text-center" data-testid="admin-emp-month">{monthLabel(month)}</span>
+        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setMonth((mo) => shiftMonth(mo, 1))} disabled={month >= thisMonthISO()} data-testid="admin-emp-next"><CaretRight size={15} /></Button>
+      </div>
+
+      {!uid ? (
+        <p className="text-sm text-muted-foreground text-center py-6">No employees found.</p>
+      ) : loading ? (
+        <p className="text-sm text-muted-foreground text-center py-6">Loading…</p>
+      ) : (
+        <AttendanceCalendar month={month} records={records} onPickDate={openConvert} />
+      )}
+
+      <Dialog open={!!dlg} onOpenChange={(v) => !v && setDlg(null)}>
+        <DialogContent data-testid="admin-convert-dialog">
+          <DialogHeader><DialogTitle>Update {selected?.name || "employee"} · {fmtDate(dlg?.date)}</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-1">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Mark day as</label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {[["present", "Present"], ["weekoff", "Week-off"], ["leave", "Leave"], ["absent", "Absent"]].map(([k, lbl]) => (
+                  <button
+                    key={k}
+                    onClick={() => setDlg((s) => ({ ...s, status: k }))}
+                    data-testid={`admin-convert-${k}`}
+                    className={`h-10 rounded-md border text-sm font-medium ${dlg?.status === k ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {dlg?.status === "leave" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Leave type (paid)</label>
+                <select
+                  value={dlg.leave_type}
+                  onChange={(e) => setDlg((s) => ({ ...s, leave_type: e.target.value }))}
+                  data-testid="admin-convert-leave-type"
+                  className="mt-1 w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground capitalize"
+                >
+                  {CONVERT_LEAVE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDlg(null)}>Cancel</Button>
+            <Button className="btn-amber" onClick={applyConvert} disabled={busy} data-testid="admin-convert-apply">Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -222,6 +368,8 @@ export default function RegularizationPanel({ user }) {
           </Dialog>
         )}
       </div>
+
+      {isAdmin && <AdminEmployeeAttendance user={user} onChanged={load} />}
 
       {canRequest && (
         <Card className="p-5 sm:hidden">

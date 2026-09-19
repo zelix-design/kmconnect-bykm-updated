@@ -46,8 +46,9 @@ def _today() -> str:
 def _month_days(month: str) -> tuple[int, int, int]:
     y, m = int(month[:4]), int(month[5:7])
     ndays = calendar.monthrange(y, m)[1]
-    working = sum(1 for d in range(1, ndays + 1) if date(y, m, d).weekday() != 6)  # skip Sun
-    return y, m, working
+    # Rotational week-off: every calendar day is a payable day. Week-offs are
+    # marked explicitly per employee (status "weekoff") and count as paid.
+    return y, m, ndays
 
 
 class CheckInIn(BaseModel):
@@ -96,8 +97,6 @@ async def sweep_late_checkins() -> None:
     """Once past 10:30 IST on a working day, notify admins about staff/office
     admins who still haven't checked in (idempotent per person per day)."""
     local = datetime.now(TZ)
-    if local.weekday() == 6:  # Sunday
-        return
     cutoff = local.replace(hour=LATE_ALERT[0], minute=LATE_ALERT[1], second=0, microsecond=0)
     end = local.replace(hour=OFFICE_END[0], minute=OFFICE_END[1], second=0, microsecond=0)
     if local < cutoff or local > end:
@@ -367,6 +366,36 @@ async def delete_attendance(rec_id: str, user: dict = Depends(get_current_user))
 
 VALID_STATUS = ("present", "late", "half_day", "absent", "leave", "weekoff")
 
+# Human-friendly status vocabulary accepted by the bulk uploader → internal
+# status + optional leave_type. casual/sick/paid/earned leave count as PAID
+# (internal "leave"); unpaid leave / LOP count as UNPAID (internal "absent").
+_BULK_STATUS_ALIASES = {
+    "present": ("present", None), "p": ("present", None),
+    "late": ("late", None),
+    "half day": ("half_day", None), "half": ("half_day", None), "hd": ("half_day", None),
+    "absent": ("absent", None), "a": ("absent", None),
+    "week off": ("weekoff", None), "weekoff": ("weekoff", None), "wo": ("weekoff", None), "off": ("weekoff", None),
+    "leave": ("leave", None),
+    "casual leave": ("leave", "casual"), "cl": ("leave", "casual"),
+    "sick leave": ("leave", "sick"), "sl": ("leave", "sick"),
+    "paid leave": ("leave", "paid"), "pl": ("leave", "paid"),
+    "earned leave": ("leave", "earned"), "el": ("leave", "earned"),
+    "unpaid leave": ("absent", "unpaid"), "ul": ("absent", "unpaid"),
+    "lop": ("absent", "unpaid"), "loss of pay": ("absent", "unpaid"),
+}
+
+
+def _normalize_bulk_status(raw: str) -> tuple[Optional[str], Optional[str]]:
+    """Map a free-text CSV status to (internal_status, leave_type)."""
+    key = " ".join((raw or "").lower().replace("-", " ").replace("_", " ").split())
+    if not key:
+        return "present", None
+    if key in _BULK_STATUS_ALIASES:
+        return _BULK_STATUS_ALIASES[key]
+    if key in VALID_STATUS:
+        return key, None
+    return None, None
+
 
 def _to_iso_ist(date_str: str, val: Optional[str]) -> Optional[str]:
     """Normalise a check-in/out value to an ISO timestamp. Accepts 'HH:MM',
@@ -389,8 +418,21 @@ class AdminUpsertIn(BaseModel):
     user_id: str
     date: str
     status: str = "present"
+    leave_type: Optional[str] = None
     check_in: Optional[str] = None
     check_out: Optional[str] = None
+
+
+@router.get("/staff")
+async def staff_list(office: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Scoped list of employees (login users) for admin attendance pickers."""
+    _require_admin(user)
+    scope = user.get("office") if user.get("role") == "office_admin" else (office if office and office != "all" else None)
+    q: dict = {"role": {"$in": ["staff", "office_admin"]}, "deleted_at": {"$in": [None, ""]}}
+    if scope:
+        q["office"] = scope
+    users = await db.users.find(q, {"_id": 0, "id": 1, "name": 1, "office": 1, "role": 1}).sort("name", 1).to_list(5000)
+    return [{"user_id": u["id"], "name": u.get("name"), "office": u.get("office"), "role": u.get("role")} for u in users]
 
 
 @router.post("/admin/upsert")
@@ -414,7 +456,7 @@ async def admin_upsert(body: AdminUpsertIn, user: dict = Depends(get_current_use
     await db.attendance.update_one(
         {"user_id": body.user_id, "date": body.date},
         {"$set": {"user_name": target.get("name"), "office": target.get("office"),
-                  "status": body.status, "check_in": ci, "check_out": co,
+                  "status": body.status, "leave_type": body.leave_type, "check_in": ci, "check_out": co,
                   "work_seconds": work, "edited_by": user["id"]},
          "$setOnInsert": {"id": gen_id(), "user_id": body.user_id, "date": body.date,
                           "created_at": now_iso()}},
@@ -504,11 +546,9 @@ async def bulk_upload(body: BulkIn, user: dict = Depends(get_current_user)):
             if not d:
                 add(i, ref, "error", "missing date", name=u.get("name"))
                 continue
-            st = (col(row, "status") or "present").lower().replace(" ", "_")
-            if st == "halfday":
-                st = "half_day"
-            if st not in VALID_STATUS:
-                add(i, ref, "error", f"invalid status '{st}'", name=u.get("name"), date=d)
+            st, leave_type = _normalize_bulk_status(col(row, "status"))
+            if st is None:
+                add(i, ref, "error", f"invalid status '{col(row, 'status')}'", name=u.get("name"), date=d)
                 continue
             ci = _to_iso_ist(d, col(row, "check_in", "checkin", "in"))
             co = _to_iso_ist(d, col(row, "check_out", "checkout", "out"))
@@ -523,13 +563,15 @@ async def bulk_upload(body: BulkIn, user: dict = Depends(get_current_user)):
                 await db.attendance.update_one(
                     {"user_id": u["id"], "date": d},
                     {"$set": {"user_name": u.get("name"), "office": u.get("office"), "status": st,
+                              "leave_type": leave_type,
                               "check_in": ci, "check_out": co, "work_seconds": work,
                               "edited_by": user["id"]},
                      "$setOnInsert": {"id": gen_id(), "user_id": u["id"], "date": d, "created_at": now_iso()}},
                     upsert=True,
                 )
             add(i, ref, "update" if existing else "create", "",
-                name=u.get("name"), office=u.get("office"), date=d, status=st)
+                name=u.get("name"), office=u.get("office"), date=d,
+                status=(f"{st} ({leave_type})" if leave_type else st))
         except Exception as e:  # noqa: BLE001
             add(i, ref, "error", str(e))
 
@@ -581,7 +623,8 @@ def _salary_breakup(ctc: float) -> list[dict]:
 
 def _working_days_set(y: int, m: int) -> set[str]:
     ndays = calendar.monthrange(y, m)[1]
-    return {f"{y:04d}-{m:02d}-{d:02d}" for d in range(1, ndays + 1) if date(y, m, d).weekday() != 6}
+    # Rotational week-off: all calendar days are payable days.
+    return {f"{y:04d}-{m:02d}-{d:02d}" for d in range(1, ndays + 1)}
 
 
 async def _paid_leave_dates(month: str, office_scope: Optional[str], working_set: set[str]) -> dict:

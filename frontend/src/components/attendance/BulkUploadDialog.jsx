@@ -11,8 +11,8 @@ import { UploadSimple, DownloadSimple, FileCsv } from "@phosphor-icons/react";
 const TEMPLATES = {
   attendance: {
     header: "email,date,status,check_in,check_out",
-    sample: "staff@example.com,2026-06-01,present,10:05,19:00\nstaff@example.com,2026-06-02,leave,,",
-    hint: "Columns: email (or user_id), date (YYYY-MM-DD), status (present/late/half_day/absent/leave/weekoff), check_in, check_out (HH:MM, optional).",
+    sample: "staff@example.com,2026-06-01,present,10:00,19:00\nstaff@example.com,2026-06-02,week-off,,\nstaff@example.com,2026-06-03,casual leave,,\nstaff@example.com,2026-06-04,sick leave,,\nstaff@example.com,2026-06-05,paid leave,,\nstaff@example.com,2026-06-06,unpaid leave,,\nstaff@example.com,2026-06-07,half day,10:00,14:00\nstaff@example.com,2026-06-08,absent,,",
+    hint: "Columns: email (or user_id), date (YYYY-MM-DD), status, check_in, check_out (HH:MM). Status: present, absent, late, half day, week-off, casual leave, sick leave, paid leave, unpaid leave. Casual/sick/paid leave & week-off = paid; unpaid leave = unpaid. check_in/out only needed for present/late/half day.",
   },
   salaries: {
     header: "email,monthly_salary",
