@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CalendarPlus, Check, X, ArrowsClockwise, CaretLeft, CaretRight } from "@phosphor-icons/react";
@@ -167,7 +167,9 @@ function AdminEmployeeAttendance({ user, onChanged }) {
 
       <Dialog open={!!dlg} onOpenChange={(v) => !v && setDlg(null)}>
         <DialogContent data-testid="admin-convert-dialog">
-          <DialogHeader><DialogTitle>Update {selected?.name || "employee"} · {fmtDate(dlg?.date)}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Update {selected?.name || "employee"} · {fmtDate(dlg?.date)}</DialogTitle>
+            <DialogDescription className="text-xs">Applied instantly. Week-off and paid leave count as paid days.</DialogDescription>
+          </DialogHeader>
           <div className="space-y-4 py-1">
             <div>
               <label className="text-xs font-medium text-muted-foreground">Mark day as</label>
@@ -308,7 +310,9 @@ export default function RegularizationPanel({ user }) {
               <Button className="btn-amber" data-testid="reg-new-btn"><CalendarPlus size={16} className="mr-1.5" /> New request</Button>
             </DialogTrigger>
             <DialogContent data-testid="reg-dialog">
-              <DialogHeader><DialogTitle>Regularize a past day</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Regularize a past day</DialogTitle>
+                <DialogDescription className="text-xs">Convert an absent day into a Week-off or Leave. Sent for approval.</DialogDescription>
+              </DialogHeader>
               <div className="space-y-4 py-1">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Date (past only)</label>

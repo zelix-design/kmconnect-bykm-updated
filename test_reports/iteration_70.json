@@ -1,0 +1,40 @@
+{
+  "summary": "Frontend-only verification of 4 attendance changes (bulk statuses, admin employee-picker calendar on Regularize, instant convert dialog, rotational week-off/absent). All 7 acceptance criteria PASS across Super Admin, Office Admin, and Staff roles.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Regularize > Admin convert dialog", "issues": ["React accessibility warning: 'Missing Description or aria-describedby={undefined} for DialogContent'. Cosmetic a11y warning only; no functional impact."]},
+      {"screen": "Staff Regularize (desktop)", "issues": ["Staff's own month calendar Card on the Regularize tab is wrapped in class 'sm:hidden', so on desktop (>=640px) only the New-request button + My-requests list is shown; calendar visible only on mobile viewport. Element is present in DOM (data-testid=attendance-calendar) but visually hidden. Confirm this is intended (staff still sees calendar under the primary Attendance tab)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Add DialogDescription/aria-describedby to admin-convert-dialog and reg-dialog to silence Radix a11y warning.",
+    "(Optional) Consider un-hiding the staff calendar on desktop for Regularize tab or remove sm:hidden if requirement 'staff self-view still shows their own calendar' is meant to apply on desktop too."
+  ],
+  "critical_code_review_comments": [
+    "AttendanceCalendar.jsx correctly treats past days without a record as 'absent' with no Sunday-dimming - rotational week-off works as specified. Verified visually: past Sundays (e.g. Sept 6 2026) render rose/red like any other absent day.",
+    "AdminEmployeeAttendance.applyConvert posts to /attendance/admin/upsert and reloads records immediately — instant apply confirmed (violet cell after Week-off apply, rose after revert to Absent).",
+    "BulkUploadDialog TEMPLATES.attendance.hint now includes all 9 statuses (present, absent, late, half day, week-off, casual leave, sick leave, paid leave, unpaid leave). Preview parses week-off→weekoff, casual/sick/paid leave→leave(<type>), unpaid leave→absent(unpaid), half day→half_day, invalid→error. Confirmed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786 (super admin); blr1@finflow.com / Office@123 (office admin, KM_BLR); staff.blr@kmfoundation.online / Staff@123 (staff, renders as 'Fathima Telecaller').",
+  "seed_data_creation": "Temporarily set 2026-09-01 for Fathima Telecaller to 'weekoff' via admin/upsert; immediately reverted to 'absent' via the same dialog. No lingering seed changes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Attendance Regularize tab: admin card testid=admin-emp-attendance; dropdown=admin-emp-select; month nav=admin-emp-prev/-month/-next (next disabled at current month e.g. Sep 2026); calendar cells testid=cal-day-YYYY-MM-DD; past Sundays now render rose (Absent) — rotational week-off. Convert dialog=admin-convert-dialog with admin-convert-{present|weekoff|leave|absent} + admin-convert-leave-type (revealed only when Leave selected) + admin-convert-apply. Payroll tab bulk upload button testid=bulk-upload-btn opens bulk-upload-dialog; select bulk-kind-attendance, fill bulk-csv, click bulk-preview-btn; preview rows appear as bulk-prow-<line>. Preview verified: week-off→weekoff, casual/sick/paid leave→leave(casual|sick|paid), unpaid leave→absent(unpaid), half day→half_day, invalid→error row. Office admin (blr1@finflow.com) sees 6 scoped employees (KM_BLR only). Staff sees no admin card, has reg-new-btn + reg-dialog; own calendar hidden on desktop via sm:hidden.",
+  "verified_scenarios": {
+    "sa_regularize_admin_card_and_controls_present": "PASS (admin-emp-attendance + admin-emp-select + admin-emp-prev/-month/-next all present; next disabled at Sep 2026)",
+    "sa_employee_select_loads_records_absent_rendering": "PASS (12 employees in dropdown; picked Fathima Telecaller; 18 past cells including past Sundays render rose/absent)",
+    "sa_convert_dialog_all_options_and_leave_type_reveal": "PASS (all 4 status buttons + Apply present; leave-type select appears only when Leave selected)",
+    "sa_apply_updates_calendar_instantly": "PASS (Sep 1 → Week-off applied → cell class contains 'violet'; reverted to Absent → cell class contains 'rose')",
+    "sa_month_nav": "PASS (prev → August 2026, next enabled after moving to past; next → back to September 2026 and disabled)",
+    "oa_scoped_employee_list": "PASS (blr1@finflow.com sees 6 KM_BLR-scoped employees; no other-office staff leaked)",
+    "bulk_template_hint_and_preview": "PASS (hint lists all 9 statuses; preview normalized week-off/casual leave/sick leave/paid leave/unpaid leave/half day/absent/present correctly; invalid status yields error row; NOT applied)",
+    "staff_regression": "PASS (no admin card; reg-new-btn opens reg-dialog; own attendance-calendar rendered in DOM though hidden on desktop by sm:hidden)"
+  },
+  "rca of the issue": "n/a - feature verification only. All acceptance criteria met."
+}

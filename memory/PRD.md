@@ -1557,3 +1557,10 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] Fixed payroll float rounding: deduction clamped to ≤ salary, net clamped ≥ 0 (no more -₹0.02).
 - [x] **Verified** — curl (company profile GET/PUT, enriched payslip, email guards/errors) + testing agent iteration_69 (frontend 100%, 8/8 criteria).
 - ⚠️ **Email delivery is config-dependent**: the Resend sender domain (kmfoundation.online) is NOT verified in the preview, so on-demand email returns a clean "domain not verified" error. Verify the domain at resend.com/domains to enable actual delivery. Feature wiring is complete and working.
+
+## Feature — 2026-06 (Attendance: bulk template statuses, admin employee calendar, rotational week-off)
+- [x] **Bulk template + importer** accept human statuses (`_normalize_bulk_status` aliases): present, absent, late, half day, week-off, casual/sick/paid/earned leave (→ PAID leave), unpaid leave / LOP (→ UNPAID/absent). Stores `leave_type`. Template sample + hint updated in BulkUploadDialog.jsx.
+- [x] **Regularize admin employee calendar** (`AdminEmployeeAttendance` in RegularizationPanel.jsx): employee dropdown + month nav + month calendar. New GET `/api/attendance/staff` (scoped employee list). Uses existing GET `/api/attendance?month=&user_id=`.
+- [x] **Instant convert**: clicking a past day opens a dialog (Present/Week-off/Leave+type/Absent) → POST `/api/attendance/admin/upsert` {status, leave_type} applied immediately, counts as paid. (admin/upsert now stores leave_type.)
+- [x] **Rotational week-off**: `_month_days`/`_working_days_set` now count ALL calendar days as payable (no Sunday exclusion); no-show sweep no longer skips Sundays. AttendanceCalendar shows any past day with no record as Absent (red), Sundays no longer dimmed. ⚠️ This changes payroll denominator to full month days for every office — week-offs must be marked explicitly (bulk/convert) to count as paid.
+- [x] **Verified** — curl (staff list, bulk status mapping incl. unpaid→absent, admin convert w/ leave_type, payroll working_days=30) + testing agent iteration_70 (frontend 100%, 7/7 across Super/Office/Staff).
