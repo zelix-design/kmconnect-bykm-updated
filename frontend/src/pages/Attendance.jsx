@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee, UploadSimple, CalendarBlank } from "@phosphor-icons/react";
+import { Clock, MapPin, SignIn, SignOut, DownloadSimple, PencilSimple, Timer, BellRinging, Coffee, UploadSimple, CalendarBlank, EnvelopeSimple } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
-import { downloadPayslipPdf } from "@/lib/payslipPdf";
+import { downloadPayslipPdf, payslipBase64 } from "@/lib/payslipPdf";
+import CompanyProfileDialog from "@/components/attendance/CompanyProfileDialog";
 import MobileCheckIn from "@/components/attendance/MobileCheckIn";
 import AttendanceCalendar from "@/components/attendance/AttendanceCalendar";
 import BulkUploadDialog from "@/components/attendance/BulkUploadDialog";
@@ -349,7 +350,53 @@ function PayrollSection({ user }) {
   const [loading, setLoading] = useState(true);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editStaff, setEditStaff] = useState(null);
+  const [companyOpen, setCompanyOpen] = useState(false);
+  const [busyUid, setBusyUid] = useState(null);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const currency = user.currency || "INR";
+
+  const genPayslip = useCallback(async (uid) => {
+    setBusyUid(uid);
+    try {
+      const { data } = await api.get(`/attendance/payslip/${uid}?month=${month}`);
+      await downloadPayslipPdf(data, currency);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Could not generate payslip");
+    } finally {
+      setBusyUid(null);
+    }
+  }, [month, currency]);
+
+  const emailPayslip = useCallback(async (row) => {
+    setBusyUid(row.user_id);
+    try {
+      const { data } = await api.get(`/attendance/payslip/${row.user_id}?month=${month}`);
+      const { base64, filename } = await payslipBase64(data, currency);
+      const res = await api.post(`/attendance/payslip/${row.user_id}/email`, {
+        month, pdf_base64: base64, filename,
+      });
+      toast.success(`Payslip emailed to ${res.data.sent_to}`);
+    } catch (e) {
+      toast.error(formatApiError(e?.response?.data?.detail) || "Could not email payslip");
+    } finally {
+      setBusyUid(null);
+    }
+  }, [month, currency]);
+
+  const downloadAll = useCallback(async () => {
+    setDownloadingAll(true);
+    try {
+      for (const r of rows) {
+        const { data } = await api.get(`/attendance/payslip/${r.user_id}?month=${month}`);
+        await downloadPayslipPdf(data, currency);
+      }
+      toast.success(`Downloaded ${rows.length} payslip${rows.length === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error("Could not download all payslips");
+    } finally {
+      setDownloadingAll(false);
+    }
+  }, [rows, month, currency]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -386,6 +433,12 @@ function PayrollSection({ user }) {
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
         <h3 className="font-semibold text-foreground flex items-center gap-2"><Clock size={18} /> Payroll</h3>
         <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="h-9" data-testid="company-profile-btn" onClick={() => setCompanyOpen(true)}>
+            Company profile
+          </Button>
+          <Button variant="outline" size="sm" className="h-9" data-testid="payroll-download-all" onClick={downloadAll} disabled={downloadingAll || rows.length === 0}>
+            <DownloadSimple size={15} className="mr-1.5" /> {downloadingAll ? "Preparing…" : "Download all"}
+          </Button>
           <Button variant="outline" size="sm" className="h-9" data-testid="bulk-upload-btn" onClick={() => setBulkOpen(true)}>
             <UploadSimple size={15} className="mr-1.5" /> Bulk upload
           </Button>
@@ -468,13 +521,25 @@ function PayrollSection({ user }) {
                     ) : formatMoney(r.net_pay, currency)}
                   </td>
                   <td className="px-3 py-3 text-center">
-                    <button
-                      data-testid={`payslip-${r.user_id}`}
-                      onClick={() => downloadPayslipPdf({ row: r, month, currency })}
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <DownloadSimple size={15} /> PDF
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        data-testid={`payslip-${r.user_id}`}
+                        onClick={() => genPayslip(r.user_id)}
+                        disabled={busyUid === r.user_id}
+                        className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                      >
+                        <DownloadSimple size={15} /> PDF
+                      </button>
+                      <button
+                        data-testid={`payslip-email-${r.user_id}`}
+                        onClick={() => emailPayslip(r)}
+                        disabled={busyUid === r.user_id}
+                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        title="Email this payslip to the employee"
+                      >
+                        <EnvelopeSimple size={15} /> Email
+                      </button>
+                    </div>
                   </td>
                   <td className="px-3 py-3 text-center">
                     <button
@@ -506,6 +571,7 @@ function PayrollSection({ user }) {
       </p>
 
       <BulkUploadDialog open={bulkOpen} onOpenChange={setBulkOpen} onDone={load} />
+      <CompanyProfileDialog open={companyOpen} onOpenChange={setCompanyOpen} />
       <EditDaysDialog
         open={!!editStaff}
         onOpenChange={(v) => !v && setEditStaff(null)}

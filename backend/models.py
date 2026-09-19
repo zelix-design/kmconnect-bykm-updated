@@ -143,6 +143,14 @@ class ClientIn(BaseModel):
     address: Optional[str] = None
     place: Optional[str] = None
     photo_url: Optional[str] = None  # relative /api/files/... path
+    # Payslip fields (all optional — hidden on the payslip when blank)
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    date_of_joining: Optional[str] = None   # ISO date
+    leave_balance: Optional[float] = None
+    tax_regime: Optional[str] = None        # "old" | "new" | free text
+    bank_account_no: Optional[str] = None
+    ifsc_code: Optional[str] = None
     # Cross-user visibility: when set to KM_BLR / KM_TCR / KM_KMLY, all office
     # admins of that office see the record. "ALL" → every office admin sees it.
     # Office admins always have this overridden server-side to their own office.

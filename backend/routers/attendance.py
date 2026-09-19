@@ -664,6 +664,64 @@ async def payroll(month: str, office: Optional[str] = None, user: dict = Depends
     return {"month": month, "rows": await _payroll_rows(month, scope)}
 
 
+DEFAULT_COMPANY = {
+    "legal_name": "KM FOUNDATION (Zelix Ventures LLP)",
+    "address": "4th Floor A Block, AKR Tech Park, Garebhavi Palya, Krishna Reddy Layout, AMR Tech Park, Karnataka – 560100",
+    "logo_url": "",
+}
+
+# Fields lifted from the staff profile (clients) onto the payslip.
+_PAYSLIP_PROFILE_FIELDS = (
+    "employee_id", "designation", "department", "date_of_joining",
+    "leave_balance", "tax_regime", "bank_account_no", "ifsc_code",
+)
+
+
+async def _company_profile() -> dict:
+    doc = await db.company_profile.find_one({"id": "default"}, {"_id": 0, "id": 0})
+    return {**DEFAULT_COMPANY, **(doc or {})}
+
+
+async def _payslip_employee(uid: str, target: dict) -> dict:
+    """Merge the staff profile (clients) payslip fields onto the login user."""
+    client = await db.clients.find_one(
+        {"client_type": "staff", "login_user_id": uid}, {"_id": 0}
+    )
+    client = client or {}
+    emp = {
+        "name": target.get("name") or client.get("name") or "",
+        "office": target.get("office") or client.get("office"),
+        "employee_code": client.get("employee_id") or "",
+    }
+    for f in _PAYSLIP_PROFILE_FIELDS:
+        emp[f] = client.get(f)
+    return emp
+
+
+@router.get("/company-profile")
+async def get_company_profile(user: dict = Depends(get_current_user)):
+    return await _company_profile()
+
+
+class CompanyProfileIn(BaseModel):
+    legal_name: str
+    address: str = ""
+    logo_url: str = ""
+
+
+@router.put("/company-profile")
+async def set_company_profile(body: CompanyProfileIn, user: dict = Depends(get_current_user)):
+    _require_admin(user)
+    await db.company_profile.update_one(
+        {"id": "default"},
+        {"$set": {"id": "default", "legal_name": body.legal_name.strip(),
+                  "address": body.address.strip(), "logo_url": (body.logo_url or "").strip(),
+                  "updated_at": now_iso(), "updated_by": user["id"]}},
+        upsert=True,
+    )
+    return await _company_profile()
+
+
 @router.get("/payslip/{uid}")
 async def payslip(uid: str, month: str, user: dict = Depends(get_current_user)):
     if not _is_admin(user) and user["id"] != uid:
@@ -677,7 +735,62 @@ async def payslip(uid: str, month: str, user: dict = Depends(get_current_user)):
     row = next((r for r in rows if r["user_id"] == uid), None)
     if not row:
         raise HTTPException(404, "No payroll for this staff/month")
-    return {"month": month, "staff": target, "payslip": row}
+    return {
+        "month": month,
+        "staff": target,
+        "payslip": row,
+        "company": await _company_profile(),
+        "employee": await _payslip_employee(uid, target),
+    }
+
+
+class PayslipEmailIn(BaseModel):
+    month: str
+    pdf_base64: str
+    filename: Optional[str] = None
+
+
+@router.post("/payslip/{uid}/email")
+async def email_payslip(uid: str, body: PayslipEmailIn, user: dict = Depends(get_current_user)):
+    """Email a client-generated payslip PDF (base64) to the employee."""
+    _require_admin(user)
+    target = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "name": 1, "email": 1, "office": 1})
+    if not target:
+        raise HTTPException(404, "User not found")
+    if user.get("role") == "office_admin" and target.get("office") != user.get("office"):
+        raise HTTPException(403, "Out of scope")
+    to_email = (target.get("email") or "").strip()
+    if not to_email:
+        raise HTTPException(400, "This employee has no email on their login account")
+    b64 = body.pdf_base64
+    if "," in b64 and b64.strip().lower().startswith("data:"):
+        b64 = b64.split(",", 1)[1]
+    company = await _company_profile()
+    fname = body.filename or f"payslip-{body.month}.pdf"
+    from lib.email_notifier import send_email
+    name = target.get("name") or "there"
+    html = (
+        f"<div style=\"font-family:-apple-system,Segoe UI,sans-serif;color:#1c1917;\">"
+        f"<p>Hi {name},</p>"
+        f"<p>Please find attached your payslip for <strong>{body.month}</strong>.</p>"
+        f"<p style=\"color:#78716c;font-size:13px;\">Regards,<br/>{company.get('legal_name')}</p>"
+        f"</div>"
+    )
+    try:
+        resp = await send_email(
+            to=to_email,
+            subject=f"Payslip · {body.month}",
+            html=html,
+            attachments=[{"filename": fname, "content": b64}],
+        )
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "not verified" in msg.lower():
+            raise HTTPException(400, "Email could not be sent — the sender domain isn't verified in Resend yet. Verify it at resend.com/domains, then try again.")
+        raise HTTPException(400, f"Email could not be sent: {msg}")
+    if resp.get("skipped"):
+        raise HTTPException(400, "Email service is not configured (RESEND_API_KEY missing).")
+    return {"ok": True, "sent_to": to_email}
 
 
 # ---------- Regularization: fix a PAST day (Absent → Week-off / Leave) ----------

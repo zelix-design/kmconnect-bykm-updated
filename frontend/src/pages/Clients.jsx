@@ -59,6 +59,8 @@ const empty = {
   office: "", eligible_incentive: "", date_of_birth: "",
   employee_id: "", address: "", place: "", photo_url: "",
   home_office: "",
+  designation: "", department: "", date_of_joining: "", leave_balance: "",
+  tax_regime: "", bank_account_no: "", ifsc_code: "",
 };
 
 const HOME_OFFICE_OPTIONS = [
@@ -148,6 +150,13 @@ function SuperAdminPeople({ pageScope }) {
       place: c.place || "",
       photo_url: c.photo_url || "",
       home_office: c.home_office || "",
+      designation: c.designation || "",
+      department: c.department || "",
+      date_of_joining: c.date_of_joining || "",
+      leave_balance: c.leave_balance ?? "",
+      tax_regime: c.tax_regime || "",
+      bank_account_no: c.bank_account_no || "",
+      ifsc_code: c.ifsc_code || "",
     });
     setOpen(true);
   };
@@ -161,6 +170,8 @@ function SuperAdminPeople({ pageScope }) {
       eligible_incentive: form.eligible_incentive === "" ? null : Number(form.eligible_incentive),
       date_of_birth: form.date_of_birth || null,
       home_office: form.home_office || null,
+      date_of_joining: form.date_of_joining || null,
+      leave_balance: form.leave_balance === "" ? null : Number(form.leave_balance),
     };
     try {
       if (editing) await api.patch(`/clients/${editing.id}`, payload);
@@ -263,7 +274,7 @@ function SuperAdminPeople({ pageScope }) {
               </Button>
             </DialogTrigger>
             )}
-            <DialogContent className="bg-card">
+            <DialogContent className="bg-card max-h-[88vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="font-display">{editing ? "Edit" : "Add"} {isStaff ? "staff" : "entry"}</DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
@@ -341,6 +352,28 @@ function SuperAdminPeople({ pageScope }) {
                       <Label>Eligible incentive (₹ per admission)</Label>
                       <Input type="number" min="0" step="50" value={form.eligible_incentive} onChange={(e) => setForm({ ...form, eligible_incentive: e.target.value })} placeholder="e.g. 500" data-testid="cli-incentive" />
                       <p className="text-[11px] text-muted-foreground mt-1">Paid out once the staff hits 3+ admissions in a month.</p>
+                    </div>
+                    <div className="pt-2 border-t border-border">
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Payslip details (optional)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div><Label>Designation</Label><Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="e.g. Telecaller" data-testid="cli-designation" /></div>
+                        <div><Label>Department</Label><Input value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} placeholder="e.g. Admissions" data-testid="cli-department" /></div>
+                        <div><Label>Date of joining</Label><Input type="date" value={form.date_of_joining} onChange={(e) => setForm({ ...form, date_of_joining: e.target.value })} data-testid="cli-doj" /></div>
+                        <div><Label>Leave balance</Label><Input type="number" step="0.5" value={form.leave_balance} onChange={(e) => setForm({ ...form, leave_balance: e.target.value })} placeholder="e.g. 12" data-testid="cli-leave-balance" /></div>
+                        <div><Label>Bank account no.</Label><Input value={form.bank_account_no} onChange={(e) => setForm({ ...form, bank_account_no: e.target.value })} data-testid="cli-bank-acct" /></div>
+                        <div><Label>IFSC code</Label><Input value={form.ifsc_code} onChange={(e) => setForm({ ...form, ifsc_code: e.target.value })} data-testid="cli-ifsc" /></div>
+                        <div>
+                          <Label>Tax regime</Label>
+                          <Select value={form.tax_regime || "_none"} onValueChange={(v) => setForm({ ...form, tax_regime: v === "_none" ? "" : v })}>
+                            <SelectTrigger data-testid="cli-tax-regime"><SelectValue placeholder="Not set" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_none">Not set</SelectItem>
+                              <SelectItem value="New Regime">New Regime</SelectItem>
+                              <SelectItem value="Old Regime">Old Regime</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </>
                 ) : (
