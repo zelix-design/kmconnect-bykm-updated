@@ -627,8 +627,15 @@ def _working_days_set(y: int, m: int) -> set[str]:
     return {f"{y:04d}-{m:02d}-{d:02d}" for d in range(1, ndays + 1)}
 
 
-async def _paid_leave_dates(month: str, office_scope: Optional[str], working_set: set[str]) -> dict:
-    """user_id -> set of working-day dates covered by APPROVED, non-unpaid leave in `month`."""
+# Monthly paid-leave entitlement per employee (lapses each month, no carry-over).
+# Sick/Casual leave days are paid up to these caps; extra days of these types
+# are unpaid. Other leave types (paid/earned) stay fully paid; unpaid leave is
+# always unpaid.
+PAID_LEAVE_CAPS = {"sick": 2, "casual": 1}
+
+
+async def _leave_request_days(month: str, office_scope: Optional[str], working_set: set[str]) -> dict:
+    """user_id -> {date: leave_type} for APPROVED, non-unpaid leave requests in `month`."""
     y, m = int(month[:4]), int(month[5:7])
     start = f"{y:04d}-{m:02d}-01"
     end = f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
@@ -636,17 +643,18 @@ async def _paid_leave_dates(month: str, office_scope: Optional[str], working_set
     if office_scope:
         q["office"] = office_scope
     docs = await db.leave_requests.find(
-        q, {"_id": 0, "requester_user_id": 1, "from_date": 1, "to_date": 1}
+        q, {"_id": 0, "requester_user_id": 1, "from_date": 1, "to_date": 1, "leave_type": 1}
     ).to_list(5000)
     out: dict = {}
     for d in docs:
         fd, td = d.get("from_date", ""), d.get("to_date", "")
         if not fd or not td or td < start or fd > end:
             continue
-        bucket = out.setdefault(d["requester_user_id"], set())
+        bucket = out.setdefault(d["requester_user_id"], {})
+        lt = (d.get("leave_type") or "").lower()
         for ds in working_set:
             if fd <= ds <= td:
-                bucket.add(ds)
+                bucket[ds] = lt
     return out
 
 
@@ -660,25 +668,55 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
     salaries = await _salary_map(office_scope)
     att = await db.attendance.find(
         {"date": {"$regex": f"^{month}"}, **({"office": office_scope} if office_scope else {})},
-        {"_id": 0, "user_id": 1, "date": 1, "status": 1},
+        {"_id": 0, "user_id": 1, "date": 1, "status": 1, "leave_type": 1},
     ).to_list(20000)
-    leave_map = await _paid_leave_dates(month, office_scope, working_set)
-    present: dict = {}
+    leave_req = await _leave_request_days(month, office_scope, working_set)
+    paid_present: dict = {}   # present / late / weekoff (fully paid)
     half: dict = {}
+    sick: dict = {}
+    casual: dict = {}
+    other_leave: dict = {}    # paid/earned/generic leave (uncapped paid)
+
+    def _bucket_leave(uid, ds, lt):
+        if lt == "sick":
+            sick.setdefault(uid, set()).add(ds)
+        elif lt == "casual":
+            casual.setdefault(uid, set()).add(ds)
+        else:
+            other_leave.setdefault(uid, set()).add(ds)
+
     for a in att:
         uid, ds, st = a["user_id"], a.get("date"), a.get("status")
-        if st in ("present", "late", "weekoff", "leave"):
-            present.setdefault(uid, set()).add(ds)
+        if st in ("present", "late", "weekoff"):
+            paid_present.setdefault(uid, set()).add(ds)
         elif st == "half_day":
             half.setdefault(uid, set()).add(ds)
+        elif st == "leave":
+            _bucket_leave(uid, ds, (a.get("leave_type") or "").lower())
+    # Fold in approved leave-requests not already recorded in attendance.
+    for uid, dmap in leave_req.items():
+        seen = paid_present.get(uid, set()) | half.get(uid, set())
+        for ds, lt in dmap.items():
+            if ds not in seen:
+                _bucket_leave(uid, ds, lt)
+
     out = []
     for s in staff:
         uid = s["id"]
-        pset = present.get(uid, set())
+        pset = paid_present.get(uid, set())
         hset = half.get(uid, set()) - pset
-        lset = leave_map.get(uid, set()) - pset - hset  # paid leave not already worked
-        present_days, half_days, leave_days = len(pset), len(hset), len(lset)
-        present_eq = present_days + 0.5 * half_days + leave_days
+        sick_all = sick.get(uid, set()) - pset - hset
+        casual_all = casual.get(uid, set()) - pset - hset
+        other_all = other_leave.get(uid, set()) - pset - hset
+        # Apply monthly paid-leave caps: sick ≤ 2, casual ≤ 1; excess is unpaid.
+        paid_sick = min(len(sick_all), PAID_LEAVE_CAPS["sick"])
+        paid_casual = min(len(casual_all), PAID_LEAVE_CAPS["casual"])
+        unpaid_sick = len(sick_all) - paid_sick
+        unpaid_casual = len(casual_all) - paid_casual
+        paid_leave_days = paid_sick + paid_casual + len(other_all)
+        unpaid_leave_days = unpaid_sick + unpaid_casual
+        present_days, half_days = len(pset), len(hset)
+        present_eq = present_days + 0.5 * half_days + paid_leave_days
         absent = max(0, working_days - present_eq)
         salary = float(salaries.get(uid, 0) or 0)
         per_day = round(salary / working_days, 2) if working_days else 0
@@ -688,8 +726,11 @@ async def _payroll_rows(month: str, office_scope: Optional[str]) -> list[dict]:
         out.append({
             "user_id": uid, "name": s.get("name"), "office": s.get("office"), "role": s.get("role"),
             "monthly_salary": salary, "working_days": working_days,
-            "present_days": present_days, "half_days": half_days, "leave_days": leave_days,
+            "present_days": present_days, "half_days": half_days, "leave_days": paid_leave_days,
             "paid_days": round(present_eq, 1), "absent_days": round(absent, 1),
+            "sick_leave_days": len(sick_all), "casual_leave_days": len(casual_all),
+            "paid_sick_days": paid_sick, "paid_casual_days": paid_casual,
+            "unpaid_leave_days": unpaid_leave_days,
             "per_day": per_day, "deduction": deduction,
             "net_pay": 0 if held else net,
             "net_before_hold": net,

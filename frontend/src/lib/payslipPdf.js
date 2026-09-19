@@ -130,8 +130,10 @@ export async function buildPayslipDoc(data, currency = "INR") {
     ["Payable days", String(row.paid_days ?? "—")],
     ["Bank account no.", employee.bank_account_no || "—"],
     ["IFSC code", employee.ifsc_code || "—"],
-    ["Leave balance", employee.leave_balance != null ? String(employee.leave_balance) : "—"],
+    ["Paid sick leave", `${row.paid_sick_days ?? 0} / 2${(row.sick_leave_days ?? 0) > (row.paid_sick_days ?? 0) ? ` (${row.sick_leave_days} taken)` : ""}`],
+    ["Paid casual leave", `${row.paid_casual_days ?? 0} / 1${(row.casual_leave_days ?? 0) > (row.paid_casual_days ?? 0) ? ` (${row.casual_leave_days} taken)` : ""}`],
     ["Regime opted", employee.tax_regime ? String(employee.tax_regime) : "—"],
+    ["Leave balance", employee.leave_balance != null ? String(employee.leave_balance) : "—"],
   ];
   const detailBody = [];
   for (let i = 0; i < details.length; i += 2) {
@@ -173,8 +175,13 @@ export async function buildPayslipDoc(data, currency = "INR") {
 
   // ---- Deductions (B) ----
   const dedRows = [];
+  const unpaidLeave = Number(row.unpaid_leave_days || 0);
+  const absentTotal = Number(row.absent_days || 0);
   if (Number(row.deduction || 0) > 0) {
-    dedRows.push([`Loss of pay (${row.absent_days} absent day${Number(row.absent_days) === 1 ? "" : "s"})`, fmt(row.deduction, currency)]);
+    const note = unpaidLeave > 0
+      ? `Loss of pay (${absentTotal} unpaid day${absentTotal === 1 ? "" : "s"}, incl. ${unpaidLeave} leave beyond allowance)`
+      : `Loss of pay (${absentTotal} absent day${absentTotal === 1 ? "" : "s"})`;
+    dedRows.push([note, fmt(row.deduction, currency)]);
   }
   if (held) {
     dedRows.push(["Salary on hold", fmt(Number(row.net_before_hold || 0), currency)]);
