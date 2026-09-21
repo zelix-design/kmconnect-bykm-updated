@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SquaresFour, Rows } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SquaresFour, Rows, UploadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
@@ -20,6 +20,7 @@ import CollegeSelect from "@/components/CollegeSelect";
 import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 import { navigateToApply, buildApplyUrl, linkedUserRef } from "@/lib/applyUrl";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
+import StudentBulkUploadDialog from "@/components/student-detail/StudentBulkUploadDialog";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -62,11 +63,13 @@ export default function Students() {
   const allowEdit = canEdit(user, "students");
   const isSuper = user?.role === "super_admin";
   const role = user?.role;
+  const isAdmin = isSuper || role === "office_admin";
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
   const [clients, setClients] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [open, setOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
   // Filters
@@ -338,6 +341,18 @@ export default function Students() {
                 <ClipboardText size={16} className="mr-1.5" /> Paste application
               </Button>
             )}
+            {allowEdit && isAdmin && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBulkOpen(true)}
+                className="h-10"
+                data-testid="bulk-upload-students-btn"
+                title="Bulk upload admissions from a CSV"
+              >
+                <UploadSimple size={16} className="mr-1.5" /> Bulk upload
+              </Button>
+            )}
             {(allowEdit || role === "user") && (
               <Button onClick={openAddStudent} data-testid="add-student-btn" className="h-10 btn-amber border-0">
                 <Plus size={16} className="mr-1.5" /> Add student
@@ -522,6 +537,8 @@ export default function Students() {
           />
         )}
       </header>
+
+      <StudentBulkUploadDialog open={bulkOpen} onOpenChange={setBulkOpen} onDone={() => load()} />
 
       {/* Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="students-filters">

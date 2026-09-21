@@ -794,6 +794,126 @@ async def create_student(payload: StudentIn, user: dict = Depends(require_edit("
     return _summarize(doc, user)
 
 
+_STUDENT_STATUS_ALIASES = {
+    "inquiry": "inquiry", "enquiry": "inquiry", "lead": "inquiry", "new": "inquiry",
+    "enrolled": "enrolled", "admitted": "enrolled", "admission": "enrolled",
+    "joined": "enrolled", "active": "enrolled",
+    "cancelled": "cancelled", "canceled": "cancelled", "dropped": "cancelled", "withdrawn": "cancelled",
+    "completed": "completed", "complete": "completed", "passed": "completed", "passed out": "completed",
+}
+
+_STUDENT_DATE_FORMATS = (
+    "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y",
+    "%d/%m/%y", "%d-%m-%y", "%d-%b-%Y", "%d %b %Y", "%d %B %Y", "%b %d, %Y", "%B %d, %Y",
+)
+
+
+def _norm_student_date(v: Optional[str]) -> tuple[Optional[str], bool]:
+    """Return (iso_date_or_None, ok). ok=False only when a non-empty value
+    could not be parsed."""
+    v = (v or "").strip()
+    if not v:
+        return None, True
+    for fmt in _STUDENT_DATE_FORMATS:
+        try:
+            return datetime.strptime(v, fmt).strftime("%Y-%m-%d"), True
+        except ValueError:
+            continue
+    return None, False
+
+
+class StudentBulkIn(BaseModel):
+    csv: str
+    preview: bool = False
+
+
+@router.post("/bulk")
+async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edit("students"))):
+    """Bulk-create admissions from a CSV (Enrollment Date, Name, Course,
+    College, Reference, Status). Super/Office admins only. Supports a dry-run
+    preview (preview=true) that validates rows without inserting."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only Super Admin and Office Admin can bulk upload admissions")
+
+    import csv as _csv
+    import io
+
+    text = (payload.csv or "").lstrip("\ufeff")
+    if not text.strip():
+        raise HTTPException(400, "CSV is empty")
+    reader = _csv.DictReader(io.StringIO(text))
+
+    def col(row: dict, *keys) -> str:
+        for k in keys:
+            if k in row and (row[k] or "").strip():
+                return row[k].strip()
+        return ""
+
+    rows_out: List[dict] = []
+    created = errors = 0
+    to_insert: List[dict] = []
+    office_admin = user.get("role") == "office_admin"
+
+    for i, raw in enumerate(reader, start=2):
+        row = {(k or "").strip().lstrip("\ufeff").lower(): (v or "") for k, v in raw.items()}
+        name = col(row, "name", "student name", "student")
+        if not name:
+            errors += 1
+            rows_out.append({"line": i, "action": "error", "message": "name is required"})
+            continue
+        status_raw = col(row, "status")
+        status = _STUDENT_STATUS_ALIASES.get(status_raw.lower()) if status_raw else "inquiry"
+        if status is None:
+            errors += 1
+            rows_out.append({"line": i, "name": name, "action": "error", "message": f"invalid status '{status_raw}'"})
+            continue
+        ed_raw = col(row, "enrollment date", "enrollment_date", "enroll date", "date")
+        ed, ok = _norm_student_date(ed_raw)
+        if not ok:
+            errors += 1
+            rows_out.append({"line": i, "name": name, "action": "error", "message": f"invalid date '{ed_raw}'"})
+            continue
+        course = col(row, "course") or None
+        college = col(row, "college") or None
+        reference = col(row, "reference", "ref") or None
+        rows_out.append({
+            "line": i, "name": name, "action": "create", "message": "",
+            "date": ed, "status": status,
+            "course": course, "college": college, "reference": reference,
+        })
+        created += 1
+        if not payload.preview:
+            ru = await _resolve_referrer_by_name(reference)
+            si = StudentIn(name=name, course=course, college=college, reference=reference,
+                           status=status, enrollment_date=ed)
+            data = si.model_dump()
+            if office_admin:
+                data["home_office"] = user.get("office")
+            data.pop("sc_from_college_override", None)
+            to_insert.append({
+                "id": gen_id(), "user_id": user["id"], "created_at": now_iso(),
+                "schedules": [], "payments": [],
+                "referrer_user_id": ru["id"] if ru else None,
+                "referrer_name": ru["name"] if ru else None,
+                **data,
+            })
+
+    if not payload.preview and to_insert:
+        await db.students.insert_many(to_insert)
+        if office_admin:
+            office_label = (user.get("office") or "").replace("KM_", "KM ")
+            await notify_super_admins(
+                type="student_enrolled",
+                title=f"Bulk admissions · {user.get('name', 'Office admin')}",
+                message=f"{len(to_insert)} admissions uploaded{' · ' + office_label if office_label else ''}",
+                link="/students",
+                actor_user_id=user["id"],
+                metadata={"count": len(to_insert)},
+            )
+
+    return {"created": created, "updated": 0, "error_count": errors, "rows": rows_out}
+
+
 _AGENT_TYPES = {"sub_agent", "associate", "km"}
 
 
