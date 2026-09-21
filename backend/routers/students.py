@@ -822,6 +822,14 @@ def _norm_student_date(v: Optional[str]) -> tuple[Optional[str], bool]:
     return None, False
 
 
+_STUDENT_OFFICE_ALIASES = {
+    "km_blr": "KM_BLR", "blr": "KM_BLR", "bangalore": "KM_BLR", "bengaluru": "KM_BLR", "km bangalore": "KM_BLR",
+    "km_tcr": "KM_TCR", "tcr": "KM_TCR", "thrissur": "KM_TCR", "trichur": "KM_TCR", "km thrissur": "KM_TCR",
+    "km_kmly": "KM_KMLY", "kmly": "KM_KMLY", "kollam": "KM_KMLY", "km kollam": "KM_KMLY",
+    "all": "ALL", "everyone": "ALL", "shared": "ALL", "all offices": "ALL",
+}
+
+
 class StudentBulkIn(BaseModel):
     csv: str
     preview: bool = False
@@ -876,16 +884,29 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
         course = col(row, "course") or None
         college = col(row, "college") or None
         reference = col(row, "reference", "ref") or None
+        vis_raw = col(row, "visible to office", "visible_to_office", "home_office", "office", "visibility")
+        home_office = None
+        if vis_raw:
+            home_office = _STUDENT_OFFICE_ALIASES.get(vis_raw.lower())
+            if home_office is None:
+                errors += 1
+                rows_out.append({"line": i, "name": name, "action": "error",
+                                 "message": f"invalid office '{vis_raw}' (use KM_BLR / KM_TCR / KM_KMLY / ALL)"})
+                continue
+        # Office admins can only publish to their own office.
+        effective_office = user.get("office") if office_admin else home_office
         rows_out.append({
             "line": i, "name": name, "action": "create", "message": "",
             "date": ed, "status": status,
             "course": course, "college": college, "reference": reference,
+            "office": effective_office,
         })
         created += 1
         if not payload.preview:
             ru = await _resolve_referrer_by_name(reference)
             si = StudentIn(name=name, course=course, college=college, reference=reference,
-                           status=status, enrollment_date=ed)
+                           status=status, enrollment_date=ed,
+                           home_office=None if office_admin else home_office)
             data = si.model_dump()
             if office_admin:
                 data["home_office"] = user.get("office")

@@ -8,11 +8,11 @@ import {
 import { toast } from "sonner";
 import { UploadSimple, DownloadSimple, FileCsv } from "@phosphor-icons/react";
 
-const HEADER = "Enrollment Date,Name,Course,College,Reference,Status";
+const HEADER = "Enrollment Date,Name,Course,College,Reference,Status,Visible to office";
 const SAMPLE = [
-  "2026-06-01,Anjali Menon,BSc Nursing,City College,Ramesh (agent),Enrolled",
-  "15/06/2026,Rahul Nair,BPT,Green Valley College,,Inquiry",
-  "2026-06-20,Fathima K,B.Com,Sunrise College,,Completed",
+  "2026-06-01,Anjali Menon,BSc Nursing,City College,Ramesh (agent),Enrolled,KM_BLR",
+  "15/06/2026,Rahul Nair,BPT,Green Valley College,,Inquiry,KM_TCR",
+  "2026-06-20,Fathima K,B.Com,Sunrise College,,Completed,ALL",
 ].join("\n");
 
 function downloadTemplate() {
@@ -100,7 +100,7 @@ export default function StudentBulkUploadDialog({ open, onOpenChange, onDone }) 
               className="mt-1 font-mono text-xs"
             />
             <p className="text-[11px] text-muted-foreground mt-1.5">
-              Columns: Enrollment Date, Name (required), Course, College, Reference, Status. Status: inquiry, enrolled, cancelled, completed. Reference auto-links to a staff/agent by name when it matches.
+              Columns: Enrollment Date, Name (required), Course, College, Reference, Status, Visible to office. Status: inquiry, enrolled, cancelled, completed. Visible to office: KM_BLR, KM_TCR, KM_KMLY or ALL (blank = private; Office Admin uploads always go to their own office). Reference auto-links to a staff/agent by name when it matches.
             </p>
           </div>
 
@@ -118,7 +118,7 @@ export default function StudentBulkUploadDialog({ open, onOpenChange, onDone }) 
                     <span className="flex-1 min-w-0 truncate">
                       <span className="text-foreground font-medium">{r.name || "—"}</span>
                       <span className="text-muted-foreground">
-                        {r.status ? ` · ${r.status}` : ""}{r.date ? ` · ${r.date}` : ""}{r.college ? ` · ${r.college}` : ""}
+                        {r.status ? ` · ${r.status}` : ""}{r.date ? ` · ${r.date}` : ""}{r.college ? ` · ${r.college}` : ""}{r.office ? ` · ${String(r.office).replace("KM_", "KM ")}` : ""}
                         {r.message ? ` · ${r.message}` : ""}
                       </span>
                     </span>
