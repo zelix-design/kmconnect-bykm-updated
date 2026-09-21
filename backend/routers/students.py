@@ -978,6 +978,46 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
 _AGENT_TYPES = {"sub_agent", "associate", "km"}
 
 
+class StudentBulkActionIn(BaseModel):
+    ids: List[str]
+    action: Literal["delete", "status", "visibility"]
+    value: Optional[str] = None
+
+
+@router.post("/bulk-action")
+async def bulk_action_students(payload: StudentBulkActionIn, user: dict = Depends(require_edit("students"))):
+    """Apply a bulk action (delete / change status / change visibility) to
+    many students at once. Super Admin acts on any record; Office Admin only
+    on records in their own office scope."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only Super Admin and Office Admin can run bulk actions")
+    ids = [i for i in (payload.ids or []) if i]
+    if not ids:
+        raise HTTPException(400, "No students selected")
+    office_admin = user.get("role") == "office_admin"
+    scope = _office_visibility_clause(user) if office_admin else {}
+    q = {"id": {"$in": ids}, **scope}
+
+    if payload.action == "delete":
+        res = await db.students.delete_many(q)
+        return {"deleted": res.deleted_count}
+    if payload.action == "status":
+        status = _STUDENT_STATUS_ALIASES.get((payload.value or "").strip().lower(), (payload.value or "").strip().lower())
+        if status not in ("inquiry", "enrolled", "cancelled", "completed"):
+            raise HTTPException(400, f"invalid status '{payload.value}'")
+        res = await db.students.update_many(q, {"$set": {"status": status}})
+        return {"updated": res.modified_count}
+    if payload.action == "visibility":
+        vv = _STUDENT_OFFICE_ALIASES.get((payload.value or "").strip().lower(), (payload.value or "").strip())
+        if vv not in ("KM_BLR", "KM_TCR", "KM_KMLY", "ALL"):
+            raise HTTPException(400, f"invalid office '{payload.value}' (use KM_BLR / KM_TCR / KM_KMLY / ALL)")
+        if office_admin and vv not in (user.get("office"), "ALL"):
+            vv = user.get("office")
+        res = await db.students.update_many(q, {"$set": {"home_office": vv}})
+        return {"updated": res.modified_count}
+    raise HTTPException(400, "Unknown action")
+
+
 def _new_ledger_bucket(kind: str, name: str) -> dict:
     return {
         "type": kind, "name": name,

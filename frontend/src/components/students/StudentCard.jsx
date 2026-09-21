@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 
@@ -26,7 +27,7 @@ const CARD_TINT = {
   completed: "bg-sky-100/40 dark:bg-sky-500/10 border-sky-200/70 dark:border-sky-500/30",
 };
 
-export default function StudentCard({ s, currency, isSuper }) {
+export default function StudentCard({ s, currency, isSuper, selectable, selected, onToggleSelect }) {
   return (
     <Link
       key={s.id}
@@ -34,9 +35,18 @@ export default function StudentCard({ s, currency, isSuper }) {
       data-testid={`st-card-${s.id}`}
       className="group block"
     >
-      <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm hover:border-border transition-all h-full flex flex-col ${CARD_TINT[s.status] || "bg-card border-border"}`}>
+      <Card className={`p-5 border rounded-lg shadow-none hover:shadow-sm transition-all h-full flex flex-col ${selected ? "ring-2 ring-primary border-primary/50" : "hover:border-border"} ${CARD_TINT[s.status] || "bg-card border-border"}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
+            {selectable && (
+              <span
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(); }}
+                className="shrink-0"
+                data-testid={`st-card-select-${s.id}`}
+              >
+                <Checkbox checked={!!selected} className="pointer-events-none" />
+              </span>
+            )}
             <div className="w-11 h-11 rounded-md bg-card/70 text-foreground flex items-center justify-center font-medium shrink-0 border border-border">
               {(s.name || "?").slice(0, 2).toUpperCase()}
             </div>

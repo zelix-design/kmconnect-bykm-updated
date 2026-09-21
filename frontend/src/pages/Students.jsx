@@ -9,7 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SquaresFour, Rows, UploadSimple } from "@phosphor-icons/react";
+import { Plus, ArrowRight, Student as StudentIcon, FileXls, MagnifyingGlass, Buildings, UserCircle, ShareNetwork, ClipboardText, MapPin, SquaresFour, Rows, UploadSimple, Trash, X } from "@phosphor-icons/react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { downloadStudentsXlsx } from "@/lib/studentExports";
 import FeesPlanFields, { emptyFeesPlan, normalizeFeesPlanForApi } from "@/components/FeesPlanFields";
@@ -70,6 +74,9 @@ export default function Students() {
   const [colleges, setColleges] = useState([]);
   const [open, setOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
   // Filters
@@ -131,6 +138,34 @@ export default function Students() {
     setList(s.data); setClients(c.data); setColleges(col.data);
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const toggleSel = (id) => setSelectedIds((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const toggleMany = (ids, checked) => setSelectedIds((prev) => {
+    const n = new Set(prev);
+    ids.forEach((id) => { if (checked) n.add(id); else n.delete(id); });
+    return n;
+  });
+  const clearSel = () => setSelectedIds(new Set());
+  const runBulk = async (action, value) => {
+    if (selectedIds.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const { data } = await api.post("/students/bulk-action", { ids: [...selectedIds], action, value });
+      const n = data.deleted ?? data.updated ?? 0;
+      toast.success(action === "delete" ? `Deleted ${n} student${n === 1 ? "" : "s"}` : `Updated ${n} student${n === 1 ? "" : "s"}`);
+      clearSel();
+      setConfirmDelete(false);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Bulk action failed");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   // Auto-open the Add dialog when arriving with ?new=1 (from Quick Entry hub or Add-an-admission flow)
   const [searchParams, setSearchParams] = useSearchParams();
@@ -616,6 +651,10 @@ export default function Students() {
             currency={currency}
             cityOfStudent={cityOfStudent}
             hometownOf={hometownOf}
+            selectable={isAdmin}
+            selectedIds={selectedIds}
+            onToggle={toggleSel}
+            onToggleMany={toggleMany}
           />
         </>
       ) : (
@@ -629,11 +668,74 @@ export default function Students() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="students-grid">
             {filtered.map((s) => (
-              <StudentCard key={s.id} s={s} currency={currency} isSuper={isSuper} />
+              <StudentCard
+                key={s.id} s={s} currency={currency} isSuper={isSuper}
+                selectable={isAdmin}
+                selected={selectedIds.has(s.id)}
+                onToggleSelect={() => toggleSel(s.id)}
+              />
             ))}
           </div>
         </>
       )}
+
+      {isAdmin && selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-3 flex-wrap justify-center bg-card border border-border shadow-xl rounded-full px-3 sm:px-4 py-2 max-w-[95vw]"
+          data-testid="students-bulk-bar"
+        >
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap" data-testid="students-bulk-count">
+            {selectedIds.size} selected
+          </span>
+          <Select onValueChange={(v) => runBulk("status", v)} disabled={bulkBusy}>
+            <SelectTrigger className="h-9 w-[150px] rounded-full" data-testid="bulk-status-select"><SelectValue placeholder="Set status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inquiry">Inquiry</SelectItem>
+              <SelectItem value="enrolled">Enrolled</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select onValueChange={(v) => runBulk("visibility", v)} disabled={bulkBusy}>
+            <SelectTrigger className="h-9 w-[170px] rounded-full" data-testid="bulk-visibility-select"><SelectValue placeholder="Visible to office" /></SelectTrigger>
+            <SelectContent>
+              {isSuper && <SelectItem value="KM_BLR">KM Bangalore</SelectItem>}
+              {isSuper && <SelectItem value="KM_TCR">KM Thrissur</SelectItem>}
+              {isSuper && <SelectItem value="KM_KMLY">KM Kollam</SelectItem>}
+              <SelectItem value="ALL">All offices</SelectItem>
+              {!isSuper && <SelectItem value={user?.office || "ALL"}>My office</SelectItem>}
+            </SelectContent>
+          </Select>
+          <Button variant="destructive" size="sm" className="h-9 rounded-full" onClick={() => setConfirmDelete(true)} disabled={bulkBusy} data-testid="bulk-delete-btn">
+            <Trash size={15} className="mr-1.5" /> Delete
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={clearSel} disabled={bulkBusy} data-testid="bulk-clear-btn" aria-label="Clear selection">
+            <X size={16} />
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent data-testid="bulk-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} student{selectedIds.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the selected admission{selectedIds.size === 1 ? "" : "s"} and their fee records. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); runBulk("delete"); }}
+              disabled={bulkBusy}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+              data-testid="bulk-delete-confirm-btn"
+            >
+              {bulkBusy ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
