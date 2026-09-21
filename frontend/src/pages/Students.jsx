@@ -150,16 +150,30 @@ export default function Students() {
     return n;
   });
   const clearSel = () => setSelectedIds(new Set());
+  const undoBulk = async (token) => {
+    try {
+      const { data } = await api.post("/students/bulk-undo", { token });
+      toast.success(`Restored ${data.restored} student${data.restored === 1 ? "" : "s"}`);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not undo");
+    }
+  };
   const runBulk = async (action, value) => {
     if (selectedIds.size === 0) return;
     setBulkBusy(true);
     try {
       const { data } = await api.post("/students/bulk-action", { ids: [...selectedIds], action, value });
       const n = data.deleted ?? data.updated ?? 0;
-      toast.success(action === "delete" ? `Deleted ${n} student${n === 1 ? "" : "s"}` : `Updated ${n} student${n === 1 ? "" : "s"}`);
+      const msg = action === "delete" ? `Deleted ${n} student${n === 1 ? "" : "s"}` : `Updated ${n} student${n === 1 ? "" : "s"}`;
       clearSel();
       setConfirmDelete(false);
       load();
+      if (data.undo_token && n > 0) {
+        toast.success(msg, { duration: 8000, action: { label: "Undo", onClick: () => undoBulk(data.undo_token) } });
+      } else {
+        toast.success(msg);
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Bulk action failed");
     } finally {

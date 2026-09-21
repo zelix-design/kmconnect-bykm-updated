@@ -1582,3 +1582,9 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] **Multi-select UI** in BOTH views: StudentsTable (checkbox column + header select-all-visible), StudentCard (checkbox that doesn't navigate). Floating bulk bar (Set status / Visible to office / Delete / Clear) with live count; AlertDialog confirm for delete. Gated to super_admin + office_admin (staff see nothing).
 - [x] Also added earlier in this session: "Visible to office" column on the admissions bulk import, and a duplicate guard (match by name+college → update instead of duplicate; in-file dupes collapse).
 - [x] **Verified** — curl (status/visibility/delete all worked) + testing agent iteration_72 (frontend 100%, 8/8; super+office work, staff hidden, office visibility limited).
+
+## Feature — 2026-06 (Undo for bulk actions)
+- [x] Bulk-action now snapshots affected students server-side (collection student_bulk_undo) and returns an `undo_token`. Delete snapshots full docs (re-inserted on undo); status/visibility snapshot prior values (restored on undo).
+- [x] POST /api/students/bulk-undo {token} restores state (actor-scoped) and consumes the snapshot.
+- [x] Frontend: bulk success toast now shows an "Undo" action (8s) that calls bulk-undo and reloads.
+- [x] Verified via curl: status change undone (→inquiry), delete undone (2 re-inserted).

@@ -988,7 +988,8 @@ class StudentBulkActionIn(BaseModel):
 async def bulk_action_students(payload: StudentBulkActionIn, user: dict = Depends(require_edit("students"))):
     """Apply a bulk action (delete / change status / change visibility) to
     many students at once. Super Admin acts on any record; Office Admin only
-    on records in their own office scope."""
+    on records in their own office scope. Snapshots the affected records so the
+    action can be undone via /bulk-undo."""
     if user.get("role") not in ("super_admin", "office_admin"):
         raise HTTPException(403, "Only Super Admin and Office Admin can run bulk actions")
     ids = [i for i in (payload.ids or []) if i]
@@ -998,24 +999,70 @@ async def bulk_action_students(payload: StudentBulkActionIn, user: dict = Depend
     scope = _office_visibility_clause(user) if office_admin else {}
     q = {"id": {"$in": ids}, **scope}
 
+    async def _save_undo(kind: str, field: Optional[str], docs=None, changes=None) -> str:
+        token = gen_id()
+        await db.student_bulk_undo.insert_one({
+            "id": token, "user_id": user["id"], "created_at": now_iso(),
+            "kind": kind, "field": field, "docs": docs or [], "changes": changes or [],
+        })
+        return token
+
     if payload.action == "delete":
+        docs = await db.students.find(q, {"_id": 0}).to_list(100000)
+        if not docs:
+            return {"deleted": 0}
         res = await db.students.delete_many(q)
-        return {"deleted": res.deleted_count}
+        token = await _save_undo("delete", None, docs=docs)
+        return {"deleted": res.deleted_count, "undo_token": token}
+
     if payload.action == "status":
         status = _STUDENT_STATUS_ALIASES.get((payload.value or "").strip().lower(), (payload.value or "").strip().lower())
         if status not in ("inquiry", "enrolled", "cancelled", "completed"):
             raise HTTPException(400, f"invalid status '{payload.value}'")
+        prev = await db.students.find(q, {"_id": 0, "id": 1, "status": 1}).to_list(100000)
         res = await db.students.update_many(q, {"$set": {"status": status}})
-        return {"updated": res.modified_count}
+        token = await _save_undo("update", "status", changes=[{"id": d["id"], "value": d.get("status")} for d in prev])
+        return {"updated": res.modified_count, "undo_token": token}
+
     if payload.action == "visibility":
         vv = _STUDENT_OFFICE_ALIASES.get((payload.value or "").strip().lower(), (payload.value or "").strip())
         if vv not in ("KM_BLR", "KM_TCR", "KM_KMLY", "ALL"):
             raise HTTPException(400, f"invalid office '{payload.value}' (use KM_BLR / KM_TCR / KM_KMLY / ALL)")
         if office_admin and vv not in (user.get("office"), "ALL"):
             vv = user.get("office")
+        prev = await db.students.find(q, {"_id": 0, "id": 1, "home_office": 1}).to_list(100000)
         res = await db.students.update_many(q, {"$set": {"home_office": vv}})
-        return {"updated": res.modified_count}
+        token = await _save_undo("update", "home_office", changes=[{"id": d["id"], "value": d.get("home_office")} for d in prev])
+        return {"updated": res.modified_count, "undo_token": token}
     raise HTTPException(400, "Unknown action")
+
+
+class BulkUndoIn(BaseModel):
+    token: str
+
+
+@router.post("/bulk-undo")
+async def bulk_undo_students(payload: BulkUndoIn, user: dict = Depends(require_edit("students"))):
+    """Restore the state captured by the most recent bulk action."""
+    snap = await db.student_bulk_undo.find_one({"id": payload.token, "user_id": user["id"]}, {"_id": 0})
+    if not snap:
+        raise HTTPException(404, "Nothing to undo (or it already expired)")
+    restored = 0
+    if snap["kind"] == "delete":
+        docs = snap.get("docs") or []
+        existing = {d["id"] async for d in db.students.find(
+            {"id": {"$in": [d["id"] for d in docs]}}, {"_id": 0, "id": 1})}
+        fresh = [d for d in docs if d["id"] not in existing]
+        if fresh:
+            await db.students.insert_many(fresh)
+            restored = len(fresh)
+    elif snap["kind"] == "update":
+        field = snap.get("field")
+        for ch in snap.get("changes") or []:
+            await db.students.update_one({"id": ch["id"]}, {"$set": {field: ch.get("value")}})
+            restored += 1
+    await db.student_bulk_undo.delete_one({"id": payload.token})
+    return {"restored": restored}
 
 
 def _new_ledger_bucket(kind: str, name: str) -> dict:
