@@ -1571,3 +1571,8 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] **Payslip PDF** shows "Paid sick leave X/2" and "Paid casual leave Y/1" (with "(N taken)" when exceeded), and the deductions loss-of-pay line notes when it includes leave beyond allowance.
 - [x] Absent-day regularization (staff request → admin approval) already exists and is the path to convert an absent day to paid leave/week-off.
 - [x] **Verified** — curl end-to-end: 26 present + 3 sick + 2 casual in May(31d), salary 31000 → paid_sick=2, paid_casual=1, unpaid_leave_days=2, absent=2, deduction=₹2000, net=₹29000. Exact match.
+
+## Feature — 2026-06 (Bulk upload admissions — Super/Office Admin)
+- [x] **POST /api/students/bulk** {csv, preview} → {created, updated:0, error_count, rows[]}. Super/Office admin only. CSV columns: Enrollment Date, Name (required), Course, College, Reference, Status. Status aliases → inquiry/enrolled/cancelled/completed; flexible date parsing (ISO, dd/mm/yyyy, dd-mmm-yyyy, etc.); Reference auto-maps to referrer via _resolve_referrer_by_name; office_admin rows forced to their home_office; one summary super-admin notification per office_admin bulk. preview=true = dry-run (no writes).
+- [x] **Frontend** StudentBulkUploadDialog.jsx (download template, choose file / paste CSV, row-by-row preview with create/error badges, Apply). 'Bulk upload' button on Students page gated to super_admin + office_admin.
+- [x] **Verified** — curl (preview 3-valid/2-error, apply, date 15/06/2026→2026-06-15, referrer mapping, invalid status/date errors, cleanup) + testing agent iteration_71 (frontend 100%, super+office work, staff hidden).
