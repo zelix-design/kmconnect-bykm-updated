@@ -27,6 +27,7 @@ function downloadTemplate() {
 
 const ACTION_CLS = {
   create: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  update: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
   error: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
 };
 
@@ -57,10 +58,10 @@ export default function StudentBulkUploadDialog({ open, onOpenChange, onDone }) 
       setPreview(data);
       if (isPreview) {
         setApplied(false);
-        if (data.error_count && !data.created) toast.error("All rows have errors — fix them before applying");
+        if (data.error_count && !(data.created + data.updated)) toast.error("All rows have errors — fix them before applying");
       } else {
         setApplied(true);
-        toast.success(`Added ${data.created} admission${data.created === 1 ? "" : "s"}${data.error_count ? ` · ${data.error_count} skipped` : ""}`);
+        toast.success(`${data.created} added · ${data.updated} updated${data.error_count ? ` · ${data.error_count} skipped` : ""}`);
         onDone?.();
       }
     } catch (e) {
@@ -108,6 +109,7 @@ export default function StudentBulkUploadDialog({ open, onOpenChange, onDone }) 
             <div data-testid="student-bulk-preview">
               <div className="flex items-center gap-3 text-xs font-medium mb-2">
                 <span className="text-emerald-600 dark:text-emerald-400">{preview.created} to add</span>
+                <span className="text-sky-600 dark:text-sky-400">{preview.updated} to update</span>
                 <span className="text-rose-600 dark:text-rose-400">{preview.error_count} error{preview.error_count !== 1 ? "s" : ""}</span>
                 {applied && <span className="ml-auto text-foreground font-semibold">✓ Applied</span>}
               </div>
@@ -132,8 +134,8 @@ export default function StudentBulkUploadDialog({ open, onOpenChange, onDone }) 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
           <Button variant="outline" onClick={() => call(true)} disabled={busy} data-testid="student-bulk-preview-btn">Preview</Button>
-          <Button className="btn-amber" onClick={() => call(false)} disabled={busy || !preview || preview.created === 0 || applied} data-testid="student-bulk-submit">
-            <UploadSimple size={16} className="mr-1.5" /> Apply{preview ? ` (${preview.created})` : ""}
+          <Button className="btn-amber" onClick={() => call(false)} disabled={busy || !preview || (preview.created + preview.updated) === 0 || applied} data-testid="student-bulk-submit">
+            <UploadSimple size={16} className="mr-1.5" /> Apply{preview ? ` (${preview.created + preview.updated})` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

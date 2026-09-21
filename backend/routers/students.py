@@ -858,9 +858,24 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
         return ""
 
     rows_out: List[dict] = []
-    created = errors = 0
+    created = updated = errors = 0
     to_insert: List[dict] = []
     office_admin = user.get("role") == "office_admin"
+
+    # Duplicate guard: match by (name + college) within the caller's scope.
+    # A re-upload UPDATES the existing admission instead of creating a copy.
+    scope_q = {} if user.get("role") == "super_admin" else _office_visibility_clause(user)
+    existing = await db.students.find(
+        scope_q, {"_id": 0, "id": 1, "name": 1, "college": 1}
+    ).to_list(100000)
+
+    def dkey(n: Optional[str], c: Optional[str]) -> tuple:
+        return ((n or "").strip().lower(), (c or "").strip().lower())
+
+    existing_map: dict = {}
+    for s in existing:
+        existing_map.setdefault(dkey(s.get("name"), s.get("college")), s["id"])
+    batch_keys: dict = {}  # keys created earlier in THIS file → their id
 
     for i, raw in enumerate(reader, start=2):
         row = {(k or "").strip().lstrip("\ufeff").lower(): (v or "") for k, v in raw.items()}
@@ -893,17 +908,35 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
                 rows_out.append({"line": i, "name": name, "action": "error",
                                  "message": f"invalid office '{vis_raw}' (use KM_BLR / KM_TCR / KM_KMLY / ALL)"})
                 continue
-        # Office admins can only publish to their own office.
         effective_office = user.get("office") if office_admin else home_office
+        k = dkey(name, college)
+        match_id = existing_map.get(k) or batch_keys.get(k)
+        action = "update" if match_id else "create"
         rows_out.append({
-            "line": i, "name": name, "action": "create", "message": "",
+            "line": i, "name": name, "action": action, "message": "duplicate → updated" if match_id else "",
             "date": ed, "status": status,
             "course": course, "college": college, "reference": reference,
             "office": effective_office,
         })
-        created += 1
+        if match_id:
+            updated += 1
+        else:
+            created += 1
         if not payload.preview:
             ru = await _resolve_referrer_by_name(reference)
+            if match_id:
+                set_fields = {
+                    "course": course, "college": college, "reference": reference,
+                    "status": status, "enrollment_date": ed,
+                    "referrer_user_id": ru["id"] if ru else None,
+                    "referrer_name": ru["name"] if ru else None,
+                }
+                if office_admin:
+                    set_fields["home_office"] = user.get("office")
+                elif home_office is not None:
+                    set_fields["home_office"] = home_office
+                await db.students.update_one({"id": match_id}, {"$set": set_fields})
+                continue
             si = StudentIn(name=name, course=course, college=college, reference=reference,
                            status=status, enrollment_date=ed,
                            home_office=None if office_admin else home_office)
@@ -911,13 +944,20 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
             if office_admin:
                 data["home_office"] = user.get("office")
             data.pop("sc_from_college_override", None)
+            new_id = gen_id()
+            batch_keys[k] = new_id
             to_insert.append({
-                "id": gen_id(), "user_id": user["id"], "created_at": now_iso(),
+                "id": new_id, "user_id": user["id"], "created_at": now_iso(),
                 "schedules": [], "payments": [],
                 "referrer_user_id": ru["id"] if ru else None,
                 "referrer_name": ru["name"] if ru else None,
                 **data,
             })
+        elif match_id:
+            # preview: remember this key so a later same-key row shows as update
+            pass
+        else:
+            batch_keys[k] = f"_preview_{i}"
 
     if not payload.preview and to_insert:
         await db.students.insert_many(to_insert)
@@ -932,7 +972,7 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
                 metadata={"count": len(to_insert)},
             )
 
-    return {"created": created, "updated": 0, "error_count": errors, "rows": rows_out}
+    return {"created": created, "updated": updated, "error_count": errors, "rows": rows_out}
 
 
 _AGENT_TYPES = {"sub_agent", "associate", "km"}
