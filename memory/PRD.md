@@ -1588,3 +1588,13 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] POST /api/students/bulk-undo {token} restores state (actor-scoped) and consumes the snapshot.
 - [x] Frontend: bulk success toast now shows an "Undo" action (8s) that calls bulk-undo and reloads.
 - [x] Verified via curl: status change undone (→inquiry), delete undone (2 re-inserted).
+
+
+## Feature — 2026-09 (Meta Conversions API — server-side Lead events)
+- [x] **Integration**: sends a server-side `Lead` event to Meta Conversions API. Option A matching — email (`em`) + phone (`ph`) SHA-256 hashed; CRM lead id attached only as a plain reference in `custom_data.lead_id` (+ `event_source: "crm"`), never as Meta's own Lead-Ads id. `action_source: "system_generated"`, dedup via `event_id: lead-<id>`.
+- [x] **Backend** `lib/meta_capi.py` (get/save settings in `app_settings` key `meta_capi`, `hash_email`/`hash_phone`, `send_lead_event`, `public_status` that masks the token → only `has_token` boolean) + `routers/meta.py` (`GET/PUT /api/integrations/meta/settings`, `POST /api/integrations/meta/test`). Admin-only (super_admin + office_admin); staff/user → 403. Blank `access_token` on PUT preserves the saved token. Graph version default `v21.0`, default country code `+91`.
+- [x] **Auto-fire**: `convert_lead` (POST /api/leads/{id}/convert) and `update_lead` (transition → converted) call `send_lead_event` best-effort (try/except so a Meta failure never breaks conversion). Fires once (`meta_lead.auto_sent` guard). CSV/bulk imports do NOT fire (per user).
+- [x] **Manual re-send**: `POST /api/leads/{id}/meta/send-lead` (admin-only, bypasses once-guard). LeadDetailDialog converted block shows a "Send to Meta" button (data-testid=`lead-send-meta-btn`) + last status; disabled when lead has no email/phone.
+- [x] **Frontend** `components/settings/MetaCapiSettings.jsx` on Settings page (super_admin + office_admin): Pixel/Dataset ID, Access Token (write-only, masked), Test Event Code, default country code, enabled Switch, Save + Send-test buttons.
+- [x] **Verified** — curl (settings CRUD, token masking, token-preserve-on-blank, test event reached Meta returning clean 400 "Invalid OAuth access token data.", manual send 400) + testing agent iteration_73 (backend 10/10, frontend 100%; admin gating, graceful degradation, no 500s). Fake test creds purged from DB afterwards.
+- Note: sending real events needs the user to paste a valid Pixel/Dataset ID + Conversions API Access Token in Settings → Meta. Preview/fake creds correctly surface a clean error, never a crash.

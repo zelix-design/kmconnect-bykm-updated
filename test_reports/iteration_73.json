@@ -1,0 +1,24 @@
+{
+  "summary": "Verified Meta Conversions API integration end-to-end. Backend: 10/10 pytest tests pass covering GET (masked, admin-only, staff 403), PUT (save + preserve token on blank + staff 403), POST /test (clean 400 with Meta's real error 'Invalid OAuth access token data.'), POST /leads/{id}/meta/send-lead (admin returns clean 400, staff 403). Frontend: Settings card renders with all data-testids (pixel_id, access_token, test_event_code, country_code, enabled switch, save, send-test); save shows success toast; after reload access_token field is blank with placeholder '•••••••• saved — leave blank to keep'; Configured badge appears; Send test event with fake creds shows clean error toast 'Invalid OAuth access token data.' (no crash). Converted lead detail dialog (via ?lead=<id>) shows 'Send to Meta' button (data-testid=lead-send-meta-btn); clicking with fake creds shows inline 'Meta send failed · Invalid OAuth access token data.' (clean 400, no crash). DB cleanup performed: app_settings.meta_capi doc deleted (1), lead.meta_lead unset (1).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration73_meta_capi.py",
+    "/app/test_reports/pytest/iteration73_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "meta_capi.public_status correctly masks access_token and only exposes has_token boolean — good.",
+    "PUT settings correctly preserves the previously saved token when access_token is blank/None (server-side merge).",
+    "convert_lead wraps send_lead_event in try/except so Meta failures never break /convert — verified conceptually via code review.",
+    "manual /meta/send-lead correctly enforces admin-only (returns 403 to staff) in addition to require_edit('leads')."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration73_meta_capi.py"],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "Used muneer@kmfoundation.co / kmf@0786 (super_admin), blr1@finflow.com / Office@123 (office_admin), staff.blr@kmfoundation.online / Staff@123 (staff).",
+  "seed_data_creation": "None. Temporary fake creds saved during test were purged: app_settings {key:'meta_capi'} deleted and lead.meta_lead unset via async python script.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Meta CAPI integration is stable and clean. Backend test suite lives at /app/backend/tests/test_iteration73_meta_capi.py and can be re-run for regression. Frontend deep-links to a lead via /leads?lead=<id>. If testing again with real Meta creds, remember to clean up app_settings.meta_capi and lead.meta_lead afterwards.",
+  "rca of the issue": "No bugs found."
+}
