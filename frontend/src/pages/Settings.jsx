@@ -10,6 +10,7 @@ import StaffProfile from "@/pages/StaffProfile";
 import AdmissionRevenuePinSettings from "@/components/settings/AdmissionRevenuePinSettings";
 import PinSettingsSection from "@/components/settings/PinSettingsSection";
 import GoogleSheetsSettings from "@/components/settings/GoogleSheetsSettings";
+import MetaCapiSettings from "@/components/settings/MetaCapiSettings";
 
 export default function Settings() {
   const { user, updateProfile } = useAuth();
@@ -82,6 +83,10 @@ function WorkspaceSettings({ user, updateProfile }) {
 
       {(user?.role === "super_admin" || user?.role === "office_admin") && (
         <GoogleSheetsSettings />
+      )}
+
+      {(user?.role === "super_admin" || user?.role === "office_admin") && (
+        <MetaCapiSettings />
       )}
 
       <PinSettingsSection />

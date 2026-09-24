@@ -28,6 +28,7 @@ from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR,
 from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
 from lib.activity_log import log_event
 from lib.user_photo import resolve_photos_for_users
+from lib.meta_capi import send_lead_event
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -1036,6 +1037,17 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if new_assignee:
         await _notify_assignment(fresh, actor=user)
+    # If this edit moved the lead into "converted", fire the Meta Lead event
+    # once (best-effort). The dedicated /convert path handles the normal flow.
+    if (
+        patch.get("status") == "converted"
+        and lead.get("status") != "converted"
+        and not (lead.get("meta_lead") or {}).get("auto_sent")
+    ):
+        try:
+            await send_lead_event(fresh, actor=user)
+        except Exception:
+            pass
     return fresh
 
 
@@ -1294,7 +1306,29 @@ async def convert_lead(lead_id: str, payload: Optional[ConvertIn] = None, user: 
         )
     except Exception:
         pass
+    # Fire the Meta Conversions API "Lead" event once, on genuine conversion.
+    # Best-effort — never blocks or fails the conversion.
+    try:
+        await send_lead_event(lead, actor=user)
+    except Exception:
+        pass
     return {"ok": True, "student_id": student_id, "whatsapp": wa_link, "visit_whatsapp": wa_visit}
+
+
+@router.post("/{lead_id}/meta/send-lead")
+async def meta_send_lead(lead_id: str, user: dict = Depends(require_edit("leads"))):
+    """Manually (re)send this lead's `Lead` event to Meta Conversions API.
+    Admin-only. Bypasses the once-only auto guard so admins can retry."""
+    if user.get("role") not in ("super_admin", "office_admin"):
+        raise HTTPException(403, "Only admins can send leads to Meta.")
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    result = await send_lead_event(lead, actor=user, manual=True)
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("detail") or "Meta send failed.")
+    return {**result, "lead": fresh}
 
 
 @router.post("/{lead_id}/resend-application-link")
