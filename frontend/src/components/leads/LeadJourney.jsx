@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Sparkle, ArrowRight, ChatCircleDots, Bus, GraduationCap, PhoneCall,
-  WhatsappLogo, CheckCircle, XCircle, ArrowClockwise, PencilSimple,
+  WhatsappLogo, CheckCircle, XCircle, ArrowClockwise, PencilSimple, ShareNetwork,
 } from "@phosphor-icons/react";
 import { fmtDateTime, statusLabel, LEAD_STATUS_META } from "./constants";
 import FollowUpEditDialog from "./FollowUpEditDialog";
@@ -62,6 +62,20 @@ function buildEvents(lead) {
     });
   }
 
+  (lead.meta_deliveries || []).forEach((m) => {
+    events.push({
+      kind: "meta",
+      at: m.at,
+      metaStatus: m.status,        // "sent" | "failed"
+      detail: m.detail,
+      fbtraceId: m.fbtrace_id,
+      test: m.test,
+      manual: m.manual,
+      who: m.who,
+      id: m.id,
+    });
+  });
+
   return events
     .filter((e) => e.at)
     .sort((a, b) => new Date(a.at) - new Date(b.at));
@@ -74,6 +88,7 @@ function EventDot({ kind }) {
     followup: { icon: PhoneCall, cls: "bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-blue-500/30" },
     visit: { icon: Bus, cls: "bg-violet-500/15 text-violet-600 dark:text-violet-400 ring-violet-500/30" },
     conversion: { icon: GraduationCap, cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-emerald-500/30" },
+    meta: { icon: ShareNetwork, cls: "bg-[#0866FF]/15 text-[#0866FF] ring-[#0866FF]/30" },
   };
   const { icon: Icon, cls } = map[kind] || map.status;
   return (
@@ -198,6 +213,39 @@ function EventRow({ ev, canResend, onResendLink, resending, canEditFollowup, onE
         </p>
         {ev.departureAt && (
           <p className="text-[11px] text-muted-foreground">Departure: {fmtDateTime(ev.departureAt)}</p>
+        )}
+        <p className="text-[11px] text-muted-foreground">{timestamp}{who}</p>
+      </>
+    ),
+    meta: (
+      <>
+        <div className="flex flex-wrap items-center gap-1.5 text-sm text-foreground">
+          <span className="font-medium">{ev.metaStatus === "sent" ? "Lead sent to Meta" : "Meta send failed"}</span>
+          <span
+            data-testid={`journey-meta-badge-${ev.id || "x"}`}
+            className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+              ev.metaStatus === "sent"
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                : "bg-rose-500/10 text-rose-600 dark:text-rose-300 border-rose-500/30"
+            }`}
+          >
+            {ev.metaStatus === "sent" ? <CheckCircle size={10} weight="fill" /> : <XCircle size={10} weight="fill" />}
+            {ev.metaStatus === "sent" ? "Sent" : "Failed"}
+          </span>
+          {ev.test && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Test</span>
+          )}
+          {ev.manual && (
+            <span className="text-[10px] text-muted-foreground">· manual</span>
+          )}
+        </div>
+        {ev.metaStatus === "failed" && ev.detail && (
+          <p className="text-xs text-rose-600 dark:text-rose-300 mt-0.5">{ev.detail}</p>
+        )}
+        {ev.fbtraceId && (
+          <p className="text-[11px] text-muted-foreground mt-0.5 font-mono break-all" data-testid={`journey-meta-trace-${ev.id || "x"}`}>
+            trace: {ev.fbtraceId}
+          </p>
         )}
         <p className="text-[11px] text-muted-foreground">{timestamp}{who}</p>
       </>

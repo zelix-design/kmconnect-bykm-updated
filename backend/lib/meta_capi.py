@@ -17,6 +17,7 @@ import hashlib
 import logging
 import os
 import re
+import uuid
 from datetime import datetime, timezone
 
 import httpx
@@ -88,22 +89,40 @@ def hash_phone(phone: str, default_cc: str = "+91") -> str | None:
     return _sha256(digits)
 
 
-async def _record(lead_id: str, result: dict, *, auto: bool, test: bool) -> None:
-    """Persist the latest send outcome on the lead doc for the UI."""
-    entry = {
-        "last_status": "sent" if result.get("ok") else "failed",
+async def _record(lead_id: str, result: dict, *, manual: bool, test: bool, actor: dict | None = None) -> None:
+    """Persist the latest send outcome (snapshot for the button) and append a
+    capped delivery-history entry (for the Lead Journey timeline)."""
+    now = datetime.now(timezone.utc).isoformat()
+    status = "sent" if result.get("ok") else "failed"
+    snapshot = {
+        "last_status": status,
         "detail": result.get("detail"),
         "events_received": result.get("events_received"),
         "fbtrace_id": result.get("fbtrace_id"),
         "test": test,
-        "at": datetime.now(timezone.utc).isoformat(),
+        "at": now,
     }
-    set_doc = {"meta_lead": entry}
-    if result.get("ok") and auto and not test:
-        set_doc["meta_lead"]["auto_sent"] = True
+    if result.get("ok") and not manual and not test:
+        snapshot["auto_sent"] = True
+    history_entry = {
+        "id": str(uuid.uuid4()),
+        "at": now,
+        "status": status,
+        "detail": result.get("detail"),
+        "events_received": result.get("events_received"),
+        "fbtrace_id": result.get("fbtrace_id"),
+        "test": test,
+        "manual": manual,
+        "who": (actor or {}).get("name") or (actor or {}).get("email"),
+    }
     try:
-        # Preserve auto_sent across manual re-sends by merging field-by-field.
-        await db.leads.update_one({"id": lead_id}, {"$set": {f"meta_lead.{k}": v for k, v in set_doc["meta_lead"].items()}})
+        await db.leads.update_one(
+            {"id": lead_id},
+            {
+                "$set": {f"meta_lead.{k}": v for k, v in snapshot.items()},
+                "$push": {"meta_deliveries": {"$each": [history_entry], "$slice": -20}},
+            },
+        )
     except Exception:  # pragma: no cover - persistence is best-effort
         log.warning("meta_capi: could not persist result for lead %s", lead_id)
 
@@ -186,5 +205,5 @@ async def send_lead_event(
         result = {"ok": False, "detail": "Could not reach Meta. Please try again."}
 
     if record and lead_id:
-        await _record(lead_id, result, auto=not manual, test=use_test)
+        await _record(lead_id, result, manual=manual, test=use_test, actor=actor)
     return result

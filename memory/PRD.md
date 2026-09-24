@@ -1598,3 +1598,8 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] **Frontend** `components/settings/MetaCapiSettings.jsx` on Settings page (super_admin + office_admin): Pixel/Dataset ID, Access Token (write-only, masked), Test Event Code, default country code, enabled Switch, Save + Send-test buttons.
 - [x] **Verified** — curl (settings CRUD, token masking, token-preserve-on-blank, test event reached Meta returning clean 400 "Invalid OAuth access token data.", manual send 400) + testing agent iteration_73 (backend 10/10, frontend 100%; admin gating, graceful degradation, no 500s). Fake test creds purged from DB afterwards.
 - Note: sending real events needs the user to paste a valid Pixel/Dataset ID + Conversions API Access Token in Settings → Meta. Preview/fake creds correctly surface a clean error, never a crash.
+
+## Feature — 2026-09 (Meta delivery history in Lead Journey)
+- [x] Each send now appends a capped (`$slice: -20`) entry to `lead.meta_deliveries[]` `{id, at, status:sent|failed, detail, fbtrace_id, events_received, test, manual, who}` in addition to the `meta_lead` snapshot (`lib/meta_capi._record`, actor name threaded through `send_lead_event`).
+- [x] LeadJourney timeline renders a new `meta` event kind (ShareNetwork dot, Meta blue) with a Sent/Failed badge, Test + manual chips, failure detail, and the Meta trace id (data-testids `journey-meta-badge-*`, `journey-meta-trace-*`). Manual re-send returns the fresh lead so the timeline updates instantly.
+- [x] **Verified** — curl: two manual sends recorded 2 history entries with distinct real Meta `fbtrace_id`s + actor "Muneer S"; frontend compiles clean. DB reset afterwards.
