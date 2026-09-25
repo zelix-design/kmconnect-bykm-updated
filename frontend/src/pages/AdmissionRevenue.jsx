@@ -60,7 +60,7 @@ function AdmissionRevenue() {
         setFyOptions(r.data?.options || []);
         setFy(r.data?.current || "");
       } catch {
-        toast.error("Could not load financial-year list");
+        toast.error("Could not load academic-year list");
       }
     })();
   }, [isSuper]);
@@ -107,19 +107,19 @@ function AdmissionRevenue() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Service charges received from colleges for every enrolled admission —
-            aggregated by Indian financial year (Apr → Mar).
+            aggregated by academic year (Jan → Dec).
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-muted-foreground">Financial year</label>
+          <label className="text-xs text-muted-foreground">Academic year</label>
           <Select value={fy} onValueChange={setFy}>
             <SelectTrigger className="w-36" data-testid="fy-select">
-              <SelectValue placeholder="Pick FY" />
+              <SelectValue placeholder="Pick year" />
             </SelectTrigger>
             <SelectContent>
               {fyOptions.map((y) => (
                 <SelectItem key={y} value={y} data-testid={`fy-opt-${y}`}>
-                  FY {y}
+                  {y}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -144,7 +144,7 @@ function AdmissionRevenue() {
         </Card>
       ) : !data ? (
         <Card className="p-12 text-center text-sm text-muted-foreground bg-card border border-border shadow-none">
-          No data for this financial year.
+          No data for this academic year.
         </Card>
       ) : (
         <>
@@ -153,7 +153,7 @@ function AdmissionRevenue() {
             <TierCard
               tier="committed"
               label="Committed"
-              hint="All enrolled admissions in FY"
+              hint="All enrolled admissions in the academic year"
               icon={TrendUp}
               accent="orange"
               count={tiers.committed?.count}
