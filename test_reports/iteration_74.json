@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 74 — Global Academic Year selector. Backend: all 11 pytest cases pass (11/11): /api/academic-years shape+auth, year-filter scope+no-op regression across transactions/invoices/students/leads/clients, dashboard summary+cashflow year scoping (2026 has data, 2020 zeros, cashflow returns 12 monthly buckets), and non-year endpoints (/api/accounts, /api/auth/me) still return 200 with a stray ?year= param. Frontend: header selector renders, defaults to 2026, dropdown exposes 'All years' + '2026' with correct data-testids, network GETs carry ?year=2026 (23/25 endpoints; a couple of legacy endpoints e.g. /api/auth/me do not receive the param — expected/harmless). Persistence across page reload works for a year value. HOWEVER a real bug was found in the 'All years' flow.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AcademicYearProvider (src/lib/academicYear.jsx)",
+        "issue": "'All years' selection does not persist. Selecting the All years option clears localStorage and reloads, but on remount initialYear() sees no stored value and defaults back to the current calendar year, re-writing 'finflow_academic_year'='2026' and re-injecting ?year=2026 on every GET. Net effect: users can never actually view All years.",
+        "selector": "[data-testid=academic-year-all]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Academic Year -> All years",
+        "issue": "After clicking All years, localStorage becomes '2026' and 23/25 API GETs still send ?year=2026 (verified empirically). The header selector visually reverts to '2026'.",
+        "affected_selectors": ["[data-testid=academic-year-select]", "[data-testid=academic-year-all]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration74_academic_year.py",
+    "/app/test_reports/pytest/iter74.xml"
+  ],
+  "action_items": [
+    "Fix 'All years' persistence in /app/frontend/src/lib/academicYear.jsx. Suggested fix: distinguish 'never set' from 'explicitly All years'. E.g. store sentinel 'all' in localStorage when user picks it (setApiYear should still keep in-memory null so no year param is sent, but persist 'all' so initialYear() doesn't fall back to CURRENT_YEAR). Alternative: check localStorage.hasOwnProperty/getItem for the raw key inside initialYear() before defaulting to current year."
+  ],
+  "critical_code_review_comments": [
+    "src/lib/academicYear.jsx initialYear(): cannot represent explicit All years — always coerces empty localStorage to current year. This makes the All years feature functionally dead.",
+    "src/lib/api.js setApiYear removes the key when null. Because provider immediately re-sets it to current year on next mount, the removal is invisible to the user."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration74_academic_year.py"],
+  "success_rate": { "backend": "100% (11/11)", "frontend": "~85% — selector, default, dropdown, year injection, persistence for a specific year work; 'All years' is broken" },
+  "test_credentials": "admin@kmfoundation.online / Admin@786 (best for finance filter tests, owns 73 tx / 32 invoices)",
+  "seed_data_creation": "None. No test data written.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend academic-year filter is solid (all data lives in CY 2026 so 2026==all-data, 2020==empty). Only real defect is the frontend All-years persistence bug in academicYear.jsx (initialYear). After main agent patches, retest by (a) clicking [data-testid=academic-year-all] and confirming localStorage != '2026' and API GETs have no ?year=, (b) reloading and confirming the selector still shows 'All years'.",
+  "rca of the issue": "In src/lib/academicYear.jsx, setYear('all') calls setApiYear(null) which removes 'finflow_academic_year' from localStorage, then window.location.reload(). On reload the provider's initialYear() runs: getApiYear() returns null → falls through to `setApiYear(String(CURRENT_YEAR))`, which re-writes '2026' into localStorage and into the api.js in-memory var. Consequently every GET gets ?year=2026 and the selector visually snaps back to 2026. Fix: persist an explicit 'all' sentinel (e.g. localStorage.setItem(YEAR_KEY, 'all') when the user chooses All years) and have initialYear()/api.js interpret 'all' as no filter."
+}

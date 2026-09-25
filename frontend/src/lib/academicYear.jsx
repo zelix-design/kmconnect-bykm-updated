@@ -40,7 +40,10 @@ export function AcademicYearProvider({ children }) {
   const setYear = useCallback(
     (next) => {
       const val = next == null ? "all" : String(next);
-      setApiYear(val === "all" ? null : val);
+      // Persist the raw choice ("all" or a year). api.js skips injecting a
+      // ?year param when the value is "all", but we must still store it so a
+      // reload doesn't fall back to the current-year default.
+      setApiYear(val);
       setYearState(val);
       if (typeof window !== "undefined") window.location.reload();
     },
