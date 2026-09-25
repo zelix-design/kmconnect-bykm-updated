@@ -1,11 +1,8 @@
 """Client CRUD."""
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
-from lib.academic_year import with_year
 from models import ClientIn
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
@@ -28,7 +25,7 @@ def _office_visibility_clause(user: dict) -> dict:
 
 
 @router.get("")
-async def list_clients(user: dict = Depends(get_current_user), year: Optional[int] = None):
+async def list_clients(user: dict = Depends(get_current_user)):
     """Office admin sees own clients PLUS clients scoped to their office (or
     shared with ALL) via home_office. Super admin sees clients from ALL users
     (so staff onboarded by office admins are visible too). Each returned doc
@@ -36,9 +33,9 @@ async def list_clients(user: dict = Depends(get_current_user), year: Optional[in
 
     Also enriches staff-type rows with ``has_login`` + ``login_user_id`` so
     the Employees UI can show a "Create login" action inline (matching the
-    Office Admin's Staff page)."""
+    Office Admin's Staff page). Not academic-year scoped."""
     if user.get("role") == "super_admin":
-        docs = await db.clients.find(with_year({}, "created_at", year), {"_id": 0}).sort("created_at", -1).to_list(2000)
+        docs = await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
         if docs:
             user_ids = list({d.get("user_id") for d in docs if d.get("user_id")})
             users = await db.users.find(
@@ -54,7 +51,7 @@ async def list_clients(user: dict = Depends(get_current_user), year: Optional[in
         await _enrich_login_status(docs)
         return docs
     docs = await db.clients.find(
-        with_year(_office_visibility_clause(user), "created_at", year), {"_id": 0}
+        _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
     await _enrich_login_status(docs)
     return docs

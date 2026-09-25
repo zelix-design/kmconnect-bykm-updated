@@ -132,8 +132,12 @@ api.interceptors.request.use((config) => {
   // Inject the globally-selected academic year into GET requests so every
   // page's data is scoped consistently. Endpoints that don't declare `year`
   // simply ignore the extra query param (FastAPI drops unknown params).
+  // Clients / Employees (/clients) and Messages (/messages) are intentionally
+  // exempt — they are not academic-year scoped.
   const method = (config.method || "get").toLowerCase();
-  if (method === "get" && selectedYear && selectedYear !== "all") {
+  const url = config.url || "";
+  const yearExempt = /(^|\/)(clients|messages)(\/|$|\?)/.test(url);
+  if (method === "get" && !yearExempt && selectedYear && selectedYear !== "all") {
     if (config.params == null) config.params = {};
     if (config.params.year == null) config.params.year = selectedYear;
   }
