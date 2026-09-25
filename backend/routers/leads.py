@@ -26,7 +26,7 @@ from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from lib.followup_slots import compute_next_slot, SLOT_MINUTES, WORK_START_HOUR, WORK_END_HOUR
 from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
-from lib.activity_log import log_event
+from lib.activity_log import log_event, log_lead_event
 from lib.user_photo import resolve_photos_for_users
 from lib.academic_year import date_filter
 from routers.notifications import notify_users, notify_super_admins
@@ -176,6 +176,42 @@ async def _validate_assignee(assignee_id: str, office: Optional[str], require_of
     if require_office and assignee.get("office") != office:
         raise HTTPException(400, "Assignee must belong to your office")
     return assignee
+
+
+async def _user_name(uid: Optional[str]) -> Optional[str]:
+    if not uid:
+        return None
+    u = await db.users.find_one({"id": uid}, {"_id": 0, "name": 1})
+    return u.get("name") if u else None
+
+
+def _assignment_event(from_id, from_name, to_id, to_name, actor: dict, note: Optional[str] = None) -> dict:
+    """One entry in a lead's ``assignment_history`` journey log."""
+    return {
+        "id": gen_id(),
+        "at": now_iso(),
+        "from_user_id": from_id,
+        "from_name": from_name,
+        "to_user_id": to_id,
+        "to_name": to_name,
+        "by_user_id": actor.get("id"),
+        "by_name": actor.get("name"),
+        "note": (note or "").strip() or None,
+    }
+
+
+async def _enrich_assignee(lead: dict) -> dict:
+    """Attach assigned_to_name + photo so the UI reflects the change instantly."""
+    uid = lead.get("assigned_to_user_id")
+    if uid:
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "name": 1})
+        lead["assigned_to_name"] = u.get("name") if u else None
+        photo_map = await resolve_photos_for_users([uid])
+        lead["assigned_to_photo_url"] = photo_map.get(uid) or ""
+    else:
+        lead["assigned_to_name"] = None
+        lead["assigned_to_photo_url"] = ""
+    return lead
 
 
 def _normalize_phone(raw: Optional[str]) -> str:
@@ -1009,9 +1045,15 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
         patch["next_follow_up"] = data["next_follow_up"] or None
         patch["follow_up_reminded_for"] = None  # re-arm the reminder
     new_assignee = None
-    if "assigned_to_user_id" in data and data["assigned_to_user_id"] != lead.get("assigned_to_user_id"):
+    assign_changed = (
+        "assigned_to_user_id" in data
+        and data["assigned_to_user_id"] != lead.get("assigned_to_user_id")
+    )
+    assignee = None
+    if assign_changed:
         if user.get("role") == "staff":
-            raise HTTPException(403, "Staff cannot reassign leads")
+            # Staff reassign leads through the dedicated /reassign endpoint.
+            raise HTTPException(403, "Staff reassign via the Reassign action")
         if data["assigned_to_user_id"]:
             require_office = user.get("role") == "office_admin"
             assignee = await _validate_assignee(
@@ -1025,21 +1067,79 @@ async def update_lead(lead_id: str, payload: LeadUpdate, user: dict = Depends(re
             patch["assigned_to_user_id"] = None
     patch["updated_at"] = now_iso()
     ops: dict = {"$set": patch}
+    pushes: dict = {}
     note = (data.get("status_note") or "").strip()
     if patch.get("status") and patch["status"] != lead.get("status"):
         meta = None
         if patch["status"] == "lost" and patch.get("lost_reason"):
             meta = {"lost_reason": patch["lost_reason"]}
-        ops["$push"] = {"status_history": _status_event(
-            lead.get("status"), patch["status"], user, note=note, metadata=meta)}
+        pushes["status_history"] = _status_event(
+            lead.get("status"), patch["status"], user, note=note, metadata=meta)
     elif note:
         # Note-only entry (no stage change) — a standalone conversation note.
         cur = lead.get("status")
-        ops["$push"] = {"status_history": _status_event(cur, cur, user, note=note)}
+        pushes["status_history"] = _status_event(cur, cur, user, note=note)
+
+    assign_ev = None
+    if assign_changed:
+        from_name = await _user_name(lead.get("assigned_to_user_id"))
+        to_name = assignee["name"] if assignee else None
+        assign_ev = _assignment_event(
+            lead.get("assigned_to_user_id"), from_name,
+            (assignee or {}).get("id"), to_name, user)
+        pushes["assignment_history"] = assign_ev
+    if pushes:
+        ops["$push"] = pushes
     await db.leads.update_one({"id": lead_id}, ops)
     fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
     if new_assignee:
         await _notify_assignment(fresh, actor=user)
+    if assign_ev:
+        await log_lead_event(
+            actor=user, event_type="lead.assigned", lead=fresh,
+            note=f"Reassigned {fresh.get('name')} from {assign_ev['from_name'] or 'Unassigned'} "
+                 f"to {assign_ev['to_name'] or 'Unassigned'}")
+    return fresh
+
+
+class ReassignIn(BaseModel):
+    assigned_to_user_id: str
+    note: Optional[str] = None
+
+
+@router.post("/{lead_id}/reassign")
+async def reassign_lead(lead_id: str, payload: ReassignIn, user: dict = Depends(require_edit("leads"))):
+    """Hand a lead over to a colleague. Staff may reassign only leads assigned
+    to them (enforced by ``_scope_filter``) and only to a colleague in their
+    own office. Records an ``assignment_history`` journey entry, logs the move
+    to the Activity page, and notifies the new owner."""
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    new_id = (payload.assigned_to_user_id or "").strip()
+    if not new_id:
+        raise HTTPException(400, "Pick a colleague to reassign this lead to")
+    if new_id == lead.get("assigned_to_user_id"):
+        fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+        return await _enrich_assignee(fresh)
+    # Staff & office admins can only reassign within their own office.
+    require_office = user.get("role") in ("office_admin", "staff")
+    assignee = await _validate_assignee(new_id, user.get("office"), require_office)
+
+    from_id = lead.get("assigned_to_user_id")
+    from_name = await _user_name(from_id)
+    patch = {"assigned_to_user_id": assignee["id"], "updated_at": now_iso()}
+    if user.get("role") == "super_admin":
+        patch["office"] = assignee.get("office")
+    ev = _assignment_event(from_id, from_name, assignee["id"], assignee["name"], user, payload.note)
+    await db.leads.update_one({"id": lead_id}, {"$set": patch, "$push": {"assignment_history": ev}})
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+    await _enrich_assignee(fresh)
+    await _notify_assignment(fresh, actor=user)
+    note_suffix = f" — {payload.note.strip()}" if (payload.note or "").strip() else ""
+    await log_lead_event(
+        actor=user, event_type="lead.assigned", lead=fresh,
+        note=f"Reassigned {fresh.get('name')} from {from_name or 'Unassigned'} to {assignee['name']}{note_suffix}")
     return fresh
 
 

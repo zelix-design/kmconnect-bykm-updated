@@ -47,6 +47,8 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [stagePrompt, setStagePrompt] = useState(null); // {status} when a stage note popup is open
   const [noteText, setNoteText] = useState(""); // always-visible add-note box
   const [admins, setAdmins] = useState([]);
+  const [colleagues, setColleagues] = useState([]);
+  const [reassigning, setReassigning] = useState(false);
   const [resending, setResending] = useState(false);
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
@@ -82,10 +84,36 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     }
   }, [open, hasVisit, isAdmin]);
 
+  // Colleagues a lead can be handed to (office-scoped for staff/office admin).
+  useEffect(() => {
+    if (open && editable) {
+      api.get("/users/assignable").then(({ data }) => setColleagues(data)).catch(() => {});
+    }
+  }, [open, editable]);
+
   if (!local) return null;
   const meta = LEAD_STATUS_META[local.status] || LEAD_STATUS_META.new;
 
   const refresh = (updated) => { setLocal(updated); onChanged?.(); };
+
+  const reassign = async (toId) => {
+    if (!toId || toId === local.assigned_to_user_id || reassigning) return;
+    setReassigning(true);
+    try {
+      const { data } = await api.post(`/leads/${local.id}/reassign`, { assigned_to_user_id: toId });
+      setLocal(data);
+      onChanged?.();
+      toast.success(`Lead handed over to ${data.assigned_to_name || "colleague"}`);
+      // Handover: if it's no longer mine, close the detail view for staff.
+      if (user?.role === "staff" && data.assigned_to_user_id !== user.id) {
+        onOpenChange?.(false);
+      }
+    } catch (err) {
+      toast.error(formatApiError(err?.response?.data?.detail) || "Reassign failed");
+    } finally {
+      setReassigning(false);
+    }
+  };
 
   const changeStatus = async (status) => {
     // Interested & Converted have dedicated capture forms
@@ -231,6 +259,30 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
             )}
           </div>
           {local.notes && <p className="text-sm text-muted-foreground bg-muted/40 rounded-lg p-2.5">{local.notes}</p>}
+
+          {editable && !local.converted_student_id && (
+            <div className="flex items-center gap-2 flex-wrap" data-testid="lead-reassign-row">
+              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <UsersThree size={13} /> Assign to
+              </span>
+              <Select
+                value={local.assigned_to_user_id || "unassigned"}
+                onValueChange={reassign}
+                disabled={reassigning || busy}
+              >
+                <SelectTrigger className="h-8 w-56 bg-card text-xs" data-testid="lead-reassign-select">
+                  <SelectValue placeholder="Reassign to a colleague" />
+                </SelectTrigger>
+                <SelectContent>
+                  {colleagues.map((c) => (
+                    <SelectItem key={c.id} value={c.id} data-testid={`lead-reassign-opt-${c.id}`}>
+                      {c.name}{c.id === user?.id ? " (me)" : ""} · {c.role === "office_admin" ? "Office admin" : "Staff"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {local.converted_student_id && (
             <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5" data-testid="lead-converted-note">
               <GraduationCap size={14} /> Converted to a student record.
