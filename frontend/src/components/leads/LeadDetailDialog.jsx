@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple, Bus, UsersThree, WhatsappLogo, ShareNetwork, CheckCircle } from "@phosphor-icons/react";
+import { Phone, EnvelopeSimple, GraduationCap, MapPin, ClockCountdown, PencilSimple, Trash, CalendarPlus, MegaphoneSimple, Bus, UsersThree, WhatsappLogo } from "@phosphor-icons/react";
 import { LEAD_STATUSES, LEAD_STATUS_META, sourceLabel, fmtDateTime, toLocalInput, fromLocalInput, VISIT_STATUSES, VISIT_STATUS_META } from "./constants";
 import { canEdit } from "@/lib/perm";
 import InterestedDialog from "./InterestedDialog";
@@ -48,7 +48,6 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [noteText, setNoteText] = useState(""); // always-visible add-note box
   const [admins, setAdmins] = useState([]);
   const [resending, setResending] = useState(false);
-  const [metaSending, setMetaSending] = useState(false);
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
 
@@ -197,20 +196,6 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
     }
   };
 
-  const sendToMeta = async () => {
-    if (metaSending) return;
-    setMetaSending(true);
-    try {
-      const { data } = await api.post(`/leads/${local.id}/meta/send-lead`);
-      if (data.lead) refresh(data.lead);
-      toast.success(data.detail || "Lead sent to Meta");
-    } catch (err) {
-      toast.error(formatApiError(err?.response?.data?.detail) || "Could not send to Meta");
-    } finally {
-      setMetaSending(false);
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card max-w-xl" data-testid="lead-detail-dialog">
@@ -247,44 +232,14 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
           </div>
           {local.notes && <p className="text-sm text-muted-foreground bg-muted/40 rounded-lg p-2.5">{local.notes}</p>}
           {local.converted_student_id && (
-            <div className="space-y-2" data-testid="lead-converted-block">
-              <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5" data-testid="lead-converted-note">
-                <GraduationCap size={14} /> Converted to a student record.
-                {local.conversion_details && (local.conversion_details.course || local.conversion_details.college) && (
-                  <span className="text-muted-foreground">
-                    {[local.conversion_details.course, local.conversion_details.college, local.conversion_details.city].filter(Boolean).join(" · ")}
-                  </span>
-                )}
-              </p>
-              {isAdmin && (
-                <div className="flex flex-wrap items-center gap-2" data-testid="lead-meta-row">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={sendToMeta}
-                    disabled={metaSending || (!local.phone && !local.email)}
-                    data-testid="lead-send-meta-btn"
-                  >
-                    <ShareNetwork size={14} className="mr-1.5" />
-                    {metaSending ? "Sending…" : (local.meta_lead?.last_status === "sent" ? "Re-send to Meta" : "Send to Meta")}
-                  </Button>
-                  {local.meta_lead?.last_status === "sent" && (
-                    <span className="text-[11px] text-emerald-600 flex items-center gap-1" data-testid="lead-meta-sent">
-                      <CheckCircle size={13} weight="fill" /> Sent to Meta
-                    </span>
-                  )}
-                  {local.meta_lead?.last_status === "failed" && (
-                    <span className="text-[11px] text-rose-600" data-testid="lead-meta-failed">
-                      Meta send failed{local.meta_lead?.detail ? ` · ${local.meta_lead.detail}` : ""}
-                    </span>
-                  )}
-                  {!local.phone && !local.email && (
-                    <span className="text-[11px] text-muted-foreground">No email/phone to match</span>
-                  )}
-                </div>
+            <p className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5" data-testid="lead-converted-note">
+              <GraduationCap size={14} /> Converted to a student record.
+              {local.conversion_details && (local.conversion_details.course || local.conversion_details.college) && (
+                <span className="text-muted-foreground">
+                  {[local.conversion_details.course, local.conversion_details.college, local.conversion_details.city].filter(Boolean).join(" · ")}
+                </span>
               )}
-            </div>
+            </p>
           )}
 
           {/* Campus visit */}
