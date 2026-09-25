@@ -1,0 +1,33 @@
+{
+  "summary": "Retest of iteration_74 HIGH bug: 'All years' persistence in the global Academic Year selector. Backend NOT retested per E1 (already 11/11 in iteration_74). Frontend flow verified end-to-end via Playwright on the public URL with admin@kmfoundation.online. All four assertions from the review request PASSED, plus the 2026 counter-check and Dashboard+Students rendering.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "retest_results": {
+    "all_years_localStorage_is_all": "PASS — localStorage['finflow_academic_year'] === 'all' after selecting All years (was '2026' before)",
+    "all_years_selector_displays_all_years_after_reload": "PASS — trigger text = 'All years'",
+    "no_year_param_on_gets_after_all_years": "PASS — 25/25 captured /api GETs carried NO ?year= (endpoints: auth/me, notifications, messages/banners, leads/stats, students, clients, students/agent-ledger, dashboard/summary, dashboard/cashflow, dashboard/expense-by-category, transactions, academic-years, …)",
+    "persists_across_manual_browser_refresh": "PASS — after page.reload(): localStorage still 'all', trigger still 'All years', 25/25 GETs still without ?year=",
+    "specific_year_2026_still_works": "PASS — selecting 2026 sets localStorage='2026', trigger shows '2026', 25/25 GETs carry ?year=2026",
+    "pages_render_in_both_modes": "PASS — Dashboard body ~1171 chars, Students page ~4387 chars with 28 enrollment cards rendered"
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest/iter74.xml (previous backend run — untouched)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix in /app/frontend/src/lib/academicYear.jsx is correct: setYear now always calls setApiYear(val) with the raw 'all' sentinel or the year string, and api.js request interceptor only injects ?year when selectedYear && selectedYear !== 'all'. initialYear() reads the stored value directly, so 'all' is preserved across reloads.",
+    "Minor (pre-existing, not blocking): AcademicYearSelect passes v to setYear untouched; the ternary `v === 'all' ? 'all' : v` is a no-op. Harmless."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "not retested (100% previously)", "frontend": "100% (all 6 retest checks passed)" },
+  "test_credentials": "admin@kmfoundation.online / Admin@786 (used)",
+  "seed_data_creation": "None. No test data created. Reset selector to 'All years' at end of test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 74's HIGH bug is fully resolved. Frontend Academic Year selector now correctly persists 'all' sentinel (localStorage='all'), suppresses ?year= param on API GETs, and survives manual browser refresh. Specific-year selection (2026) also verified end-to-end. No further action required on this feature.",
+  "rca of the issue": "Original bug (iter_74): setYear('all') called setApiYear(null), which removed the localStorage key; on reload, initialYear() saw no stored value and defaulted back to CURRENT_YEAR (2026). Fix (iter_75, applied by main agent in academicYear.jsx): setYear always persists a value — either the year string or the literal 'all' — via setApiYear(val). api.js's request interceptor was already guarded with `selectedYear && selectedYear !== 'all'`, so the 'all' sentinel is stored but not injected. Verified in browser: localStorage='all' persists across reload and manual refresh, and no /api GET carries ?year=."
+}
