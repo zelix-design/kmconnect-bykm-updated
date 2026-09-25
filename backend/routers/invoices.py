@@ -8,6 +8,7 @@ from pymongo.errors import OperationFailure
 from db import client, db
 from auth_lib import get_current_user, gen_id, now_iso
 from models import InvoiceIn
+from lib.academic_year import with_year
 from routers.notifications import notify_users
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
@@ -260,8 +261,9 @@ async def open_credits(
 
 
 @router.get("")
-async def list_invoices(user: dict = Depends(get_current_user)):
-    return await db.invoices.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+async def list_invoices(user: dict = Depends(get_current_user), year: Optional[int] = None):
+    q = with_year({"user_id": user["id"]}, "issue_date", year)
+    return await db.invoices.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @router.post("")

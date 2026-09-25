@@ -6,6 +6,7 @@ import { canView } from "@/lib/perm";
 import { buildApplyUrl } from "@/lib/applyUrl";
 import AuthedImage from "@/components/AuthedImage";
 import NotificationsBell from "@/components/NotificationsBell";
+import AcademicYearSelect from "@/components/AcademicYearSelect";
 import BottomNav from "@/components/BottomNav";
 import InstallPrompt from "@/components/InstallPrompt";
 import {
@@ -348,6 +349,7 @@ export default function AppShell() {
               </a>
             )}
             <NotificationsBell />
+            <AcademicYearSelect />
             <ThemeToggle />
             <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
               <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden" data-testid="topbar-avatar">

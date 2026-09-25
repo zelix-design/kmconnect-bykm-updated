@@ -2,6 +2,7 @@ import React from "react";
 import "@/index.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { AcademicYearProvider } from "@/lib/academicYear";
 import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -140,7 +141,7 @@ export default function App() {
           <Route path="/register" element={<PublicOnly><AuthPage mode="register" /></PublicOnly>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route element={<Protected><AppShell /></Protected>}>
+          <Route element={<Protected><AcademicYearProvider><AppShell /></AcademicYearProvider></Protected>}>
             <Route path="/" element={<PermGate page="overview"><Dashboard /></PermGate>} />
             <Route path="/quick-entry" element={<PermGate page="quick_entry"><QuickEntry /></PermGate>} />
             <Route path="/transactions" element={<PermGate page="transactions"><Transactions /></PermGate>} />

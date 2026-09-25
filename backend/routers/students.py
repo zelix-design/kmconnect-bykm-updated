@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
+from lib.academic_year import in_year
 from routers.notifications import notify_super_admins
 
 
@@ -675,10 +676,18 @@ async def my_sc_earned(user: dict = Depends(get_current_user)):
 
 
 @router.get("")
-async def list_students(user: dict = Depends(get_current_user)):
+async def list_students(user: dict = Depends(get_current_user), year: Optional[int] = None):
     """Office admin sees own students. Super admin sees students from ALL users
     so admissions enrolled by office admins surface on the central Students page.
-    Linked `user` accounts only see students that reference their client."""
+    Linked `user` accounts only see students that reference their client.
+
+    An optional ``year`` narrows to admissions whose enrollment (or creation)
+    date falls in that calendar year."""
+    def _yr(items):
+        if year is None:
+            return items
+        return [s for s in items if in_year(s.get("enrollment_date") or s.get("created_at"), year)]
+
     # Linked user (sub-agent / associate consultant logging in) — show students
     # whose `reference` matches the linked client's name (case-insensitive) OR
     # students this user themselves entered (created via the Add-student flow).
@@ -695,10 +704,10 @@ async def list_students(user: dict = Depends(get_current_user)):
             },
             {"_id": 0},
         ).sort("created_at", -1).to_list(2000)
-        return [_summarize(s, user) for s in items]
+        return [_summarize(s, user) for s in _yr(items)]
 
     if user.get("role") == "super_admin":
-        items = await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+        items = _yr(await db.students.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000))
         if items:
             user_ids = list({s.get("user_id") for s in items if s.get("user_id")})
             referrer_ids = list({s.get("referrer_user_id") for s in items if s.get("referrer_user_id")})
@@ -726,6 +735,7 @@ async def list_students(user: dict = Depends(get_current_user)):
     items = await db.students.find(
         _office_visibility_clause(user), {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
+    items = _yr(items)
     # Populate referrer_name for legacy rows so the "Referred by" chip renders.
     referrer_ids = list({s.get("referrer_user_id") for s in items if s.get("referrer_user_id") and not s.get("referrer_name")})
     umap: dict = {}
@@ -1088,7 +1098,7 @@ def _finalise_ledger_row(row: dict) -> dict:
 
 
 @router.get("/agent-ledger")
-async def agent_ledger(user: dict = Depends(get_current_user)):
+async def agent_ledger(user: dict = Depends(get_current_user), year: Optional[int] = None):
     """Aggregate payments routed through sub-agents / associates / KMs.
 
     Returns a row per (received_in.type, received_in.name) combo with totals."""
@@ -1099,6 +1109,8 @@ async def agent_ledger(user: dict = Depends(get_current_user)):
     for st in students:
         payments = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
         for p in payments:
+            if not in_year(p.get("date"), year):
+                continue
             received = p.get("received_in") or {}
             r_type = received.get("type")
             if r_type in _AGENT_TYPES:
@@ -1191,6 +1203,7 @@ async def agent_payments(
     type: str,
     name: str,
     user: dict = Depends(get_current_user),
+    year: Optional[int] = None,
 ):
     """Flat list of every payment routed through a specific (type, name) agent.
 
@@ -1210,6 +1223,8 @@ async def agent_payments(
         payments = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
         for p in payments:
             if not _payment_matches_agent(p, type, target):
+                continue
+            if not in_year(p.get("date"), year):
                 continue
             paid, sc = _split_adjustments(p)
             total_received += float(p.get("amount") or 0)

@@ -29,6 +29,7 @@ from lib.whatsapp import send_visit_scheduled, send_application_link, fmt_dt_ist
 from lib.activity_log import log_event
 from lib.user_photo import resolve_photos_for_users
 from lib.meta_capi import send_lead_event
+from lib.academic_year import date_filter
 from routers.notifications import notify_users, notify_super_admins
 
 router = APIRouter(prefix="/api/leads", tags=["leads"])
@@ -411,6 +412,7 @@ async def list_leads(
     q: Optional[str] = None,
     view: Optional[str] = None,  # "missed" | "today" | None
     office: Optional[str] = None,  # super_admin only — narrow to one office
+    year: Optional[int] = None,
 ):
     if user.get("role") not in ("super_admin", "office_admin", "staff"):
         raise HTTPException(403, "Not allowed")
@@ -432,7 +434,9 @@ async def list_leads(
             query["$and"].append({"$or": or_clause})
         else:
             query["$or"] = or_clause
-    docs = await db.leads.find(query, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    dfilt = date_filter("created_at", year)
+    find_query = {"$and": [query, dfilt]} if dfilt else query
+    docs = await db.leads.find(find_query, {"_id": 0}).sort("created_at", -1).to_list(2000)
 
     now = datetime.now(timezone.utc)
     for d in docs:

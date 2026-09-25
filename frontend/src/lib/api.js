@@ -17,6 +17,33 @@ function normalizeBackend(raw) {
 const BACKEND_URL = normalizeBackend(process.env.REACT_APP_BACKEND_URL);
 export const API = `${BACKEND_URL}/api`;
 
+// ---- Global Academic Year filter ----------------------------------------
+// A single selected calendar year is injected into every GET request as
+// `?year=`, so list/aggregation endpoints across the whole app return only
+// that year's data. "all" (or null) means no filtering. Initialised
+// synchronously from localStorage so the very first requests already carry it.
+const YEAR_KEY = "finflow_academic_year";
+let selectedYear = (() => {
+  try {
+    const v = typeof window !== "undefined" ? window.localStorage.getItem(YEAR_KEY) : null;
+    return v || null;
+  } catch {
+    return null;
+  }
+})();
+
+export const setApiYear = (y) => {
+  selectedYear = y == null ? null : String(y);
+  try {
+    if (!selectedYear) window.localStorage.removeItem(YEAR_KEY);
+    else window.localStorage.setItem(YEAR_KEY, selectedYear);
+  } catch {
+    /* private mode — in-memory only */
+  }
+};
+
+export const getApiYear = () => selectedYear;
+
 // Token storage helpers — used as a FALLBACK when cross-origin cookies are
 // blocked by the browser (e.g. Chrome's third-party cookie deprecation when
 // frontend and backend live on different sub/domains in production).
@@ -101,6 +128,14 @@ api.interceptors.request.use((config) => {
     if (!config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${t}`;
     }
+  }
+  // Inject the globally-selected academic year into GET requests so every
+  // page's data is scoped consistently. Endpoints that don't declare `year`
+  // simply ignore the extra query param (FastAPI drops unknown params).
+  const method = (config.method || "get").toLowerCase();
+  if (method === "get" && selectedYear && selectedYear !== "all") {
+    if (config.params == null) config.params = {};
+    if (config.params.year == null) config.params.year = selectedYear;
   }
   return config;
 });

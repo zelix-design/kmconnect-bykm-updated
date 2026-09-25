@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import TransactionIn
+from lib.academic_year import date_filter
 from routers.notifications import notify_super_admins, notify_users
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
@@ -19,6 +20,7 @@ async def list_transactions(
     category_id: Optional[str] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
+    year: Optional[int] = None,
     limit: int = 200,
 ):
     q: dict = {"user_id": user["id"]}
@@ -34,6 +36,8 @@ async def list_transactions(
             q["date"]["$gte"] = start
         if end:
             q["date"]["$lte"] = end
+    elif year is not None:
+        q.update(date_filter("date", year))
     return await db.transactions.find(q, {"_id": 0}).sort("date", -1).limit(limit).to_list(limit)
 
 
