@@ -2,14 +2,30 @@ import React, { useEffect, useRef, useSyncExternalStore } from "react";
 import { Check, X } from "@phosphor-icons/react";
 import { subscribe, getSnapshot, setOverlayMounted, dismissCelebration } from "@/lib/celebrate";
 
-const SUCCESS_MS = 1250;
-const ERROR_MS = 2200;
+const SUCCESS_MS = 1700;
+const ERROR_MS = 2600;
+
+const SUCCESS_SUBTITLE = {
+  Added: "Your new record has been created.",
+  Saved: "Your changes have been saved.",
+  Updated: "Your changes have been saved.",
+  Deleted: "The item has been removed.",
+};
+
+/** Frosted-glass folder silhouette that sits inside the gradient hero. */
+function GlassFolder() {
+  return (
+    <svg className="celebrate-folder" viewBox="0 0 156 126" aria-hidden="true">
+      <path d="M22 32 Q22 21 33 21 L60 21 Q66 21 70 27 L75 35 Q77 38 82 38 L127 38 Q138 38 138 49 L138 96 Q138 107 127 107 L33 107 Q22 107 22 96 Z" />
+    </svg>
+  );
+}
 
 /**
- * Single, app-wide centered feedback overlay. Renders a big animated checkmark
- * on success or an animated cross on error, with a short caption, over a lightly
- * dimmed backdrop. Auto-dismisses and never traps the user. Honors reduced
- * motion via CSS (see index.css).
+ * Single, app-wide centered feedback overlay styled after the approved
+ * reference: a white card with a gradient hero (green for success, crimson for
+ * error), a frosted folder holding a white check/cross badge, a bold title and
+ * a muted subtitle. Auto-dismisses, non-blocking, honors reduced motion.
  */
 export default function CelebrationOverlay() {
   const state = useSyncExternalStore(subscribe, getSnapshot, () => null);
@@ -31,7 +47,11 @@ export default function CelebrationOverlay() {
   if (!state) return null;
 
   const isError = state.kind === "error";
-  const testid = isError ? "celebration-error" : "celebration-success";
+  const caption = state.caption || (isError ? "Didn't go through" : "Saved");
+  const title = isError ? caption : `${caption} successfully!`;
+  const subtitle = isError
+    ? state.message || "Something went wrong. Please try again."
+    : SUCCESS_SUBTITLE[caption] || "All done.";
 
   return (
     <div
@@ -42,19 +62,25 @@ export default function CelebrationOverlay() {
       aria-live="polite"
       role="status"
     >
-      <div className="celebrate-card" data-testid={testid} onClick={(e) => e.stopPropagation()}>
-        <div className={`celebrate-badge ${isError ? "is-error" : "is-success"}`}>
-          <span className="celebrate-ring" aria-hidden="true" />
-          {isError ? (
-            <X size={40} weight="bold" className="celebrate-icon" />
-          ) : (
-            <Check size={44} weight="bold" className="celebrate-icon" />
-          )}
+      <div
+        className="celebrate-card"
+        data-testid={isError ? "celebration-error" : "celebration-success"}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="celebrate-hero">
+          <GlassFolder />
+          <div className="celebrate-check-badge">
+            {isError ? (
+              <X size={30} weight="bold" className="celebrate-icon" />
+            ) : (
+              <Check size={32} weight="bold" className="celebrate-icon" />
+            )}
+          </div>
         </div>
-        <p className="celebrate-caption" data-testid="celebration-caption">{state.caption}</p>
-        {state.message ? (
-          <p className="celebrate-message" data-testid="celebration-message">{state.message}</p>
-        ) : null}
+        <div className="celebrate-body">
+          <h3 className="celebrate-title" data-testid="celebration-caption">{title}</h3>
+          <p className="celebrate-subtitle" data-testid="celebration-message">{subtitle}</p>
+        </div>
       </div>
     </div>
   );
