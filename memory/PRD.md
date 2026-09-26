@@ -1636,3 +1636,9 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] Titles are friendly sentences derived from the action: "Added/Saved/Updated/Deleted successfully!"; subtitle from a per-action map; error shows the failure reason as subtitle. Testids unchanged (celebration-overlay/-success/-error/-caption/-message) so logic/wiring stayed intact.
 - [x] Files: `components/CelebrationOverlay.jsx` (new card markup + GlassFolder), `index.css` (`.celebrate-*` gradient hero, white badge, reduced-motion). `lib/celebrate.js` + `lib/api.js` unchanged.
 - [x] **Verified** — testing agent iteration_78 (frontend 100%): success/update/error variants render the new design, auto-dismiss, non-blocking, no duplicate toasts; test data cleaned up.
+
+## Bug fix — 2026-06 (Upload dialog wouldn't close during celebration)
+- Report: "After uploading completion this popup not disappear. still showing when I am close this popup."
+- Root cause: the app-wide celebration overlay (z-index 9999, above the dialog's z-50) had a centered card with `pointer-events: auto`; while the success celebration was visible it overlapped the dialog and intercepted clicks on the dialog's Close/Done button, so the dialog appeared un-closable.
+- Fix: made the ENTIRE celebration overlay click-through — both `.celebrate-backdrop` and `.celebrate-card` now `pointer-events: none` (index.css), matching the non-blocking/auto-dismiss spec. Celebration still shows and fades.
+- Verified: testing agent iteration_79 (frontend 100%) — Colleges bulk upload dialog closes on a single Done/X click while the celebration is visible; computed styles confirm pointer-events:none on both overlay layers. Test data cleaned up.
