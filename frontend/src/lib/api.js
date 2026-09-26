@@ -1,4 +1,32 @@
 import axios from "axios";
+import { celebrate } from "@/lib/celebrate";
+
+// Endpoints whose mutations are background/automatic (not user-initiated) and
+// must NOT pop the success celebration.
+const CELEBRATE_EXCLUDES = ["/auth", "/push", "/webauthn", "/notifications", "/login-attempts", "/uploads"];
+
+function celebrationCaption(method, status) {
+  const m = (method || "").toLowerCase();
+  if (m === "delete") return "Deleted";
+  if (m === "patch" || m === "put") return "Updated";
+  if (m === "post") return status === 201 ? "Added" : "Saved";
+  return null;
+}
+
+function maybeCelebrate(resp) {
+  try {
+    const cfg = resp?.config || {};
+    const method = (cfg.method || "get").toLowerCase();
+    if (!["post", "put", "patch", "delete"].includes(method)) return;
+    if (cfg.skipCelebration) return;
+    const url = cfg.url || "";
+    if (CELEBRATE_EXCLUDES.some((x) => url.includes(x))) return;
+    const caption = celebrationCaption(method, resp?.status);
+    if (caption) celebrate({ kind: "success", caption });
+  } catch {
+    /* feedback is best-effort — never break a request */
+  }
+}
 
 // Defensive URL normalization: in some Vercel/Netlify dashboards, operators
 // configure REACT_APP_BACKEND_URL without the scheme (e.g. just the bare
@@ -169,7 +197,10 @@ function _shouldRetry(err) {
   return false;
 }
 api.interceptors.response.use(
-  (resp) => resp,
+  (resp) => {
+    maybeCelebrate(resp);
+    return resp;
+  },
   async (err) => {
     if (_shouldRetry(err)) {
       await new Promise((r) => setTimeout(r, 400));

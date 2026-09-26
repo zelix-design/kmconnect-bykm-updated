@@ -1,56 +1,54 @@
-# Academic Year Rollover
+# Celebratory Success Feedback Across the App
 
-## Goal
-Add an "academic year" (e.g. 2025-26) to the system so that student and money records
-belong to a specific year, and provide a "Year Rollover" action that closes the current
-year and opens a fresh one — without losing or hiding the old year.
+Every time something is saved, added, updated, or deleted, the app plays a short centered celebration — a big animated checkmark that pops and fades — so an action always feels confirmed. Errors get a matching polished animated message, and the button being clicked shows a subtle in-progress state.
 
-## What an academic year means here
-- Years are written as 2025-26, 2026-27, and so on.
-- One year is the "active" year at any time. Anything newly created (a new student, a new
-  income/expense entry) is automatically filed under the active year.
-- Every existing student and every existing money entry will be filed under 2025-26 as the
-  starting point. Nothing is deleted or hidden during this one-time setup.
+## Who it's for
+Everyone who uses the app — super admins, office admins, staff, and sub-agent/associate users. It touches every screen where records are created or changed (leads, students, invoices, transactions, clients, employees, attendance, campaigns, messages, settings, and so on).
 
-## Filtering by year (everywhere)
-- The Students page and the Accounts/Transactions (Ledger) pages get a year selector at the
-  top. It defaults to the active year.
-- Switching the selector shows that year's students and that year's money entries. All years
-  stay fully viewable and editable — old years are not locked.
-- Reports/exports on these pages follow the selected year.
+## Core features and experience
+- **Centered success celebration**: On a successful create/update/edit/delete, a large animated checkmark appears in the middle of the screen, "pops" in, holds briefly, then fades away on its own. The screen behind dims slightly during the moment.
+- **App-wide coverage**: This fires for every create/update/edit/delete action across the whole app, consistently, without the user needing to do anything.
+- **Action-aware wording**: A short caption under the checkmark reflects what happened — for example "Saved", "Added", "Updated", or "Deleted". (Simple, human wording; not technical.)
+- **Polished error feedback**: When an action fails, a matching animated error message appears (styled to feel part of the same system) explaining that it didn't go through, so success and failure feel like one coherent language.
+- **In-progress button state**: The specific button the user clicked shows a subtle loading state (spinner/disabled) while the action is being processed, so it's clear something is happening and to prevent double submits.
+- **Non-blocking**: The celebration auto-dismisses quickly and does not require a click or trap the user; they can keep working as it fades.
 
-## The rollover action (Super Admin only)
-Triggered from a clear "Start New Year" control. When run, it:
+## User flow
+1. The user fills a form or triggers an action (e.g. add a lead, edit a student, record a payment, delete a record after confirming).
+2. The button they clicked shows a brief loading state while it processes.
+3. On success, the centered checkmark celebration pops in, holds for a moment, and fades — with a short caption ("Saved", "Added", etc.).
+4. On failure, the polished animated error message appears instead, and the form stays as-is so they can retry.
 
-1. Opens the next academic year (e.g. from 2025-26 it creates 2026-27) and makes it the new
-   active year.
-2. Shows a checklist of the current year's still-studying students (enrolled/inquiry, with
-   fees pending). The admin ticks which ones carry forward into the new year. Completed and
-   cancelled students are not offered and stay behind in the old year.
-   - Ticked students appear in the new year with their remaining/pending fees continuing
-     there. Their old year still shows what was collected in that year.
-3. For every account, takes its closing balance at year-end and sets that as the account's
-   opening balance for the new year. Past transactions stay filed under their own year.
-4. After rollover, new entries land in the new active year automatically.
+## UI/UX feel
+- Quick and delightful, not disruptive: the whole celebration lasts roughly one second and gets out of the way.
+- The checkmark draws/scales in with an easing "pop", a soft glow or ring, then fades with the backdrop.
+- Colors and motion match the app's existing crimson / near-black theme; the success accent reads clearly (green check) against a lightly dimmed backdrop.
+- Motion is smooth on both light and dark themes and honors "reduced motion" preferences (a gentle fade instead of a bounce for users who prefer less animation).
+- One consistent success/error language everywhere — the same component and timing on every page.
 
-A short confirmation screen summarises what will happen (how many students carried forward,
-that balances roll into openings, that the active year changes) before anything is committed.
+## Implementation phases
 
-## Decisions already made
-- Records cover both Students and Accounts/Ledger.
-- Year format: academic year, e.g. 2025-26.
-- Existing data is filed under 2025-26 to begin with.
-- Account closing balance carries forward as the new year's opening balance.
-- Student carry-forward is a manual tick-list chosen at rollover time.
-- Only Super Admin can trigger a rollover.
-- All years remain viewable and editable side by side (no read-only lock on old years).
+**Phase 1 — MVP (built now)**
+- One reusable centered success celebration (animated checkmark + short caption + brief backdrop dim + auto-dismiss).
+- Wired so every create/update/edit/delete across the app triggers it consistently.
+- Polished animated error feedback for failed actions.
+- Subtle loading state on the clicked button during the action.
+- Reduced-motion fallback.
 
-## Open assumptions (flag if wrong)
-- The active year applies system-wide (one active year for the whole organisation, not per
-  office). Offices still filter by year as usual.
-- A carried-forward student keeps the same fee plan; only the pending (uncollected) portion
-  continues into the new year, while collected amounts remain recorded in the year received.
-- Rollover moves forward one year at a time and is not automatically reversible. Old-year data
-  can still be edited manually afterwards if a correction is needed.
-- Students in "inquiry" status are treated as still-studying and offered in the carry-forward
-  tick-list.
+**Phase 2 — Later**
+- Bigger, more festive treatment for milestone actions (e.g. a lead converted to a student, a payment recorded) — for example a brief confetti burst — while routine saves keep the quick checkmark.
+- Optional subtle sound and/or haptic tap on success (with a user setting to turn it off).
+
+**Phase 3 — Later**
+- Per-action custom captions and icons (e.g. a distinct celebration for a completed admission).
+- An "Undo" affordance embedded in the success feedback for actions where undo is safe (e.g. delete).
+- Light success/failure counts surfaced for admins.
+
+## Assumptions
+- The celebration is a **centered overlay** (per request) that **auto-dismisses in about 1–1.4 seconds** and does not require a click; it briefly dims the background but does not block the user afterward.
+- It fires on **user-initiated** create/update/edit/delete actions only. Background/automatic calls (polling, auto-refresh, reminder re-arming, silent syncs, and all read/list/load actions) do **not** trigger the celebration, to avoid random pop-ups.
+- To avoid double feedback, the new centered celebration **replaces the existing plain green success toasts** for these actions; existing error toasts are **restyled** into the new animated error treatment rather than shown twice.
+- Captions are **generic and derived from the action type** ("Saved / Added / Updated / Deleted"). Specific per-record wording is out of scope for Phase 1 (moves to Phase 3).
+- Where a **delete confirmation** already exists, it stays; the celebration plays **after** the user confirms and the delete succeeds.
+- The feature **honors reduced-motion** settings with a simpler fade.
+- No new third-party integration is required; this is a front-end experience layer over existing actions.

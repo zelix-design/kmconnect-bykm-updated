@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { AcademicYearProvider } from "@/lib/academicYear";
 import { ThemeProvider } from "@/lib/theme";
 import { Toaster } from "@/components/ui/sonner";
+import CelebrationOverlay from "@/components/CelebrationOverlay";
 
 import AuthPage from "@/pages/AuthPage";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -175,6 +176,7 @@ export default function App() {
         </BrowserRouter>
         </PinLockGate>
         <Toaster position="top-right" richColors />
+        <CelebrationOverlay />
       </AuthProvider>
     </ThemeProvider>
   );
