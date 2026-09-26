@@ -55,9 +55,16 @@ export function recentlyCelebrated(windowMs = 1600) {
 }
 
 /** Fire the centered feedback. `kind` is 'success' or 'error'. */
-export function celebrate({ kind = "success", caption = "Saved", message = null } = {}) {
+export function celebrate({
+  kind = "success",
+  caption = "Saved",
+  message = null,
+  milestone = false,
+  title = null,
+  subtitle = null,
+} = {}) {
   if (kind === "success") lastCelebrationAt = Date.now();
-  current = { id: Date.now() + Math.random(), kind, caption, message };
+  current = { id: Date.now() + Math.random(), kind, caption, message, milestone, title, subtitle };
   emit();
 }
 

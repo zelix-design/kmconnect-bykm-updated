@@ -13,6 +13,19 @@ function celebrationCaption(method, status) {
   return null;
 }
 
+// Significant wins get a festive confetti burst + tailored wording; routine
+// saves keep the plain folder-check popup.
+function milestoneFor(method, url) {
+  if ((method || "").toLowerCase() !== "post") return null;
+  if (/\/convert$/.test(url)) {
+    return { title: "Lead converted!", subtitle: "A new student has been enrolled." };
+  }
+  if (/\/payments$/.test(url)) {
+    return { title: "Payment recorded!", subtitle: "The fee payment has been saved." };
+  }
+  return null;
+}
+
 function maybeCelebrate(resp) {
   try {
     const cfg = resp?.config || {};
@@ -21,6 +34,11 @@ function maybeCelebrate(resp) {
     if (cfg.skipCelebration) return;
     const url = cfg.url || "";
     if (CELEBRATE_EXCLUDES.some((x) => url.includes(x))) return;
+    const milestone = milestoneFor(method, url);
+    if (milestone) {
+      celebrate({ kind: "success", caption: "Saved", milestone: true, title: milestone.title, subtitle: milestone.subtitle });
+      return;
+    }
     const caption = celebrationCaption(method, resp?.status);
     if (caption) celebrate({ kind: "success", caption });
   } catch {
