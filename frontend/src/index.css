@@ -235,7 +235,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
     100% { opacity: 0; }
 }
 .celebrate-card {
-    pointer-events: auto;
+    pointer-events: none; /* fully click-through — never blocks dialogs/buttons */
     width: 388px;
     max-width: 90vw;
     padding: 14px;
