@@ -182,7 +182,7 @@ function SuperAdminDashboard() {
                 <t.icon size={18} weight={active ? "fill" : "duotone"} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${active ? "text-white" : "text-foreground"}`}>{t.label}</p>
+                <p className={`text-sm font-medium tracking-tight ${active ? "text-white" : "text-foreground"}`}>{t.label}</p>
                 <p className={`text-xs ${active ? "text-white/80" : "text-muted-foreground"}`}>{active ? "Selected" : "Open"}</p>
               </div>
               <ArrowUpRight size={14} className={active ? "text-white/80" : "text-muted-foreground/70 group-hover:text-foreground"} />
