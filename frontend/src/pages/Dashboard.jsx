@@ -29,7 +29,7 @@ import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
 import LeadFunnel from "@/components/leads/LeadFunnel";
 
 const TILES = [
-  { key: "transactions", label: "Transactions", icon: Receipt, palette: "amber" },
+  { key: "transactions", label: "Accounts", icon: Receipt, palette: "amber" },
   { key: "students", label: "Students", icon: Student, palette: "emerald", roles: ["super_admin", "office_admin"] },
   { key: "clients", label: "Clients", icon: UsersThree, palette: "sky", roles: ["super_admin", "office_admin"] },
   { key: "ledger", label: "Ledger", icon: Notebook, palette: "violet", roles: ["super_admin", "office_admin"] },
