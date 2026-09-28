@@ -158,6 +158,13 @@ function SidebarContent({ onItemClick, user, onLogout }) {
         </div>
       </div>
 
+      {/* Academic year — scopes the whole app; lives in the menu for both
+          desktop sidebar and the mobile slide-out drawer. */}
+      <div className="px-4 pt-4 pb-1">
+        <p className="px-1 mb-1.5 text-[10px] uppercase tracking-[0.18em] text-[hsl(var(--sidebar-muted))] font-semibold">Academic year</p>
+        <AcademicYearSelect className="!w-full !justify-start !rounded-lg" />
+      </div>
+
       {/* Nav */}
       <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
         {buildSections(navItems, role).map((section, idx) => {
@@ -349,7 +356,6 @@ export default function AppShell() {
               </a>
             )}
             <NotificationsBell />
-            <AcademicYearSelect />
             <ThemeToggle />
             <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
               <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden" data-testid="topbar-avatar">
