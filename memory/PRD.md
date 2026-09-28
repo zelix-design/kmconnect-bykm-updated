@@ -1648,3 +1648,11 @@ admissions per year. It's confidential — only super admin can see it."
 - [x] Milestones detected in the axios interceptor (`lib/api.js` `milestoneFor`): POST `…/convert` (lead → student) → title "Lead converted!" / "A new student has been enrolled."; POST `…/payments` (fee payment) → "Payment recorded!" / "The fee payment has been saved.". `celebrate()` carries `milestone/title/subtitle` (`lib/celebrate.js`).
 - [x] `CelebrationOverlay.jsx` renders a 70-piece CSS `<Confetti>` layer for milestone successes, holds ~2.8s (MILESTONE_MS), stays non-blocking (pointer-events:none). Confetti hidden under prefers-reduced-motion. Styles in `index.css` (`.celebrate-confetti`, `.confetti-piece`, `@keyframes confettiFall`, `[data-milestone="1"]`).
 - [x] **Verified** — testing agent iteration_80 (frontend 100%): convert + payment show confetti with correct wording (data-milestone=1, celebration-confetti present); routine create/update show the plain popup with NO confetti; non-blocking + auto-dismiss; no duplicate toasts.
+
+---
+
+## 2026-09-28 — Sound & Haptics + PIN-unlock greeting
+- Added optional success **chime + haptic phone-tap** (`lib/feedbackSound.js`), fired from `celebrate()` on every successful save/update/delete and richer on milestones. Default ON; persists in `localStorage['finflow_sound_haptics']`.
+- New **Sound & Haptics** toggle card (`components/settings/SoundHapticsSettings.jsx`) mounted on both admin `Settings.jsx` and staff `StaffProfile.jsx`. testids: `sound-haptics-settings-card`, `sound-haptics-toggle`.
+- Admission Revenue **PIN unlock** now shows greeting "Unlocked!" / "You're in — here's your confidential revenue." instead of "Saved successfully!" via `customFor()` in `lib/api.js` (matches `/pin/verify`).
+- Verified frontend-only (iteration_81.json): toggle renders/persists for both roles, PIN greeting wiring confirmed. Sound/vibration not auto-testable.
