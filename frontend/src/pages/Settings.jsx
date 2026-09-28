@@ -10,6 +10,7 @@ import StaffProfile from "@/pages/StaffProfile";
 import AdmissionRevenuePinSettings from "@/components/settings/AdmissionRevenuePinSettings";
 import PinSettingsSection from "@/components/settings/PinSettingsSection";
 import GoogleSheetsSettings from "@/components/settings/GoogleSheetsSettings";
+import SoundHapticsSettings from "@/components/settings/SoundHapticsSettings";
 
 export default function Settings() {
   const { user, updateProfile } = useAuth();
@@ -83,6 +84,8 @@ function WorkspaceSettings({ user, updateProfile }) {
       {(user?.role === "super_admin" || user?.role === "office_admin") && (
         <GoogleSheetsSettings />
       )}
+
+      <SoundHapticsSettings />
 
       <PinSettingsSection />
     </div>

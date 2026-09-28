@@ -18,6 +18,7 @@
  *     everything falls back to the original sonner toasts.
  */
 import { toast as sonnerToast } from "sonner";
+import { playSuccessCue } from "@/lib/feedbackSound";
 
 const origSuccess = sonnerToast.success.bind(sonnerToast);
 const origError = sonnerToast.error.bind(sonnerToast);
@@ -65,6 +66,9 @@ export function celebrate({
 } = {}) {
   if (kind === "success") lastCelebrationAt = Date.now();
   current = { id: Date.now() + Math.random(), kind, caption, message, milestone, title, subtitle };
+  if (kind === "success") {
+    try { playSuccessCue({ milestone: !!milestone }); } catch { /* best-effort */ }
+  }
   emit();
 }
 

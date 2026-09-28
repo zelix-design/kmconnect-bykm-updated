@@ -26,6 +26,15 @@ function milestoneFor(method, url) {
   return null;
 }
 
+// Some successful mutations aren't a "save" at all — give them their own
+// welcoming wording instead of the generic "Saved successfully!".
+function customFor(method, url) {
+  if (/\/pin\/verify$/.test(url)) {
+    return { caption: "Unlocked!", title: "Unlocked!", subtitle: "You're in — here's your confidential revenue." };
+  }
+  return null;
+}
+
 function maybeCelebrate(resp) {
   try {
     const cfg = resp?.config || {};
@@ -34,6 +43,11 @@ function maybeCelebrate(resp) {
     if (cfg.skipCelebration) return;
     const url = cfg.url || "";
     if (CELEBRATE_EXCLUDES.some((x) => url.includes(x))) return;
+    const custom = customFor(method, url);
+    if (custom) {
+      celebrate({ kind: "success", caption: custom.caption, title: custom.title, subtitle: custom.subtitle });
+      return;
+    }
     const milestone = milestoneFor(method, url);
     if (milestone) {
       celebrate({ kind: "success", caption: "Saved", milestone: true, title: milestone.title, subtitle: milestone.subtitle });

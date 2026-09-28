@@ -4,6 +4,7 @@ import { useAuth } from "@/lib/auth";
 import AuthedImage from "@/components/AuthedImage";
 import { Button } from "@/components/ui/button";
 import PinSettingsSection from "@/components/settings/PinSettingsSection";
+import SoundHapticsSettings from "@/components/settings/SoundHapticsSettings";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -154,6 +155,7 @@ export default function StaffProfile() {
           </form>
         )}
       </Card>
+      <SoundHapticsSettings />
       <PinSettingsSection />
     </div>
   );
