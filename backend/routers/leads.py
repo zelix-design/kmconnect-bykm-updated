@@ -61,6 +61,7 @@ class LeadIn(BaseModel):
     source: str = "other"
     status: str = "new"
     assigned_to_user_id: Optional[str] = None
+    campaign_id: Optional[str] = None
     next_follow_up: Optional[str] = None  # ISO datetime (UTC) or null
     notes: Optional[str] = ""
 
@@ -522,6 +523,44 @@ async def my_campaigns(user: dict = Depends(get_current_user)):
     cmap = {c["id"]: c.get("name") for c in cs}
     out = [{"id": cid, "name": cmap.get(cid) or "Campaign", "count": n} for cid, n in counts.items()]
     out.sort(key=lambda x: (-x["count"], x["name"].lower()))
+    return out
+
+
+@router.get("/assigned-campaigns")
+async def assigned_campaigns(user: dict = Depends(get_current_user)):
+    """Campaigns the caller can tag a new lead to.
+
+    - staff: campaigns in their office where they're in the distribution plan
+      OR already own at least one lead ("assigned campaigns").
+    - office_admin: every campaign in their office.
+    - super_admin: every campaign.
+    Returns [{id, name}] sorted by name.
+    """
+    role = user.get("role")
+    if role not in ("super_admin", "office_admin", "staff"):
+        raise HTTPException(403, "Not allowed")
+
+    if role == "super_admin":
+        q: dict = {}
+    else:
+        q = {"office": user.get("office")}
+    cs = await db.campaigns.find(q, {"_id": 0, "id": 1, "name": 1, "distribute_employee_ids": 1}).to_list(2000)
+
+    if role == "staff":
+        uid = user["id"]
+        # Campaigns where this staff already owns leads.
+        lead_docs = await db.leads.find(
+            {"assigned_to_user_id": uid, "campaign_id": {"$nin": [None, ""]}},
+            {"_id": 0, "campaign_id": 1},
+        ).to_list(200_000)
+        owned = {d.get("campaign_id") for d in lead_docs if d.get("campaign_id")}
+        cs = [
+            c for c in cs
+            if uid in (c.get("distribute_employee_ids") or []) or c["id"] in owned
+        ]
+
+    out = [{"id": c["id"], "name": c.get("name") or "Campaign"} for c in cs]
+    out.sort(key=lambda x: x["name"].lower())
     return out
 
 
@@ -997,6 +1036,18 @@ async def create_lead(payload: LeadIn, user: dict = Depends(require_edit("leads"
         raise HTTPException(400, "Invalid status")
     src = payload.source if payload.source in LEAD_SOURCES else "other"
 
+    campaign_id: Optional[str] = None
+    if payload.campaign_id:
+        cq: dict = {"id": payload.campaign_id}
+        if role != "super_admin":
+            cq["office"] = user.get("office")
+        camp = await db.campaigns.find_one(cq, {"_id": 0, "id": 1, "office": 1})
+        if not camp:
+            raise HTTPException(400, "Campaign not found")
+        campaign_id = camp["id"]
+        if office is None:
+            office = camp.get("office")
+
     doc = {
         "id": gen_id(),
         "name": payload.name.strip(),
@@ -1007,6 +1058,7 @@ async def create_lead(payload: LeadIn, user: dict = Depends(require_edit("leads"
         "source": src,
         "status": payload.status,
         "assigned_to_user_id": assigned_to,
+        "campaign_id": campaign_id,
         "office": office,
         "next_follow_up": payload.next_follow_up or None,
         "notes": (payload.notes or "").strip(),
