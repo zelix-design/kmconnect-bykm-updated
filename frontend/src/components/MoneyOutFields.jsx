@@ -74,7 +74,7 @@ export default function MoneyOutFields({
           </div>
         )}
 
-        {kind === "expense" && (
+        {kind === "expense" && expenseOf !== "personal" && (
           <div>
             <Label>Category</Label>
             <Select value={categoryId || NONE} onValueChange={(v) => onCategoryChange(v === NONE ? "" : v)}>
@@ -93,6 +93,16 @@ export default function MoneyOutFields({
             </Select>
           </div>
         )}
+
+        <div>
+          <Label>Mode of payment</Label>
+          <Select value={paymentMode || ""} onValueChange={onPaymentModeChange}>
+            <SelectTrigger data-testid={`${idPrefix}-payment-mode`}><SelectValue placeholder="Select mode" /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
         {showStudents && recipientId && (
           <div>
@@ -123,18 +133,6 @@ export default function MoneyOutFields({
             />
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <Label>Mode of payment</Label>
-          <Select value={paymentMode || ""} onValueChange={onPaymentModeChange}>
-            <SelectTrigger data-testid={`${idPrefix}-payment-mode`}><SelectValue placeholder="Select mode" /></SelectTrigger>
-            <SelectContent>
-              {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
     </div>
   );
