@@ -208,9 +208,13 @@ function SidebarContent({ onItemClick, user, onLogout }) {
                   <section.icon size={17} weight="regular" className="shrink-0" />
                   <span className="flex-1 text-left">{section.label}</span>
                 </button>
-                {open && (
-                  <div className="mt-0.5 space-y-0.5">
-                    {section.items.map((item) => renderLink(item, true))}
+                {section.items.length > 0 && (
+                  <div className={`nav-collapse ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                    <div className="overflow-hidden min-h-0">
+                      <div className="mt-0.5 space-y-0.5">
+                        {section.items.map((item) => renderLink(item, true))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -415,7 +419,9 @@ export default function AppShell() {
         </header>
 
         <div className="px-4 sm:px-6 lg:px-10 py-6 sm:py-8 pb-28 md:pb-12 max-w-[1500px] w-full mx-auto">
-          <Outlet />
+          <div key={location.pathname} className="route-enter">
+            <Outlet />
+          </div>
         </div>
       </main>
       <BottomNav />

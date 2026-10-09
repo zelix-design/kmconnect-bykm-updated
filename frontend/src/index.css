@@ -499,3 +499,59 @@ h1, h2, h3, h4, h5, h6, .font-display {
     .view-enter { animation: none !important; }
 }
 
+/* Dashboard tile slider — a gradient highlight that glides to the active tile,
+   mirroring the sidebar's sliding active-highlight. */
+.tile-highlight {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 24px -10px rgba(234, 88, 12, 0.5);
+    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                height 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Smooth page/route transition when navigating between pages */
+@keyframes routeEnter {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: none; }
+}
+.route-enter {
+    animation: routeEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Collapsible sidebar group (grid-rows trick) */
+.nav-collapse {
+    display: grid;
+    transition: grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Shimmer skeleton loader */
+.shimmer {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--muted));
+}
+.shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, hsl(var(--card) / 0.65), transparent);
+    animation: shimmerSweep 1.4s infinite;
+}
+@keyframes shimmerSweep {
+    100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tile-highlight { transition: none !important; }
+    .route-enter { animation: none !important; }
+    .nav-collapse { transition: none !important; }
+    .shimmer::after { animation: none !important; display: none; }
+}
+

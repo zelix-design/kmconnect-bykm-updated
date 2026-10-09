@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef, useLayoutEffect } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate, greetingForNow } from "@/lib/format";
@@ -91,6 +91,21 @@ function SuperAdminDashboard() {
   const [custom, setCustom] = useState({ start: "", end: "" });
   const [activeTile, setActiveTile] = useState("transactions");
   const [listFilter, setListFilter] = useState("monthly");
+  const [booted, setBooted] = useState(false);
+
+  // Sliding highlight that glides to the active tile (like the sidebar rail).
+  const tileRefs = useRef({});
+  const [tileHl, setTileHl] = useState({ x: 0, y: 0, w: 0, h: 0, show: false });
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tileRefs.current[activeTile];
+      if (!el) { setTileHl((s) => ({ ...s, show: false })); return; }
+      setTileHl({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight, show: true });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [activeTile]);
 
   const range = useMemo(() => {
     if (preset === "custom") {
@@ -130,7 +145,8 @@ function SuperAdminDashboard() {
       setStudents(st.data);
       setClients(cl.data);
       setLedger(lg.data);
-    })().catch(() => {});
+      setBooted(true);
+    })().catch(() => { setBooted(true); });
   }, [range, isLightUser]);
 
   const filteredTransactions = useMemo(
@@ -172,34 +188,42 @@ function SuperAdminDashboard() {
         </div>
       </header>
 
-      {/* Inline tile tabs */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 dash-stagger" data-testid="quick-nav-tiles">
-        {TILES.filter((t) => !t.roles || t.roles.includes(role)).map((t) => {
-          const p = PALETTES[t.palette];
-          const active = activeTile === t.key;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => { setActiveTile(t.key); setListFilter("monthly"); }}
-              data-testid={`tile-${t.key}`}
-              className={`group press-spring card-hover flex items-center gap-3 p-4 rounded-xl text-left transition-all ${
-                active
-                  ? "bg-amber-gradient text-white border border-orange-500"
-                  : "bg-card border border-border hover:border-border"
-              }`}
-            >
-              <div className={`stat-icon w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-white/20 text-white" : p.icon}`}>
-                <t.icon size={18} weight={active ? "fill" : "duotone"} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium tracking-tight ${active ? "text-white" : "text-foreground"}`}>{t.label}</p>
-                <p className={`text-xs ${active ? "text-white/80" : "text-muted-foreground"}`}>{active ? "Selected" : "Open"}</p>
-              </div>
-              <ArrowUpRight size={14} className={active ? "text-white/80" : "text-muted-foreground/70 group-hover:text-foreground"} />
-            </button>
-          );
-        })}
+      {/* Inline tile tabs — gradient highlight slides to the active tile */}
+      <section className="relative" data-testid="quick-nav-tiles">
+        <span
+          aria-hidden="true"
+          className="tile-highlight bg-amber-gradient"
+          style={{ transform: `translate(${tileHl.x}px, ${tileHl.y}px)`, width: tileHl.w, height: tileHl.h, opacity: tileHl.show ? 1 : 0 }}
+        />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 dash-stagger">
+          {TILES.filter((t) => !t.roles || t.roles.includes(role)).map((t) => {
+            const p = PALETTES[t.palette];
+            const active = activeTile === t.key;
+            return (
+              <button
+                key={t.key}
+                ref={(el) => { tileRefs.current[t.key] = el; }}
+                type="button"
+                onClick={() => { setActiveTile(t.key); setListFilter("monthly"); }}
+                data-testid={`tile-${t.key}`}
+                className={`group press-spring relative z-[1] flex items-center gap-3 p-4 rounded-xl text-left transition-colors border ${
+                  active
+                    ? "text-white border-transparent"
+                    : "bg-transparent border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className={`stat-icon w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-white/20 text-white" : p.icon}`}>
+                  <t.icon size={18} weight={active ? "fill" : "duotone"} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium tracking-tight ${active ? "text-white" : "text-foreground"}`}>{t.label}</p>
+                  <p className={`text-xs ${active ? "text-white/80" : "text-muted-foreground"}`}>{active ? "Selected" : "Open"}</p>
+                </div>
+                <ArrowUpRight size={14} className={active ? "text-white/80" : "text-muted-foreground/70 group-hover:text-foreground"} />
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       {/* Date range filter */}
@@ -228,6 +252,8 @@ function SuperAdminDashboard() {
       </div>
 
       {/* Tile-driven overview */}
+      {!booted ? <DashboardSkeleton /> : (
+      <>
       <div key={`ov-${activeTile}`} data-testid={`overview-${activeTile}`} className="space-y-7 dash-reveal view-enter">
         {activeTile === "transactions" && (
           <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} transactions={transactions} currency={currency} range={range} hideActivityChart={isLightUser} />
@@ -290,6 +316,36 @@ function SuperAdminDashboard() {
       </section>
 
       {role === "super_admin" && <div className="dash-reveal"><LeadFunnel /></div>}
+      </>
+      )}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-7" data-testid="dashboard-skeleton">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="p-5 rounded-xl bg-card border border-border">
+            <div className="shimmer w-10 h-10 rounded-lg" />
+            <div className="shimmer h-7 w-24 rounded-md mt-4" />
+            <div className="shimmer h-3 w-20 rounded mt-3" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 p-6 rounded-xl bg-card border border-border">
+          <div className="shimmer h-3 w-24 rounded" />
+          <div className="shimmer h-5 w-40 rounded mt-2" />
+          <div className="shimmer h-64 w-full rounded-lg mt-4" />
+        </div>
+        <div className="p-6 rounded-xl bg-card border border-border">
+          <div className="shimmer h-3 w-24 rounded" />
+          <div className="shimmer h-5 w-32 rounded mt-2" />
+          <div className="shimmer h-40 w-40 rounded-full mx-auto mt-6" />
+        </div>
+      </div>
     </div>
   );
 }
