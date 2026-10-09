@@ -1666,3 +1666,13 @@ admissions per year. It's confidential — only super admin can see it."
 - Full prefers-reduced-motion fallback (instant values, no motion) for reveal, count-up, and charts.
 - Scope: `SuperAdminDashboard` only. Verified frontend (iteration_82.json, 100%). Phase 2 (Students/Leads/Office dashboards + reveal-on-scroll) and Phase 3 (modal scale-in, shimmer loaders, animated tooltips) remain backlog.
 - Also this session: campaign dropdown on Add/Edit lead form (`GET /api/leads/assigned-campaigns`, `campaign_id` on lead create); Academic Year selector moved from top header into the sidebar/mobile menu; dashboard tile "Transactions" renamed "Accounts".
+
+---
+
+## 2026-10-09 (b) — Animations Phase 2 + reveal-on-scroll + lead campaign badge
+- Extended count-up + staggered entrance to the Office dashboard (`OfficeDashboard.jsx`), CRM analytics (`CrmAnalytics.jsx` — KPI count-up + chart animations), Staff dashboard (`StaffDashboard.jsx`) and the Leads pipeline stat tiles (`LeadsPipeline.jsx`), all via `AnimatedNumber` + `.dash-stagger`.
+- New reusable `components/Reveal.jsx` (IntersectionObserver) + `.reveal-on-scroll` CSS: lower sections / card grids fade+rise as they scroll into view on Students, Leads, Staff & Office pages. Full prefers-reduced-motion fallback.
+- Lead campaign badge now shows on lead cards for ALL roles whenever a lead has a campaign (was staff/all-leads only); "Uncategorised" chip kept for the all-leads admin view.
+- Confirmed the admin staff password-reset route `POST /api/staff/members/{client_id}/login/reset` already exists and works (bogus id → "Staff member not found", short password → 422). The previously-tracked "missing reset route" issue is RESOLVED.
+- Verified frontend (iteration_83.json, 100%): count-ups land on real values, 0 stuck-hidden reveal elements, 0 page errors, campaign badges render. Known pre-existing note: the Leads page mounts two LeadsPipeline tabs → duplicate lead-card testids (not a regression).
+- Remaining (Phase 3 backlog): modal scale-in, shimmer skeleton loaders, animated chart tooltips.

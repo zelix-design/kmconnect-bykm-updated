@@ -1,0 +1,32 @@
+{
+  "summary": "Phase-2 dashboard entrance animations + reveal-on-scroll + lead campaign badge verified across Office Admin, Staff, Super Admin. All count-up stat cards end on real values (no 0/—/NaN unless the data truly is 0), reveal sections become visible after scroll (zero still-hidden .reveal-on-scroll elements), lead campaign badges render on all-roles. No runtime/console errors beyond expected 401s on the pre-login endpoint.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "office_admin_stats": {"stat-admissions":"0 (empty office — correct)","stat-incentive-earned":"₹0.00","stat-incentive-pending":"₹0.00","stat-staff-count":"0"},
+    "office_crm_kpis": {"total-leads":"75","total-admissions":"23","conversion-rate":"12%","pending-follow-ups":"5","lost-leads":"2"},
+    "office_crm_charts_visible": ["crm-funnel","crm-monthly","crm-college","crm-course","crm-lost"],
+    "staff_dashboard_stats": {"leads":"9","missed":"1","referrals":"0","leave":"0","mini_new":"8","mini_follow_up":"1","mini_interested":"0","mini_converted":"0"},
+    "staff_leads_pipeline": {"total":"9","followup":"1","missed":"1","converted":"0","lead_cards":18,"campaign_badges":0,"grid_visible":true,"note":"0 campaign badges is correct — none of this staff's 9 CSV-import leads carry a campaign_id"},
+    "super_admin_all_leads": {"total":"78","followup":"7","missed":"5","converted":"2","campaign_badges":78,"sample_names":["Uncategorised","Duplicating Leads"],"grid_visible":true},
+    "students_grid_visible_after_scroll": true,
+    "stuck_hidden_reveal_elements": 0,
+    "pageerrors": 0
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SA all-leads screenshot shows ~156 lead-card testids for 78 leads — likely duplicated rendering (list + board/preview or stale testid reuse). Non-blocking cosmetic/testability concern; worth confirming only one card per lead renders."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not tested per request)", "frontend": "100%"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co/kmf@0786, Office Admin blr1@finflow.com/Office@123, Staff staff.blr@kmfoundation.online/Staff@123",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login form has no data-testid on inputs; use input[type=email] / input[type=password] / button[type=submit]. The /logout route does not clear session in this app — use context.clear_cookies() + localStorage.clear() between accounts. SA /leads and /crm redirect to overview; access via sidebar Office -> CRM, then click 'All leads' tab to see lead cards and campaign badges."
+}
