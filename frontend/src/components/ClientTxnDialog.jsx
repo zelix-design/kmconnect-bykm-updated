@@ -89,16 +89,18 @@ export default function ClientTxnDialog({ open, onOpenChange, client, onSaved })
             ))}
           </div>
 
-          <div>
-            <Label>Amount</Label>
-            <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="client-txn-amount" />
-          </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Amount</Label>
+              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="client-txn-amount" />
+            </div>
             <div>
               <Label>Date</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="client-txn-date" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Account</Label>
               <Select value={accountId} onValueChange={setAccountId}>
