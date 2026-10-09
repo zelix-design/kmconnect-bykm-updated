@@ -179,15 +179,27 @@ export default function QuickEntry() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-3xl" data-testid="quick-entry-page">
-      <header>
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          {!isLightUser && (
+            <button onClick={() => setView("hub")} data-testid="qe-back-to-hub" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
+              <ArrowLeft size={12} /> Back to quick actions
+            </button>
+          )}
+          <p className="label-eyebrow">Quick entry</p>
+          <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Add transaction</h1>
+          <p className="text-sm text-muted-foreground mt-1">Log a payout, an expense or money coming in.</p>
+          {!isLightUser && (
+            <Button type="button" variant="outline" onClick={() => nav("/invoices")} data-testid="qe-generate-invoice-mobile" className="sm:hidden mt-3 h-10">
+              <FileText size={16} className="mr-1.5" /> Generate Invoice
+            </Button>
+          )}
+        </div>
         {!isLightUser && (
-          <button onClick={() => setView("hub")} data-testid="qe-back-to-hub" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 mb-2">
-            <ArrowLeft size={12} /> Back to quick actions
-          </button>
+          <Button type="button" variant="outline" onClick={() => nav("/invoices")} data-testid="qe-generate-invoice" className="hidden sm:inline-flex h-10 shrink-0">
+            <FileText size={16} className="mr-1.5" /> Generate Invoice
+          </Button>
         )}
-        <p className="label-eyebrow">Quick entry</p>
-        <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Add transaction</h1>
-        <p className="text-sm text-muted-foreground mt-1">Log a payout, an expense or money coming in.</p>
       </header>
 
       {/* Kind toggle */}
@@ -297,11 +309,6 @@ export default function QuickEntry() {
           <Button type="button" variant="outline" onClick={() => nav("/transactions")} data-testid="qe-view-all" className="h-12">
             View all transactions
           </Button>
-          {!isLightUser && (
-            <Button type="button" variant="outline" onClick={() => nav("/invoices")} data-testid="qe-generate-invoice" className="h-12">
-              <FileText size={16} className="mr-1.5" /> Generate Invoice
-            </Button>
-          )}
         </div>
       </Card>
     </div>
