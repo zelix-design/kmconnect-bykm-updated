@@ -367,3 +367,27 @@ h1, h2, h3, h4, h5, h6, .font-display {
     .pin-unlock-ring, .pin-unlock-icon { animation: none !important; }
 }
 
+/* ── Dashboard entrance motion ─────────────────────────────────────────── */
+@keyframes dashRise {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.dash-reveal {
+    animation: dashRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dash-stagger > * {
+    animation: dashRise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.dash-stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.dash-stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.dash-stagger > *:nth-child(3) { animation-delay: 0.15s; }
+.dash-stagger > *:nth-child(4) { animation-delay: 0.20s; }
+.dash-stagger > *:nth-child(5) { animation-delay: 0.25s; }
+.dash-stagger > *:nth-child(6) { animation-delay: 0.30s; }
+.dash-stagger > *:nth-child(7) { animation-delay: 0.35s; }
+.dash-stagger > *:nth-child(8) { animation-delay: 0.40s; }
+@media (prefers-reduced-motion: reduce) {
+    .dash-reveal,
+    .dash-stagger > * { animation: none !important; }
+}
+

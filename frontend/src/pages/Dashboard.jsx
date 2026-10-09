@@ -24,6 +24,7 @@ import {
   FILTER_OPTIONS, LEDGER_TYPE_LABEL, LEDGER_TYPE_COLOR, PALETTES,
 } from "@/lib/dashboardUtils";
 import { StatCard, ChartHeader, Empty } from "@/components/dashboard/StatCard";
+import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
 import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
 import LeadFunnel from "@/components/leads/LeadFunnel";
@@ -51,6 +52,15 @@ const CHART_MARGIN_X8 = { left: 8, right: 8 };
 const CHART_AXIS_TICK_MUTED = { fill: "hsl(var(--muted-foreground))", fontSize: 11 };
 const CHART_AXIS_TICK_FG = { fill: "hsl(var(--foreground))", fontSize: 12 };
 const CHART_BAR_RADIUS_R = [0, 4, 4, 0];
+
+// Honour the OS "reduce motion" setting: when on, charts render final state
+// instantly (no draw-in), matching the dashboard's count-up + reveal fallback.
+const REDUCE_MOTION =
+  typeof window !== "undefined" &&
+  window.matchMedia &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const CHART_ANIM = !REDUCE_MOTION;
+const CHART_ANIM_MS = 900;
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -162,7 +172,7 @@ function SuperAdminDashboard() {
       </header>
 
       {/* Inline tile tabs */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="quick-nav-tiles">
+      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 dash-stagger" data-testid="quick-nav-tiles">
         {TILES.filter((t) => !t.roles || t.roles.includes(role)).map((t) => {
           const p = PALETTES[t.palette];
           const active = activeTile === t.key;
@@ -233,7 +243,7 @@ function SuperAdminDashboard() {
       </div>
 
       {/* Inline list driven by active tile */}
-      <section data-testid="active-tile-section">
+      <section data-testid="active-tile-section" className="dash-reveal">
         <Card className="border border-border bg-card rounded-xl shadow-none">
           <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60">
             <div>
@@ -278,7 +288,7 @@ function SuperAdminDashboard() {
         </Card>
       </section>
 
-      {role === "super_admin" && <LeadFunnel />}
+      {role === "super_admin" && <div className="dash-reveal"><LeadFunnel /></div>}
     </div>
   );
 }
@@ -304,17 +314,17 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
 
   return (
     <>
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={formatMoney(todaysSpend, currency)} palette="amber" icon={ShoppingBag} hint="All expense transactions today"
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
+        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={<AnimatedNumber value={todaysSpend} format={(n) => formatMoney(n, currency)} />} palette="amber" icon={ShoppingBag} hint="All expense transactions today"
           onClick={() => nav("/transactions?type=expense")} />
-        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={formatMoney(summary?.month_income ?? 0, currency)} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight}
+        <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={<AnimatedNumber value={summary?.month_income ?? 0} format={(n) => formatMoney(n, currency)} />} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight}
           onClick={() => nav("/transactions?type=income")} />
-        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={formatMoney(summary?.month_expense ?? 0, currency)} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight}
+        <StatCard testId="stat-expense" eyebrow={`Expenses · ${range?.label || ""}`} value={<AnimatedNumber value={summary?.month_expense ?? 0} format={(n) => formatMoney(n, currency)} />} trend={cfTrend.expense} palette="rose" icon={ArrowDownRight}
           onClick={() => nav("/transactions?type=expense")} />
-        <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={formatMoney(summary?.outstanding_invoices ?? 0, currency)} palette="violet" icon={FileText} hint="Sent + overdue"
+        <StatCard testId="stat-outstanding" eyebrow="Outstanding invoices" value={<AnimatedNumber value={summary?.outstanding_invoices ?? 0} format={(n) => formatMoney(n, currency)} />} palette="violet" icon={FileText} hint="Sent + overdue"
           onClick={() => nav("/invoices?filter=outstanding")} />
       </section>
-      <section className={`grid grid-cols-1 ${hideActivityChart ? "" : "lg:grid-cols-3"} gap-4`}>
+      <section className={`grid grid-cols-1 ${hideActivityChart ? "" : "lg:grid-cols-3"} gap-4 dash-stagger`}>
         {!hideActivityChart && (
           <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
             <ChartHeader eyebrow="Activity" title="Last 6 months" right={
@@ -334,8 +344,8 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                   <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                  <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" />
-                  <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" />
+                  <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                  <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -350,7 +360,7 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
                       {byCat.map((entry) => (<Cell key={`${entry.name}-${entry.color}`} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
@@ -443,17 +453,17 @@ function StudentsOverview({ students, currency, range }) {
 
   return (
     <>
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="st-stat-total" eyebrow="Total students" value={String(stats.total)} palette="amber" icon={Student}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
+        <StatCard testId="st-stat-total" eyebrow="Total students" value={<AnimatedNumber value={stats.total} format={(n) => String(Math.round(n))} />} palette="amber" icon={Student}
           onClick={() => nav("/students")} />
-        <StatCard testId="st-stat-collected" eyebrow="Collected" value={formatMoney(stats.collected, currency)} palette="emerald" icon={ArrowUpRight}
+        <StatCard testId="st-stat-collected" eyebrow="Collected" value={<AnimatedNumber value={stats.collected} format={(n) => formatMoney(n, currency)} />} palette="emerald" icon={ArrowUpRight}
           onClick={() => nav("/students")} />
-        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={formatMoney(stats.balance, currency)} palette="rose" icon={ArrowDownRight} hint="vs. SC Earned"
+        <StatCard testId="st-stat-balance" eyebrow="Outstanding balance" value={<AnimatedNumber value={stats.balance} format={(n) => formatMoney(n, currency)} />} palette="rose" icon={ArrowDownRight} hint="vs. SC Earned"
           onClick={() => nav("/students?filter=balance")} />
-        <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={String(periodStats.count)} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`}
+        <StatCard testId="st-stat-period" eyebrow={`Enrolled · ${range?.label || ""}`} value={<AnimatedNumber value={periodStats.count} format={(n) => String(Math.round(n))} />} palette="violet" icon={FileText} hint={`${formatMoney(periodStats.collected, currency)} collected`}
           onClick={() => nav("/students?filter=enrolled")} />
       </section>
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 dash-stagger">
         <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
           <ChartHeader eyebrow="Activity" title="Enrollments · last 6 months" right={<span className="text-xs text-muted-foreground">{stats.total} total</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
@@ -464,7 +474,7 @@ function StudentsOverview({ students, currency, range }) {
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" />
+                <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -476,7 +486,7 @@ function StudentsOverview({ students, currency, range }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                    <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
                       {statusPie.map((e) => (<Cell key={`status-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
@@ -573,17 +583,17 @@ function ClientsOverview({ clients, students }) {
 
   return (
     <>
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="cl-stat-total" eyebrow="Total clients" value={String(stats.total)} palette="amber" icon={UsersThree}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
+        <StatCard testId="cl-stat-total" eyebrow="Total clients" value={<AnimatedNumber value={stats.total} format={(n) => String(Math.round(n))} />} palette="amber" icon={UsersThree}
           onClick={() => nav("/clients")} />
-        <StatCard testId="cl-stat-sub" eyebrow="Sub Agents / Associates" value={String(stats.counts.sub_agent_associate)} palette="violet" icon={IdentificationBadge}
+        <StatCard testId="cl-stat-sub" eyebrow="Sub Agents / Associates" value={<AnimatedNumber value={stats.counts.sub_agent_associate} format={(n) => String(Math.round(n))} />} palette="violet" icon={IdentificationBadge}
           onClick={() => nav("/clients?type=sub_agent_associate")} />
-        <StatCard testId="cl-stat-consultant" eyebrow="Associate Consultants" value={String(stats.counts.associate_consultant)} palette="rose" icon={Briefcase}
+        <StatCard testId="cl-stat-consultant" eyebrow="Associate Consultants" value={<AnimatedNumber value={stats.counts.associate_consultant} format={(n) => String(Math.round(n))} />} palette="rose" icon={Briefcase}
           onClick={() => nav("/clients?type=associate_consultant")} />
-        <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={String(stats.kmTotal)} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined"
+        <StatCard testId="cl-stat-km" eyebrow="KM Offices" value={<AnimatedNumber value={stats.kmTotal} format={(n) => String(Math.round(n))} />} palette="emerald" icon={Buildings} hint="BLR · TCR · KMLY combined"
           onClick={() => nav("/clients?type=km_office")} />
       </section>
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 dash-stagger">
         <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
           <ChartHeader eyebrow="Activity" title="Clients added · last 6 months" right={<span className="text-xs text-muted-foreground">{stats.total} total</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
@@ -594,7 +604,7 @@ function ClientsOverview({ clients, students }) {
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" />
+                <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -606,7 +616,7 @@ function ClientsOverview({ clients, students }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
                       {typePie.map((e) => (<Cell key={`tp-st-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
@@ -717,15 +727,15 @@ function LedgerOverview({ ledger, students, currency }) {
 
   return (
     <>
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard testId="lg-stat-received" eyebrow="Total routed" value={formatMoney(stats.totalReceived, currency)} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
+        <StatCard testId="lg-stat-received" eyebrow="Total routed" value={<AnimatedNumber value={stats.totalReceived} format={(n) => formatMoney(n, currency)} />} palette="amber" icon={Notebook} hint={`${(ledger || []).length} contacts`}
           onClick={() => nav("/agents")} />
-        <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={formatMoney(stats.paidToCollege, currency)} palette="sky" icon={Buildings}
+        <StatCard testId="lg-stat-college" eyebrow="Paid to college" value={<AnimatedNumber value={stats.paidToCollege} format={(n) => formatMoney(n, currency)} />} palette="sky" icon={Buildings}
           onClick={() => nav("/agents?type=paid_to_college")} />
-        <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={formatMoney(stats.scAdjusted, currency)} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out"
+        <StatCard testId="lg-stat-sc" eyebrow="Sub-Agents Routed" value={<AnimatedNumber value={stats.scAdjusted} format={(n) => formatMoney(n, currency)} />} palette="emerald" icon={ArrowDownRight} hint="SC adjusted out"
           onClick={() => nav("/agents?type=sub_agent")} />
         <div className="relative" data-testid="lg-stat-holding-wrapper">
-          <StatCard testId="lg-stat-holding" eyebrow="Holding" value={formatMoney(stats.holding, currency)} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled"
+          <StatCard testId="lg-stat-holding" eyebrow="Holding" value={<AnimatedNumber value={stats.holding} format={(n) => formatMoney(n, currency)} />} palette={stats.holding > 0 ? "rose" : "violet"} icon={FileText} hint="Routed − settled"
             onClick={() => nav("/agents?filter=holding")} />
           {stats.holding > 0 && (
             <Link
@@ -739,7 +749,7 @@ function LedgerOverview({ ledger, students, currency }) {
           )}
         </div>
       </section>
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 dash-stagger">
         <Card className="lg:col-span-2 p-6 border border-border bg-card rounded-xl shadow-none">
           <ChartHeader eyebrow="Activity" title="Amount routed · all time, monthly" right={<span className="text-xs text-muted-foreground">{formatMoney(stats.totalReceived, currency)}</span>} />
           <div className="h-72 -ml-2" style={{ minHeight: 280 }}>
@@ -750,7 +760,7 @@ function LedgerOverview({ ledger, students, currency }) {
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" />
+                <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -764,7 +774,7 @@ function LedgerOverview({ ledger, students, currency }) {
                     <XAxis type="number" tick={CHART_AXIS_TICK_MUTED} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
                     <YAxis dataKey="name" type="category" tick={CHART_AXIS_TICK_FG} axisLine={false} tickLine={false} width={120} />
                     <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                    <Bar dataKey="value" radius={CHART_BAR_RADIUS_R}>
+                    <Bar dataKey="value" radius={CHART_BAR_RADIUS_R} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
                       {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
                     </Bar>
                   </BarChart>
@@ -780,7 +790,7 @@ function LedgerOverview({ ledger, students, currency }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2}>
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
                       {typePie.map((e) => (<Cell key={`tp-ag-${e.name || e.color}`} fill={e.color} />))}
                     </Pie>
                     <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
