@@ -12,6 +12,8 @@ import { clientTypeLabel } from "@/pages/Clients";
 import AuthedImage from "@/components/AuthedImage";
 import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
 import StaffQuotaDialog from "@/components/leave/StaffQuotaDialog";
+import ClientTxnDialog from "@/components/ClientTxnDialog";
+import InvoiceCreateDialog from "@/components/InvoiceCreateDialog";
 
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
@@ -37,6 +39,8 @@ export default function ClientDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quotaOpen, setQuotaOpen] = useState(false);
+  const [txnOpen, setTxnOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,7 +122,7 @@ export default function ClientDetail() {
           </div>
           <div className="flex gap-2 self-start flex-wrap">
             <Button
-              onClick={() => nav(`/quick-entry?view=transaction&client=${c.id}`)}
+              onClick={() => setTxnOpen(true)}
               data-testid="client-add-transaction"
               className="btn-amber border-0"
             >
@@ -127,7 +131,7 @@ export default function ClientDetail() {
             {user?.role === "super_admin" && (
               <Button
                 variant="outline"
-                onClick={() => nav(`/invoices?new=1&client=${c.id}`)}
+                onClick={() => setInvoiceOpen(true)}
                 data-testid="client-new-invoice"
               >
                 <FileText size={14} className="mr-1.5" /> New Invoice
@@ -340,6 +344,10 @@ export default function ClientDetail() {
           userName={loginUser.name || c.name}
           onSaved={load}
         />
+      )}
+      <ClientTxnDialog open={txnOpen} onOpenChange={setTxnOpen} client={c} onSaved={load} />
+      {user?.role === "super_admin" && (
+        <InvoiceCreateDialog open={invoiceOpen} onOpenChange={setInvoiceOpen} presetClientId={c.id} onCreated={load} />
       )}
     </div>
   );

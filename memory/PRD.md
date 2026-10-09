@@ -1758,3 +1758,8 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - ClientDetail: added "Add Transaction" (→ /quick-entry?view=transaction&client=<id>, recipient prefilled) and "New Invoice" (super_admin → /invoices?new=1&client=<id>, opens the create dialog with the client preselected) on every client detail page.
 - Invoices: supports /invoices?new=1&client=<id> to auto-open the create dialog with the client preselected.
 - Verified via screenshots: ClientDetail buttons render; Add Transaction prefills recipient "SAJIN · Sub-Associate".
+
+## 2026-06 — Client detail: in-page Add Transaction / Invoice popups
+- ClientDetail "Add Transaction" now opens an in-page popup (new ClientTxnDialog): Payout | Expense only (no Income), recipient locked to the client, amount/date/account, student-referred/expense-of/mode/category, notes. On save it POSTs /transactions (client_id = this client) and stays on the client page (reloads detail). Verified via screenshot — dialog titled "Add transaction — SAJIN", recipient prefilled "SAJIN · Sub-Associate".
+- ClientDetail "New Invoice" (super_admin) opens an in-page popup (new InvoiceCreateDialog wrapping InvoiceForm with the same create logic as Invoices.jsx); on create it stays on the client page (reloads detail). Verified dialog opens with auto invoice number + full form.
+- Both reuse verified backend create paths; no navigation away from the client detail page.
