@@ -1706,3 +1706,23 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Sidebar ATTENTION DOTS wired to real signals: AppShell fetches `/messages/unread-count` (all roles) and `/expense-requests?status=pending` (super admin) into an `alerts` state (refetched on route change + every 60s), passed to SidebarContent. A rose count badge (`nav-alert-<tid>`) renders on the Messages item (unread) and the super-admin Approvals item (pending); a collapsed nav GROUP header shows a rose dot (`nav-group-alert-<key>`) if any child item has a signal.
 - SHIMMER skeletons during data load: new `components/Shimmer.jsx` (ShimmerBlock, StatRowSkeleton, CardGridSkeleton) applied to Leads/CRM pipeline (`leads-loading`), Students page (`students-loading`, added a `loading` state), and Office dashboard stat row (`stat-skeleton`). Uses the `.shimmer` sweep (reduce-motion disables it).
 - Verified frontend (iteration_86.json, 100%): approvals badge showed '1' (seeded), messages badge absent at 0 unread / '9+' for office admin with unread, all three shimmer testids confirmed, 0 non-auth console errors. Seeded test approval + its auto-created transaction + notifications were fully cleaned up afterwards (DB back to pre-test state).
+
+
+---
+
+## 2026-06 — Service Charge payouts to Sub-Associates / Associate Consultants
+**Problem:** Track money paid OUT to sub-associates / associate consultants as Service Charge payouts; surface them in Transactions + the Sub-agent Ledger and have them reduce the agent's holding.
+
+**Backend:**
+- `models.py TransactionIn` — added `is_sc_payout: bool = False` + `payment_mode: Optional[str]`. `client_id` reused as the payout recipient.
+- `routers/transactions.py` — `GET /` accepts `sc_payout` filter and enriches rows that have `client_id` with `_client_name`/`_client_type`. New `GET /api/transactions/sc-payouts` returns all SC payouts (super_admin = all users, else own) enriched with `_client_name`, `_client_type`, `_account_name`. POST/PATCH/DELETE already honor the new fields.
+- `routers/students.py` — new helper `_sc_payouts_by_agent(user, year)` maps recipient `client_type` → ledger type (sub_agent_associate→sub_agent, associate_consultant→associate, km_*→km) and sums payouts per (type, name). `agent_ledger` folds these into each row as `sc_paid_out`; `_new_ledger_bucket`/`_finalise_ledger_row` carry `sc_paid_out` and compute `holding = routed − paid_to_college − sc_adjusted − sc_paid_out`. `agent_payments` detail returns `totals.sc_paid_out` + a `payouts[]` list.
+
+**Frontend:**
+- `lib/paymentModes.js` — shared PAYMENT_MODES (Cash/Bank Transfer/UPI/Cheque/Card/Other), PAYMENT_MODE_LABELS, SC_PAYOUT_CLIENT_TYPES, SC_PAYOUT_CLIENT_TYPE_LABELS.
+- `Transactions.jsx` — Add/Edit dialog has an SC-payout checkbox (`tx-is-sc-payout`) that forces Expense + disables Type and reveals Recipient (`tx-recipient`, sub_agent_associate/associate_consultant only) + Mode (`tx-payment-mode`). New 'SC payouts' filter option. Rows render an amber `SC payout · <recipient> · <mode>` chip. Loads `/clients`.
+- `QuickEntry.jsx` — debit mode shows the same SC-payout block (`qe-is-sc-payout` → `qe-recipient` + `qe-payment-mode`); resets when switching to Credit.
+- `Agents.jsx` (Ledger) — added 'SC paid out' tile + column; new 'Service Charge payouts' card (`sc-payouts-card`) with Add payout (`add-payout-btn`) + per-row edit/delete (dialog PATCH/DELETE `/transactions/{id}`).
+- `AgentDetail.jsx` — added 'SC paid out' tile + read-only payouts list; holding reflects payouts.
+
+**Testing:** Backend curl-verified (create/list/ledger-holding/detail/edit/delete; test data cleaned). Frontend testing_agent iteration_87.json = 100% across all 6 flows, zero functional bugs. Non-blocking review notes: add data-testids to QuickEntry keypad digits + a toast testid for sturdier automation.

@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only testing of Service Charge (SC) payout feature across Transactions, Quick Entry (Add Transaction) and Ledger (/agents). All 6 requested surfaces pass end-to-end. Backend persistence, holding reduction, enriched client_name, filter by sc_payout, chip rendering, dialog edit/delete, mode switch reset all verified. No frontend issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Keypad digit buttons on QuickEntry Add Transaction have no data-testid (e.g. qe-key-5). Adding these would make amount entry deterministic for automation (currently a bare `button:has-text(\"5\")` selector works but is fragile).",
+    "After posting from QuickEntry, the sonner toast element was not easily locatable with standard selectors ([data-sonner-toast] / [role=status]); test could not programmatically assert toast text though the save succeeded (verified via API). Consider a stable data-testid=qe-toast-success for post-save confirmations."
+  ],
+  "verified_behaviours": [
+    "Transactions > Add transaction dialog: tx-sc-payout-block + tx-is-sc-payout checkbox present. Ticking forces Type=Expense and disables tx-type; reveals tx-recipient + tx-payment-mode. Saved SC payout to SAJIN via UPI ₹3000; row shows amber chip 'SC payout · SAJIN · UPI' (tx-payout-chip-<id>).",
+    "Transactions filter-type dropdown now includes 'SC payouts' (value=sc_payout). Selecting it filters list to SC payouts only.",
+    "Quick Entry (/quick-entry) card picker -> qe-add-transaction navigates to Log debit/credit page. Default mode is debit. qe-sc-payout-block + qe-is-sc-payout checkbox present. Ticking reveals qe-recipient + qe-payment-mode. Saved SC payout to SAJIN via UPI (persisted on API). Switching to mode-credit hides the SC payout block AND resets the checkbox (unchecked when debit re-selected).",
+    "Ledger (/agents): Totals row has 5 tiles including 'SC paid out'. Agent table has 'SC Paid out' column; SAJIN row showed SC Paid out = ₹4,505 and Holding = -₹4,505, confirming holding = routed - college - sc_adjusted - sc_paid_out.",
+    "Service Charge payouts card (sc-payouts-card) with add-payout-btn opens dialog containing payout-recipient / payout-amount / payout-mode / payout-account / payout-save. Added ₹1500 via Bank Transfer -> appeared as payout-row-<id> with edit-payout-<id> and delete-payout-<id> buttons.",
+    "Edit flow: changed amount to ₹2222; row text updated inline, SC Paid out tile recalculated.",
+    "Delete flow: window.confirm accepted; row removed; SC Paid out tile decremented accordingly.",
+    "Recipient dropdowns in all 3 surfaces list ONLY sub_agent_associate + associate_consultant clients (16 options; verified labels end with '· Sub-Associate' or '· Associate Consultant'; no 'staff' / KM office entries)."
+  ],
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786",
+  "seed_data_creation": "Created account TEST_SC_ACC (super admin had 0 accounts). Created 3 SC payout transactions and 1 payout (via Ledger dialog). All cleaned up at end via DELETE API — final transaction count 0, TEST_SC_ACC removed.",
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SC payout feature fully functional end-to-end. If main agent adds data-testids for QuickEntry keypad digits (qe-key-0..9) and a toast testid, automation will be more robust. No functional bugs."
+}
