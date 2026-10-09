@@ -1689,3 +1689,13 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Tooltip glide via `.recharts-tooltip-wrapper` CSS transition.
 - Verified frontend (iteration_84.json): 100% critical checks, 0 page errors across SA/Office/Staff; testing agent fixed a duplicate-key warning in Dashboard.jsx. LOW staff-tile class inconsistency since fixed.
 - Plan Phase 2 (legend toggle, timeline scrub, animated empty-states, sidebar expand/collapse motion) and Phase 3 (app-wide route transitions, shimmer loaders, animated toasts/dialogs) remain backlog.
+
+---
+
+## 2026-10-09 (d) — Tile slider + sidebar group motion + route transitions + shimmer
+- Dashboard quick-nav TILES now use a sliding gradient `.tile-highlight` that glides to the active tile (segmented-control style, mirrors the sidebar rail); inactive tiles are transparent so the highlight is visible gliding across. Measured via useLayoutEffect from tileRefs.
+- Sidebar nav GROUPS expand/collapse with a smooth `.nav-collapse` grid-rows height animation (items stay mounted); active `.nav-rail` + caret rotation retained.
+- App-wide ROUTE transition: Outlet wrapped in `<div key={pathname} className="route-enter">` for a fade/slide on navigation.
+- SHIMMER skeleton (`DashboardSkeleton` + `.shimmer`) on the dashboard's first boot (`booted` gate).
+- All honor prefers-reduced-motion. Verified frontend (iteration_85.json, 100%) across Super Admin / Office / Staff: tile highlight repositions (4/4 transforms), groups toggle, route-enter present on all pages, nothing stuck hidden, 0 functional console errors.
+- Note: "attention indicators" on sidebar groups were intentionally skipped (no existing unread/attention data source to drive them honestly). Shimmer is applied to the main dashboard as the pattern; rolling it out to other pages' load states remains optional follow-up.

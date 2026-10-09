@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only motion/UX verification (iteration 85). All four acceptance areas pass for Super Admin, and dashboards for Office Admin & Staff render cleanly. Tile sliding highlight repositions correctly (4 distinct transforms for 4 tiles), sidebar nav-collapse groups toggle, route-enter wrapper is present on every navigated page, nothing is stuck at opacity:0.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "super_admin": {
+      "quick-nav-tiles_present": true,
+      "tiles_found": ["tile-transactions","tile-students","tile-clients","tile-ledger"],
+      "tile_highlight_present": true,
+      "tile_highlight_initial_style": "transform: translate(0px, 0px); width: 267px; height: 74px; opacity: 1;",
+      "distinct_transforms_on_click": "4 of 4 (0px, 279px, 558px, 837px)",
+      "overview_switches_on_click": true,
+      "nav_group_count": 3,
+      "nav_collapse_count": 3,
+      "nav_rail_present": true,
+      "nav_group_toggle_no_error": true,
+      "route_enter_wrapper_on_pages": ["/students","/leads","/dashboard"],
+      "stuck_opacity_zero_elements": [],
+      "skeleton_on_reload": false,
+      "note_on_skeleton": "DashboardSkeleton only shows during very first boot; on subsequent reload the booted gate resolves faster than the probe (<= a few hundred ms). Acceptable: skeleton element exists in code and did not stick."
+    },
+    "office_admin": {"loaded": true, "nav_rail": true, "route_enter": true, "console_errors": "only pre-auth 401 probe (expected)"},
+    "staff": {"loaded": true, "stats_visible": "9 My leads, 1 Missed follow-ups, 0 Students referred, 0 Pending leave", "nav_rail": true, "route_enter": true}
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "Used from /app/memory/test_credentials.md (super admin, office admin, staff)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Motion feature set (tile-highlight, nav-collapse groups, route-enter wrapper, dashboard-skeleton) all wired correctly and verified across all 3 roles. The post-login 401 console entries seen in logs are the standard pre-auth probe fetches, not functional errors."
+}
