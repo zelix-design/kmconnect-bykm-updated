@@ -21,6 +21,7 @@ export default function MoneyOutFields({
   paymentMode, onPaymentModeChange,
   expenseCategories = [],
   categoryId, onCategoryChange,
+  hideRecipient = false,
   idPrefix = "mo",
 }) {
   const isCampusVisit = kind === "expense" && expenseOf === "campus_visit";
@@ -44,20 +45,22 @@ export default function MoneyOutFields({
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <Label>Recipient <span className="text-muted-foreground font-normal">(optional)</span></Label>
-          <Select value={recipientId || NONE} onValueChange={(v) => onRecipientChange(v === NONE ? "" : v)}>
-            <SelectTrigger data-testid={`${idPrefix}-recipient`}><SelectValue placeholder="Select recipient" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>— None —</SelectItem>
-              {payoutClients.length === 0 ? (
-                <div className="px-2 py-3 text-xs text-muted-foreground text-center">No Sub-Associate / Associate Consultant clients yet.</div>
-              ) : payoutClients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name} · {SC_PAYOUT_CLIENT_TYPE_LABELS[c.client_type]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {!hideRecipient && (
+          <div>
+            <Label>Recipient <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Select value={recipientId || NONE} onValueChange={(v) => onRecipientChange(v === NONE ? "" : v)}>
+              <SelectTrigger data-testid={`${idPrefix}-recipient`}><SelectValue placeholder="Select recipient" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>— None —</SelectItem>
+                {payoutClients.length === 0 ? (
+                  <div className="px-2 py-3 text-xs text-muted-foreground text-center">No Sub-Associate / Associate Consultant clients yet.</div>
+                ) : payoutClients.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name} · {SC_PAYOUT_CLIENT_TYPE_LABELS[c.client_type]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {showExpenseOf && (
           <div>

@@ -115,6 +115,7 @@ export default function ClientTxnDialog({ open, onOpenChange, client, onSaved })
             kind={kind}
             recipientId={client?.id}
             onRecipientChange={() => {}}
+            hideRecipient
             payoutClients={client ? [client] : []}
             referredStudents={referredStudents}
             studentName={studentName} onStudentNameChange={setStudentName}
