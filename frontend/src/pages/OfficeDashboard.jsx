@@ -10,6 +10,7 @@ import {
 import { StatCard } from "@/components/dashboard/StatCard";
 import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
 import Reveal from "@/components/Reveal";
+import { StatRowSkeleton } from "@/components/Shimmer";
 import StaffBreakdownList from "@/components/office-dashboard/StaffBreakdownList";
 import {
   UpcomingBirthdaysCard, IncentiveRuleCard,
@@ -184,6 +185,7 @@ export default function OfficeDashboard({ superView = false }) {
             ))}
           </div>
 
+          {loading ? <StatRowSkeleton /> : (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
             <StatCard testId="stat-admissions" icon={GraduationCap} palette="amber"
               eyebrow="Admissions"
@@ -210,6 +212,7 @@ export default function OfficeDashboard({ superView = false }) {
               onClick={() => nav("/employees")}
             />
           </div>
+          )}
 
           <Reveal className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <StaffBreakdownList

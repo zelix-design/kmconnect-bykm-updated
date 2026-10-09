@@ -22,6 +22,7 @@ import LeadsBulkActionBar from "./LeadsBulkActionBar";
 import UserAvatar from "@/components/UserAvatar";
 import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
 import Reveal from "@/components/Reveal";
+import { CardGridSkeleton } from "@/components/Shimmer";
 
 const countFmt = (n) => String(Math.round(n));
 
@@ -378,7 +379,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       </div>
 
       {loading ? (
-        <div className="text-center py-16 text-muted-foreground text-sm" data-testid="leads-loading">Loading leads…</div>
+        <CardGridSkeleton count={6} cols="md:grid-cols-2 xl:grid-cols-3" testid="leads-loading" />
       ) : view === "board" ? (
         <LeadsBoard leads={leads} editable={editable} onCardClick={setDetailLead} onStatusChange={handleBoardStatus} />
       ) : leads.length === 0 ? (

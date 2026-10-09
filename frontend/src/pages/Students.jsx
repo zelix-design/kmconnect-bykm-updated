@@ -26,6 +26,7 @@ import { navigateToApply, buildApplyUrl, linkedUserRef } from "@/lib/applyUrl";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 import StudentBulkUploadDialog from "@/components/student-detail/StudentBulkUploadDialog";
 import Reveal from "@/components/Reveal";
+import { CardGridSkeleton } from "@/components/Shimmer";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -71,6 +72,7 @@ export default function Students() {
   const isAdmin = isSuper || role === "office_admin";
   const currency = user?.currency || "USD";
   const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [open, setOpen] = useState(false);
@@ -131,12 +133,17 @@ export default function Students() {
   };
 
   const load = useCallback(async () => {
-    const [s, c, col] = await Promise.all([
-      api.get("/students"),
-      api.get("/clients"),
-      api.get("/colleges"),
-    ]);
-    setList(s.data); setClients(c.data); setColleges(col.data);
+    setLoading(true);
+    try {
+      const [s, c, col] = await Promise.all([
+        api.get("/students"),
+        api.get("/clients"),
+        api.get("/colleges"),
+      ]);
+      setList(s.data); setClients(c.data); setColleges(col.data);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -647,7 +654,9 @@ export default function Students() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <CardGridSkeleton count={6} cols="sm:grid-cols-2 lg:grid-cols-3" testid="students-loading" />
+      ) : filtered.length === 0 ? (
         <Card className="p-12 text-center text-sm text-muted-foreground border border-border shadow-none" data-testid="empty-students">
           <StudentIcon size={32} className="mx-auto text-muted-foreground/50 mb-3" />
           {list.length === 0 ? "No students yet. Add one to start tracking fees." : "No students match these filters."}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
+import api from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
 import { buildApplyUrl } from "@/lib/applyUrl";
@@ -107,8 +108,13 @@ function buildSections(navItems, role) {
   ].filter((s) => s.items.length > 0);
 }
 
-function SidebarContent({ onItemClick, user, onLogout }) {
+function SidebarContent({ onItemClick, user, onLogout, alerts }) {
   const role = user?.role;
+  const alertFor = (to) => {
+    if (to === "/messages") return alerts?.messages || 0;
+    if (to === "/expense-requests" && role === "super_admin") return alerts?.approvals || 0;
+    return 0;
+  };
   // Groups start COLLAPSED — click the header to expand. The group that
   // contains the current page opens automatically so the active link is
   // never hidden.
@@ -158,12 +164,24 @@ function SidebarContent({ onItemClick, user, onLogout }) {
     return () => window.removeEventListener("resize", measure);
   }, [location.pathname, collapsed, role]);
 
-  const renderLink = (item, indent) => (
-    <NavLink key={item.to} to={item.to} end={item.end} data-testid={item.tid} onClick={onItemClick} className={linkClass(indent)}>
-      <item.icon size={18} weight="regular" />
-      <span>{item.label}</span>
-    </NavLink>
-  );
+  const renderLink = (item, indent) => {
+    const count = alertFor(item.to);
+    return (
+      <NavLink key={item.to} to={item.to} end={item.end} data-testid={item.tid} onClick={onItemClick} className={linkClass(indent)}>
+        <item.icon size={18} weight="regular" />
+        <span>{item.label}</span>
+        {count > 0 && (
+          <span
+            data-testid={`nav-alert-${item.tid}`}
+            title={`${count} ${item.to === "/messages" ? "unread" : "pending"}`}
+            className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center shrink-0 shadow-sm"
+          >
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+      </NavLink>
+    );
+  };
 
   return (
     <>
@@ -195,6 +213,7 @@ function SidebarContent({ onItemClick, user, onLogout }) {
         {buildSections(navItems, role).map((section, idx) => {
           if (section.type === "group") {
             const open = !collapsed[section.key];
+            const groupAlert = section.items.reduce((n, it) => n + alertFor(it.to), 0);
             return (
               <div key={section.key} className="pt-2">
                 <button
@@ -207,6 +226,13 @@ function SidebarContent({ onItemClick, user, onLogout }) {
                   <CaretRight size={13} weight="bold" className={`shrink-0 text-[hsl(var(--sidebar-muted))] transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
                   <section.icon size={17} weight="regular" className="shrink-0" />
                   <span className="flex-1 text-left">{section.label}</span>
+                  {!open && groupAlert > 0 && (
+                    <span
+                      data-testid={`nav-group-alert-${section.key}`}
+                      title={`${groupAlert} need attention`}
+                      className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 shadow-sm"
+                    />
+                  )}
                 </button>
                 {section.items.length > 0 && (
                   <div className={`nav-collapse ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
@@ -291,6 +317,32 @@ export default function AppShell() {
   const nav = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [alerts, setAlerts] = useState({ messages: 0, approvals: 0 });
+
+  // Attention signals for the sidebar: unread messages (all roles) and pending
+  // expense approvals (super admin). Refreshed on navigation + every 60s so the
+  // dots clear once the user has dealt with them.
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    const load = async () => {
+      const next = { messages: 0, approvals: 0 };
+      try {
+        const r = await api.get("/messages/unread-count");
+        next.messages = r.data?.count || 0;
+      } catch { /* ignore */ }
+      if (user.role === "super_admin") {
+        try {
+          const r = await api.get("/expense-requests", { params: { status: "pending" } });
+          next.approvals = Array.isArray(r.data) ? r.data.length : 0;
+        } catch { /* ignore */ }
+      }
+      if (!cancelled) setAlerts(next);
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [user, location.pathname]);
 
   const pageTitle = (user?.role === "staff" && location.pathname === "/settings" ? "Profile" : null)
     || (user?.role === "staff" && location.pathname === "/leads" ? "My Leads" : null)
@@ -313,7 +365,7 @@ export default function AppShell() {
         className="hidden md:flex w-64 shrink-0 flex-col border-r bg-[hsl(var(--sidebar-bg))] border-[hsl(var(--sidebar-border))] sticky top-0 h-screen"
         data-testid="desktop-sidebar"
       >
-        <SidebarContent user={user} />
+        <SidebarContent user={user} alerts={alerts} />
       </aside>
 
       {/* Mobile Drawer */}
@@ -332,7 +384,7 @@ export default function AppShell() {
             }}
             data-testid="mobile-drawer"
           >
-            <SidebarContent user={user} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
+            <SidebarContent user={user} alerts={alerts} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
           </aside>
         </>
       )}
