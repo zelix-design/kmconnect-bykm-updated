@@ -1742,3 +1742,10 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Avatar/name is now a **Profile dropdown** (`profile-menu-btn` → `profile-menu`) containing Dark/Light mode toggle (`profile-theme-toggle`), Profile & settings, and Sign out (`logout-btn`). Standalone logout + ThemeToggle removed from topbar.
 - Mobile bottom nav: added a **CRM** item (`bottom-nav-crm` → /leads) for super_admin & office_admin.
 - Verified via screenshot (desktop): Messages button + Profile dropdown render; sidebar no longer lists Quick entry.
+
+## 2026-06 — MoneyOutFields & nav refinements (visual edits)
+- MoneyOutFields: Recipient is now OPTIONAL (— None —); "Expense of" appears only after a recipient is chosen; Student referred moved next to Recipient (same grid); added a Category dropdown (expense categories) beside Mode of payment. Wired category + optional recipient/expense-of through QuickEntry + Transactions submit (category_id saved for money-out too).
+- QuickEntry income Category switched from chips to a dropdown (qe-income-category).
+- Topbar: theme toggle replaced by a Messages button (topbar-messages-btn → /messages); avatar is a Profile dropdown (profile-menu-btn) with Dark/Light toggle, Profile & settings, Sign out.
+- Bottom nav: CRM (→/leads) + Clients (→/clients) surfaced for admins (order: Home, CRM, Clients, Students); Messages moved off the bar (now in topbar).
+- Verified via screenshots (Payout/Expense dialogs show Recipient|Student & Recipient|ExpenseOf, Mode|Category; profile dropdown). Cleaned all testing-agent leftover accounts/transactions.

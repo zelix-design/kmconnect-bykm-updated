@@ -99,21 +99,19 @@ export default function Transactions() {
     e.preventDefault();
     const { kind } = form;
     const isMoneyOut = kind !== "income";
-    if (isMoneyOut && !form.client_id) { toast.error("Pick a recipient"); return; }
-    if (kind === "expense" && !form.expense_of) { toast.error("Pick what the expense is of"); return; }
     const wantsStudent = kind === "payout" || (kind === "expense" && form.expense_of === "campus_visit");
     const payload = {
       type: kind === "income" ? "income" : "expense",
       amount: parseFloat(form.amount) || 0,
       account_id: form.account_id,
-      category_id: kind === "income" ? (form.category_id || null) : null,
+      category_id: form.category_id || null,
       date: form.date,
       description: form.description,
       is_sc_payout: kind === "payout",
-      client_id: isMoneyOut ? form.client_id : null,
+      client_id: isMoneyOut ? (form.client_id || null) : null,
       payment_mode: isMoneyOut ? (form.payment_mode || null) : null,
       student_name: wantsStudent ? (form.student_name || null) : null,
-      expense_of: kind === "expense" ? form.expense_of : null,
+      expense_of: kind === "expense" ? (form.expense_of || null) : null,
     };
     try {
       if (editing) {
@@ -226,6 +224,8 @@ export default function Transactions() {
                     studentName={form.student_name} onStudentNameChange={(v) => setForm((f) => ({ ...f, student_name: v }))}
                     expenseOf={form.expense_of} onExpenseOfChange={(v) => setForm((f) => ({ ...f, expense_of: v }))}
                     paymentMode={form.payment_mode} onPaymentModeChange={(v) => setForm((f) => ({ ...f, payment_mode: v }))}
+                    expenseCategories={categories.filter((c) => c.type === "expense")}
+                    categoryId={form.category_id} onCategoryChange={(v) => setForm((f) => ({ ...f, category_id: v }))}
                     idPrefix="tx"
                   />
                 ) : (

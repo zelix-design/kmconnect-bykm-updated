@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import MoneyOutFields from "@/components/MoneyOutFields";
 import { SC_PAYOUT_CLIENT_TYPES } from "@/lib/paymentModes";
 import {
-  HandCoins, ArrowUpRight, Plus, Check, ArrowLeft,
+  HandCoins, ArrowUpRight, Plus, ArrowLeft,
   Receipt, ReceiptX, Student as StudentIcon, CurrencyInr, ClipboardText,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -123,8 +123,6 @@ export default function QuickEntry() {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
     if (!accountId) { toast.error("Pick an account"); return; }
-    if (isMoneyOut && !recipientId) { toast.error("Pick a recipient"); return; }
-    if (kind === "expense" && !expenseOf) { toast.error("Pick what the expense is of"); return; }
     setSaving(true);
     try {
       const desc = isOther && otherSpec
@@ -135,14 +133,14 @@ export default function QuickEntry() {
         type: txType,
         amount: amt,
         account_id: accountId,
-        category_id: kind === "income" ? (categoryId || null) : null,
+        category_id: categoryId || null,
         date,
         description: desc,
         is_sc_payout: kind === "payout",
-        client_id: isMoneyOut ? recipientId : null,
+        client_id: isMoneyOut ? (recipientId || null) : null,
         payment_mode: isMoneyOut ? (paymentMode || null) : null,
         student_name: wantsStudent ? (studentName || null) : null,
-        expense_of: kind === "expense" ? expenseOf : null,
+        expense_of: kind === "expense" ? (expenseOf || null) : null,
       });
       toast.success(`${KIND_TABS.find((k) => k.value === kind).label} saved`);
       setAmount(""); setCategoryId(""); setOtherSpec(""); setDescription("");
@@ -254,6 +252,7 @@ export default function QuickEntry() {
               studentName={studentName} onStudentNameChange={setStudentName}
               expenseOf={expenseOf} onExpenseOfChange={setExpenseOf}
               paymentMode={paymentMode} onPaymentModeChange={setPaymentMode}
+              expenseCategories={filteredCats} categoryId={categoryId} onCategoryChange={setCategoryId}
               idPrefix="qe"
             />
           )}
@@ -261,20 +260,20 @@ export default function QuickEntry() {
           {kind === "income" && (
             <div>
               <Label>Category</Label>
-              <div className="flex flex-wrap gap-2 mt-2" data-testid="category-chips">
-                {filteredCats.map((c) => {
-                  const active = c.id === categoryId;
-                  return (
-                    <button key={c.id} onClick={() => setCategoryId(c.id)}
-                      data-testid={`chip-${c.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                      className={`px-3 h-9 rounded-full text-sm border flex items-center gap-2 lift ${active ? "border-orange-500 bg-amber-gradient text-white" : "border-border bg-card hover:bg-muted/40 text-foreground"}`}>
-                      <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
-                      {c.name}
-                      {active && <Check size={12} weight="bold" />}
-                    </button>
-                  );
-                })}
-              </div>
+              <Select value={categoryId || "__none__"} onValueChange={(v) => setCategoryId(v === "__none__" ? "" : v)}>
+                <SelectTrigger data-testid="qe-income-category"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {filteredCats.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
+                        {c.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {isOther && (
                 <div className="mt-3">
                   <Label>Specify "Other"</Label>
