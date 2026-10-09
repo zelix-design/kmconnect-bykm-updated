@@ -150,7 +150,7 @@ export default function OfficeDashboard({ superView = false }) {
               key={tb.value}
               onClick={() => setTab(tb.value)}
               data-testid={`office-tab-${tb.value}`}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`press-spring px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 tab === tb.value
                   ? "bg-amber-gradient text-white shadow-md shadow-orange-500/25"
                   : "bg-card border border-border text-foreground hover:bg-muted/40"
@@ -162,6 +162,7 @@ export default function OfficeDashboard({ superView = false }) {
         </div>
       </header>
 
+      <div key={tab} className="view-enter">
       {tab === "crm" ? (
         <CrmAnalytics office={superView ? office : null} />
       ) : (
@@ -226,6 +227,7 @@ export default function OfficeDashboard({ superView = false }) {
           </Reveal>
         </>
       )}
+      </div>
 
       <StaffPickerDialog
         open={pickerOpen}

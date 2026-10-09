@@ -132,11 +132,31 @@ function SidebarContent({ onItemClick, user, onLogout }) {
   });
 
   const linkClass = (indent) => ({ isActive }) =>
-    `flex items-center gap-3 ${indent ? "pl-11 pr-4" : "px-4"} py-2.5 rounded-lg text-sm transition-all ${
+    `relative z-[1] flex items-center gap-3 ${indent ? "pl-11 pr-4" : "px-4"} py-2.5 rounded-lg text-sm transition-all ${
       isActive
         ? "bg-amber-gradient text-white font-medium shadow-md shadow-orange-500/25"
-        : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400"
+        : "text-[hsl(var(--sidebar-fg))] hover:bg-orange-500/10 hover:text-orange-600 dark:hover:text-orange-400 hover:translate-x-0.5"
     }`;
+
+  // Animated sidebar: a highlight rail that slides to the active menu item.
+  const navRef = React.useRef(null);
+  const location = useLocation();
+  const [rail, setRail] = React.useState({ top: 0, height: 0, show: false });
+
+  React.useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return undefined;
+    const measure = () => {
+      const active = nav.querySelector('a[aria-current="page"]');
+      if (!active) { setRail((r) => ({ ...r, show: false })); return; }
+      const navRect = nav.getBoundingClientRect();
+      const aRect = active.getBoundingClientRect();
+      setRail({ top: aRect.top - navRect.top + nav.scrollTop, height: aRect.height, show: true });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [location.pathname, collapsed, role]);
 
   const renderLink = (item, indent) => (
     <NavLink key={item.to} to={item.to} end={item.end} data-testid={item.tid} onClick={onItemClick} className={linkClass(indent)}>
@@ -166,7 +186,12 @@ function SidebarContent({ onItemClick, user, onLogout }) {
       </div>
 
       {/* Nav */}
-      <nav className="px-3 py-6 flex-1 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
+      <nav ref={navRef} className="relative px-3 py-6 flex-1 space-y-0.5 overflow-y-auto" data-testid="sidebar-nav">
+        <span
+          className="nav-rail"
+          aria-hidden="true"
+          style={{ transform: `translateY(${rail.top}px)`, height: rail.height, opacity: rail.show ? 1 : 0 }}
+        />
         {buildSections(navItems, role).map((section, idx) => {
           if (section.type === "group") {
             const open = !collapsed[section.key];

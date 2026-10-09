@@ -9,6 +9,7 @@ import {
   Target, GraduationCap, TrendUp, ClockCountdown, XCircle,
 } from "@phosphor-icons/react";
 import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
+import { ChartTooltip, activePieShape, usePieActive, CHART_CURSOR, CHART_CURSOR_LINE } from "@/components/dashboard/ChartInteractions";
 
 const REDUCE_MOTION =
   typeof window !== "undefined" &&
@@ -62,6 +63,8 @@ function ChartCard({ eyebrow, title, children, testid, empty }) {
 export default function CrmAnalytics({ office = null }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const coursePie = usePieActive();
+  const lostPie = usePieActive();
 
   useEffect(() => {
     setLoading(true);
@@ -102,9 +105,9 @@ export default function CrmAnalytics({ office = null }) {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis dataKey="stage" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64} isAnimationActive={CHART_ANIM} animationDuration={900}>
-                {funnel.map((f) => <Cell key={f.stage} fill={FUNNEL_COLORS[f.stage] || "#f97316"} />)}
+              <Tooltip content={<ChartTooltip />} cursor={CHART_CURSOR} animationDuration={CHART_ANIM ? 200 : 0} />
+              <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={64} activeBar={{ fillOpacity: 1 }} isAnimationActive={CHART_ANIM} animationDuration={900}>
+                {funnel.map((f) => <Cell key={f.stage} fill={FUNNEL_COLORS[f.stage] || "#f97316"} fillOpacity={0.88} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -122,8 +125,8 @@ export default function CrmAnalytics({ office = null }) {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey="value" name="Admissions" stroke="#f97316" strokeWidth={2.5} fill="url(#seatGrad)" dot={{ r: 3, fill: "#f97316" }} isAnimationActive={CHART_ANIM} animationDuration={900} />
+              <Tooltip content={<ChartTooltip />} cursor={CHART_CURSOR_LINE} animationDuration={CHART_ANIM ? 200 : 0} />
+              <Area type="monotone" dataKey="value" name="Admissions" stroke="#f97316" strokeWidth={2.5} fill="url(#seatGrad)" dot={{ r: 3, fill: "#f97316" }} activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={900} />
             </AreaChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -137,8 +140,8 @@ export default function CrmAnalytics({ office = null }) {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={axisTick} axisLine={false} tickLine={false} width={120} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} />
-              <Bar dataKey="value" name="Admissions" fill="#0ea5e9" radius={[0, 6, 6, 0]} maxBarSize={26} isAnimationActive={CHART_ANIM} animationDuration={900} />
+              <Tooltip content={<ChartTooltip />} cursor={CHART_CURSOR} animationDuration={CHART_ANIM ? 200 : 0} />
+              <Bar dataKey="value" name="Admissions" fill="#0ea5e9" radius={[0, 6, 6, 0]} maxBarSize={26} activeBar={{ fillOpacity: 1 }} fillOpacity={0.88} isAnimationActive={CHART_ANIM} animationDuration={900} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -146,10 +149,10 @@ export default function CrmAnalytics({ office = null }) {
         <ChartCard eyebrow="Demand" title="Course-wise admissions" testid="crm-course" empty={course.length === 0}>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={course} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={48} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={900}>
-                {course.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+              <Pie data={course} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={48} paddingAngle={2} activeIndex={coursePie.activeIndex} activeShape={activePieShape} onMouseEnter={coursePie.onEnter} onMouseLeave={coursePie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={900}>
+                {course.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} fillOpacity={coursePie.cellOpacity(i)} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip content={<ChartTooltip />} animationDuration={CHART_ANIM ? 200 : 0} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -161,10 +164,10 @@ export default function CrmAnalytics({ office = null }) {
         <ChartCard eyebrow="Drop-off" title="Lost reasons" testid="crm-lost" empty={lost.length === 0}>
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
-              <Pie data={lost} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={48} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={900}>
-                {lost.map((_, i) => <Cell key={i} fill={PIE_COLORS[(i + 4) % PIE_COLORS.length]} />)}
+              <Pie data={lost} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={48} paddingAngle={2} activeIndex={lostPie.activeIndex} activeShape={activePieShape} onMouseEnter={lostPie.onEnter} onMouseLeave={lostPie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={900}>
+                {lost.map((_, i) => <Cell key={i} fill={PIE_COLORS[(i + 4) % PIE_COLORS.length]} fillOpacity={lostPie.cellOpacity(i)} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
+              <Tooltip content={<ChartTooltip />} animationDuration={CHART_ANIM ? 200 : 0} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>

@@ -1,46 +1,52 @@
-# Dashboard Entrance Animations
+# Dashboards That Move With Purpose
 
-Bring the dashboard to life on load: stat tiles glide in one after another, the numbers count up from zero, and the charts draw themselves in. The motion style is taken from the reference video; the app keeps its own crimson/amber theme and existing layout.
+Borrow the motion language of the Farider dashboard reference and bring it to every dashboard in the app: charts that react to the cursor, cards that lift on hover, sections that glide in and out, a live heartbeat on "today" numbers, and a sliding highlight on the menu. The look stays exactly as it is now — the app's crimson/amber theme, layout, and content do not change; only how things respond and transition does.
 
 ## Who it's for
-The people who open the dashboard every day — Super Admins, Office Admins, and Staff — who want the numbers to feel alive and give a quick "the page is ready, here's what changed" moment.
+The people who live in these dashboards every day — Super Admins, Office Admins, and Staff — who want the numbers and charts to feel responsive and alive, so each hover and tab switch gives a quick, confident "the app heard me" moment.
 
 ## Core features and experience
-- **Staggered reveal**: the top stat tiles and the main cards fade and slide up in sequence (one shortly after the next) instead of all snapping in at once.
-- **Counting numbers**: the key figures on the dashboard (totals, balances, counts) tick up from zero to their real value over about a second, so the eye lands on them.
-- **Charts animating in**: bars grow up from the baseline, lines draw left to right, and the donut/progress rings sweep around to fill.
-- **Gentle hover feel**: cards and buttons keep a subtle lift on hover so the dashboard feels responsive (this already exists and will be kept consistent).
-- **Respects "reduce motion"**: anyone whose device is set to minimize animation sees the final numbers and charts instantly with no movement — nothing is ever hidden behind an animation.
+- **Interactive charts**: hovering a bar, line point, or donut slice gently highlights it (the rest dims slightly) and a smooth tooltip glides to the cursor showing that figure. Moving across the chart animates the highlight from one point to the next, so reading the data feels fluid rather than static.
+- **Richer card & button hover**: dashboard cards lift a touch with a soft shadow/glow and their icon reacts on hover; buttons and clickable tiles get a subtle, springy press feel. Consistent across all dashboards.
+- **Smooth section transitions**: switching the dashboard tile/tab (or sub-view) slides the outgoing content out and eases the incoming content in, instead of a hard swap — a short, quick crossfade-and-slide.
+- **Live "today" pulse**: figures that represent the current moment (for example today's spend / real-time counts) carry a soft pulsing dot so it's clear they are live and refreshing, not a frozen snapshot.
+- **Animated sidebar**: the active menu item is marked by a highlight that slides smoothly from the old item to the new one as the user moves between pages, with a light hover cue on the others.
+- **Respects "reduce motion"**: anyone whose device is set to minimize animation sees the final state instantly — highlights, tooltips, and transitions resolve with no movement, and nothing is ever hidden behind an animation.
 
 ## User flow
-1. User opens the dashboard.
-2. Tiles and cards cascade in over roughly half a second; numbers count up; charts draw themselves.
-3. User changes the academic year or the date-range/period filter → the affected numbers re-count and charts re-animate to the new values, confirming the data refreshed.
-4. On later visits within the same session the motion still plays on load (see Assumptions for the alternative).
+1. User opens any dashboard (main, Office, Staff, or CRM). Content is already present; cards and buttons now respond to hover with a gentle lift.
+2. User moves the cursor over a chart → the nearest bar/point/slice highlights and a tooltip glides in with the value; sliding across moves the highlight smoothly.
+3. User switches a tile/tab → the current view slides out and the new one eases in.
+4. User glances at a "today" figure → a soft pulse signals it is live.
+5. User clicks a different item in the sidebar → the active highlight slides to it as the page changes.
 
 ## UI/UX feel
-Clean, modern, and fast — motion that is noticeable but never makes the user wait. Timing is quick (short delays between tiles, ~1–1.5s count-up, smooth chart draw). The look and colours of the dashboard do not change; only how its contents arrive on screen. Matches the "subtle and professional" end of the reference, not a flashy social-media treatment.
+Subtle, premium, and fast — motion that is noticeable but never makes the user wait (short, ~150–300ms interactions; smooth chart highlight tracking). It reads as the "purposeful, professional" end of the reference, not a flashy social-reel treatment. The reference's dark + lime-green palette is explicitly not adopted; the app keeps its crimson/amber identity, and colours, layout, and content stay as they are.
 
 ## Implementation phases
 
 ### Phase 1 — MVP (built now)
-- Staggered entrance for the dashboard's stat tiles and primary cards.
-- Count-up animation on the dashboard's headline numbers.
-- Chart draw-in (bars grow, lines draw, rings sweep) for the charts already on the dashboard.
-- Re-trigger on academic-year and period/date-range changes.
-- Full "reduce motion" fallback.
+Across all four dashboards (main Super Admin, Office, Staff, and CRM analytics):
+- Interactive charts: hover highlight + dim-the-rest + smooth cursor-following tooltip, with the highlight animating between points.
+- Richer, consistent card and button/tile hover (lift, soft glow, icon reaction, springy press).
+- Smooth slide-and-fade transition when switching tiles/tabs/sub-views.
+- Live pulse indicator on "today"/real-time figures.
+- Animated sliding active-highlight in the sidebar, with hover cues.
+- Full reduce-motion fallback for all of the above.
 
 ### Phase 2 — later
-- Extend the same entrance + count-up + chart motion to the other stat-heavy pages (e.g. Students, Leads, and the Office dashboards).
-- "Reveal on scroll" so lower sections animate in as they come into view on long pages.
+- Deeper chart interactivity: tapping a legend animates that series in/out; scrubbing a timeline; animated, friendly empty-states when a chart has no data.
+- Richer sidebar: section expand/collapse motion and a subtle indicator for unread/attention items.
 
 ### Phase 3 — later
-- App-wide polish: smooth scale-in for dialogs/modals, shimmer placeholder loaders while data is fetching, and animated tooltips on charts.
+- App-wide polish beyond dashboards: smooth page/route transitions throughout the app, shimmer skeleton loaders while data is fetching, and animated toasts/dialogs.
 
 ## Assumptions
-- Phase 1 targets the **main Dashboard page only**; other pages come in Phase 2.
-- Motion plays **every time the page loads and whenever the year or period filter changes** (not limited to once per session).
-- Intensity is **subtle and professional**, adapted to a finance app, rather than the bolder social-reel style.
-- The reference video's **green colour scheme is not adopted** — the app's current crimson/amber theme, layout, and content stay exactly as they are; only the entrance motion is added.
-- No new numbers, cards, charts, or data are introduced; this applies motion to what the dashboard already shows.
-- Count-up applies to **whole numeric figures** (amounts and counts); very long text or dates are not animated.
+- Keep the current crimson/amber theme; colours, layout, and content are unchanged — only motion/interaction is added. The reference's green scheme is not used.
+- Applies to all four dashboards (main, Office, Staff, CRM) as requested.
+- Charts animate and react using the data already shown; no new metrics, cards, or charts are introduced.
+- Hover effects are the primary desktop experience; on touch devices they degrade gracefully (tap/select still works, no "stuck" hover states), and chart tooltips appear on tap.
+- Motion intensity is subtle and professional, tuned for a finance app rather than the bolder reference style.
+- The "today/live" pulse is purely a visual cue on existing figures; it does not change how often data refreshes.
+- The animated sidebar keeps the existing menu structure and items; only the active/hover indication becomes animated.
+- All new motion honours the device "reduce motion" setting by resolving instantly with no movement.

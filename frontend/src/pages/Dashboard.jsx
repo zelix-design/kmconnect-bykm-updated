@@ -25,6 +25,7 @@ import {
 } from "@/lib/dashboardUtils";
 import { StatCard, ChartHeader, Empty } from "@/components/dashboard/StatCard";
 import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
+import { ChartTooltip, activePieShape, usePieActive, CHART_CURSOR, CHART_CURSOR_LINE } from "@/components/dashboard/ChartInteractions";
 import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
 import LeadFunnel from "@/components/leads/LeadFunnel";
@@ -182,13 +183,13 @@ function SuperAdminDashboard() {
               type="button"
               onClick={() => { setActiveTile(t.key); setListFilter("monthly"); }}
               data-testid={`tile-${t.key}`}
-              className={`group flex items-center gap-3 p-4 rounded-xl text-left transition-all lift ${
+              className={`group press-spring card-hover flex items-center gap-3 p-4 rounded-xl text-left transition-all ${
                 active
                   ? "bg-amber-gradient text-white border border-orange-500"
                   : "bg-card border border-border hover:border-border"
               }`}
             >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-white/20 text-white" : p.icon}`}>
+              <div className={`stat-icon w-10 h-10 rounded-lg flex items-center justify-center ${active ? "bg-white/20 text-white" : p.icon}`}>
                 <t.icon size={18} weight={active ? "fill" : "duotone"} />
               </div>
               <div className="flex-1 min-w-0">
@@ -297,6 +298,7 @@ function SuperAdminDashboard() {
 
 function TransactionsOverview({ summary, cashflow, byCat, transactions, currency, range, hideActivityChart }) {
   const nav = useNavigate();
+  const pie = usePieActive();
   const cfTrend = useMemo(() => {
     if (!cashflow || cashflow.length < 2) return { income: 0, expense: 0 };
     const cur = cashflow[cashflow.length - 1];
@@ -315,7 +317,7 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
   return (
     <>
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 dash-stagger">
-        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={<AnimatedNumber value={todaysSpend} format={(n) => formatMoney(n, currency)} />} palette="amber" icon={ShoppingBag} hint="All expense transactions today"
+        <StatCard testId="stat-today-spend" eyebrow="Today's spend" value={<AnimatedNumber value={todaysSpend} format={(n) => formatMoney(n, currency)} />} palette="amber" icon={ShoppingBag} hint="All expense transactions today" live
           onClick={() => nav("/transactions?type=expense")} />
         <StatCard testId="stat-income" eyebrow={`Income · ${range?.label || ""}`} value={<AnimatedNumber value={summary?.month_income ?? 0} format={(n) => formatMoney(n, currency)} />} trend={cfTrend.income} palette="emerald" icon={ArrowUpRight}
           onClick={() => nav("/transactions?type=income")} />
@@ -343,9 +345,9 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                   <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                   <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                  <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
-                  <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                  <Tooltip content={<ChartTooltip formatter={(v) => formatMoney(v, currency)} />} cursor={CHART_CURSOR_LINE} animationDuration={CHART_ANIM ? 200 : 0} />
+                  <Area type="monotone" dataKey="income" stroke="#059669" strokeWidth={2.5} fill="url(#grad-inc)" activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                  <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={2.5} fill="url(#grad-exp)" activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -360,10 +362,10 @@ function TransactionsOverview({ summary, cashflow, byCat, transactions, currency
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
-                      {byCat.map((entry) => (<Cell key={`${entry.name}-${entry.color}`} fill={entry.color || "hsl(var(--muted-foreground))"} />))}
+                    <Pie data={byCat} dataKey="total" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} activeIndex={pie.activeIndex} activeShape={activePieShape} onMouseEnter={pie.onEnter} onMouseLeave={pie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
+                      {byCat.map((entry, i) => (<Cell key={`${entry.name}-${entry.color}`} fill={entry.color || "hsl(var(--muted-foreground))"} fillOpacity={pie.cellOpacity(i)} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Tooltip content={<ChartTooltip formatter={(v) => formatMoney(v, currency)} />} animationDuration={CHART_ANIM ? 200 : 0} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -391,6 +393,7 @@ const STATUS_LABEL = { inquiry: "Inquiry", enrolled: "Enrolled", cancelled: "Can
 
 function StudentsOverview({ students, currency, range }) {
   const nav = useNavigate();
+  const pie = usePieActive();
   const stats = useMemo(() => {
     const total = students.length;
     const counts = { inquiry: 0, enrolled: 0, cancelled: 0, completed: 0 };
@@ -473,8 +476,8 @@ function StudentsOverview({ students, currency, range }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                <Tooltip content={<ChartTooltip />} cursor={CHART_CURSOR_LINE} animationDuration={CHART_ANIM ? 200 : 0} />
+                <Area type="monotone" dataKey="count" stroke="#059669" strokeWidth={2.5} fill="url(#grad-enroll)" activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -486,10 +489,10 @@ function StudentsOverview({ students, currency, range }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
-                      {statusPie.map((e) => (<Cell key={`status-${e.name || e.color}`} fill={e.color} />))}
+                    <Pie data={statusPie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} activeIndex={pie.activeIndex} activeShape={activePieShape} onMouseEnter={pie.onEnter} onMouseLeave={pie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
+                      {statusPie.map((e, i) => (<Cell key={`status-${e.name || e.color}`} fill={e.color} fillOpacity={pie.cellOpacity(i)} />))}
                     </Pie>
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Tooltip content={<ChartTooltip />} animationDuration={CHART_ANIM ? 200 : 0} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -548,6 +551,7 @@ const CLIENT_TYPES = [
 
 function ClientsOverview({ clients, students }) {
   const nav = useNavigate();
+  const pie = usePieActive();
   const stats = useMemo(() => {
     const total = clients.length;
     const counts = Object.fromEntries(CLIENT_TYPES.map((t) => [t.value, 0]));
@@ -603,8 +607,8 @@ function ClientsOverview({ clients, students }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis allowDecimals={false} tick={CHART_TICK} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                <Tooltip content={<ChartTooltip />} cursor={CHART_CURSOR_LINE} animationDuration={CHART_ANIM ? 200 : 0} />
+                <Area type="monotone" dataKey="count" stroke="#0284c7" strokeWidth={2.5} fill="url(#grad-client)" activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -616,10 +620,10 @@ function ClientsOverview({ clients, students }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
-                      {typePie.map((e) => (<Cell key={`tp-st-${e.name || e.color}`} fill={e.color} />))}
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} activeIndex={pie.activeIndex} activeShape={activePieShape} onMouseEnter={pie.onEnter} onMouseLeave={pie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
+                      {typePie.map((e, i) => (<Cell key={`tp-st-${e.name || e.color}`} fill={e.color} fillOpacity={pie.cellOpacity(i)} />))}
                     </Pie>
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Tooltip content={<ChartTooltip />} animationDuration={CHART_ANIM ? 200 : 0} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -679,6 +683,7 @@ function ClientsOverview({ clients, students }) {
 
 function LedgerOverview({ ledger, students, currency }) {
   const nav = useNavigate();
+  const pie = usePieActive();
   const stats = useMemo(() => {
     let totalReceived = 0, paidToCollege = 0, scAdjusted = 0, holding = 0;
     const byType = { sub_agent: 0, associate: 0, km: 0 };
@@ -759,8 +764,8 @@ function LedgerOverview({ ledger, students, currency }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" tick={CHART_TICK} axisLine={false} tickLine={false} />
                 <YAxis tick={CHART_TICK} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
+                <Tooltip content={<ChartTooltip formatter={(v) => formatMoney(v, currency)} />} cursor={CHART_CURSOR_LINE} animationDuration={CHART_ANIM ? 200 : 0} />
+                <Area type="monotone" dataKey="value" stroke="#6d28d9" strokeWidth={2.5} fill="url(#grad-ledger)" activeDot={{ r: 5, strokeWidth: 2 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -773,9 +778,9 @@ function LedgerOverview({ ledger, students, currency }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                     <XAxis type="number" tick={CHART_AXIS_TICK_MUTED} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(v, currency)} />
                     <YAxis dataKey="name" type="category" tick={CHART_AXIS_TICK_FG} axisLine={false} tickLine={false} width={120} />
-                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v) => formatMoney(v, currency)} />
-                    <Bar dataKey="value" radius={CHART_BAR_RADIUS_R} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
-                      {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} />))}
+                    <Tooltip content={<ChartTooltip formatter={(v) => formatMoney(v, currency)} />} cursor={CHART_CURSOR} animationDuration={CHART_ANIM ? 200 : 0} />
+                    <Bar dataKey="value" radius={CHART_BAR_RADIUS_R} activeBar={{ fillOpacity: 1 }} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
+                      {topAgents.map((a) => (<Cell key={`ag-${a.type}-${a.name}`} fill={LEDGER_TYPE_COLOR[a.type] || "#7c3aed"} fillOpacity={0.88} />))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -790,10 +795,10 @@ function LedgerOverview({ ledger, students, currency }) {
               <div className="h-40 mt-2" style={{ minHeight: 160 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
-                      {typePie.map((e) => (<Cell key={`tp-ag-${e.name || e.color}`} fill={e.color} />))}
+                    <Pie data={typePie} dataKey="value" nameKey="name" innerRadius={42} outerRadius={70} paddingAngle={2} activeIndex={pie.activeIndex} activeShape={activePieShape} onMouseEnter={pie.onEnter} onMouseLeave={pie.onLeave} isAnimationActive={CHART_ANIM} animationDuration={CHART_ANIM_MS}>
+                      {typePie.map((e, i) => (<Cell key={`tp-ag-${e.name || e.color}`} fill={e.color} fillOpacity={pie.cellOpacity(i)} />))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatMoney(v, currency)} contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Tooltip content={<ChartTooltip formatter={(v) => formatMoney(v, currency)} />} animationDuration={CHART_ANIM ? 200 : 0} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
