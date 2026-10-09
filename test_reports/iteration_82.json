@@ -1,0 +1,24 @@
+{
+  "summary": "Tested Dashboard Entrance Animations feature on super-admin main dashboard. Login OK, dashboard renders with no runtime/JS errors. Quick-nav tiles, 4 KPI stat cards, and charts all visible with final count-up values rendered correctly (digits present, no NaN/blank). Tile switching to Students (30), Clients (18), Ledger (1 contact) renders real values. Period filter is a custom button-based dropdown (not <select>); menuitems This month / Last 30 / Last 90 / Year to date / Custom range work and update the stat captions and trigger re-fetch without errors. The underlying numeric values remain ₹0.00 because the seeded dataset has no transactions in the chosen periods — this is a data condition, not a feature bug.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard charts (first mount)", "issues": ["Recharts emits width(-1)/height(-1) warnings on initial render before ResponsiveContainer sizes; cosmetic only, chart renders after resize. Consider adding minHeight to parent containers."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Recharts ResponsiveContainer parents occasionally mount at 0x0 producing console warnings; add minHeight to chart card bodies to suppress and ensure chart entrance animation plays reliably on first paint."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co / kmf@0786 (worked)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Dashboard animations feature verified end-to-end on super-admin dashboard. range-preset is a custom button dropdown — use click + role=menuitem (text match) not select_option. Stat cards: stat-income/stat-expense/stat-outstanding/stat-today-spend; tile overviews: st-stat-total, cl-stat-total, lg-stat-received. No console errors except pre-login 401 probes (expected).",
+  "rca of the issue": "N/A — no bugs found."
+}

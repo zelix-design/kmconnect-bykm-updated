@@ -1656,3 +1656,13 @@ admissions per year. It's confidential — only super admin can see it."
 - New **Sound & Haptics** toggle card (`components/settings/SoundHapticsSettings.jsx`) mounted on both admin `Settings.jsx` and staff `StaffProfile.jsx`. testids: `sound-haptics-settings-card`, `sound-haptics-toggle`.
 - Admission Revenue **PIN unlock** now shows greeting "Unlocked!" / "You're in — here's your confidential revenue." instead of "Saved successfully!" via `customFor()` in `lib/api.js` (matches `/pin/verify`).
 - Verified frontend-only (iteration_81.json): toggle renders/persists for both roles, PIN greeting wiring confirmed. Sound/vibration not auto-testable.
+
+---
+
+## 2026-10-09 — Dashboard Entrance Animations (Phase 1)
+- Staggered reveal on the main super-admin dashboard: quick-nav tiles, the 4-stat KPI rows, and chart card rows fade+slide up in sequence (`.dash-stagger`/`.dash-reveal` in `index.css`, `@keyframes dashRise`).
+- Count-up on headline figures via new `components/dashboard/AnimatedNumber.jsx` (rAF, easeOutCubic, ~1.2s; animates 0→target on load and prev→new on filter/year change).
+- Charts draw in (area/bars/pie) using Recharts `isAnimationActive`/`animationDuration`; gated by `CHART_ANIM` (off under reduce-motion).
+- Full prefers-reduced-motion fallback (instant values, no motion) for reveal, count-up, and charts.
+- Scope: `SuperAdminDashboard` only. Verified frontend (iteration_82.json, 100%). Phase 2 (Students/Leads/Office dashboards + reveal-on-scroll) and Phase 3 (modal scale-in, shimmer loaders, animated tooltips) remain backlog.
+- Also this session: campaign dropdown on Add/Edit lead form (`GET /api/leads/assigned-campaigns`, `campaign_id` on lead create); Academic Year selector moved from top header into the sidebar/mobile menu; dashboard tile "Transactions" renamed "Accounts".
