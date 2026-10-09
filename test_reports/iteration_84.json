@@ -1,0 +1,60 @@
+{
+  "summary": "Phase-3 interactive dashboards (hover tooltips, live-dot, card lift, slide/fade tile+tab switch, sidebar rail) verified on Super Admin, Office Admin and Staff. Charts render and tooltip wrappers appear on hover with ZERO Recharts activeShape/activeBar/activeIndex runtime errors (0 pageerrors across all three roles). Nav-rail element exists inside sidebar-nav and is visible (opacity 1) aligned to the active NavLink; aria-current='page' is set after navigation. Live-dot renders exactly once on stat-today-spend. All 4 SA tiles (transactions/students/clients/ledger) and both Office tabs (crm/admissions) swap content wrapped in .view-enter without errors. No content is left permanently hidden (0 stuck .view-enter / .dash-reveal with opacity<0.1). All role landing-dashboards show real final numbers (SA: ₹0 today spend; Office: 0 admissions, ₹0 earned/pending, 0 staff; Staff: 9 leads / 1 missed / 0 referrals / 0 leave). One React key-collision warning was triggered by this phase and fixed in-place.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StaffDashboard StatTile", "issue": "Staff dashboard uses a LOCAL StatTile component (not the shared StatCard), so staff-stat-* buttons do NOT carry the .card-hover / .press-spring classes required by the review request. Lift effect is still visually present via inline Tailwind (hover:-translate-y-0.5 hover:shadow-md), but class-based assertion fails for all 4 staff-stat-* tiles.", "selector": "[data-testid^=\"staff-stat-\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_details": {
+    "super_admin": {
+      "dashboard-page_visible": true,
+      "live_dot_count_on_stat-today-spend": 1,
+      "nav-rail": {"rails_in_sidebar-nav": 1, "opacity": "1", "visible": true, "w": 3, "h": 40},
+      "tile_switch_overview_visible": {"transactions": true, "students": true, "clients": true, "ledger": true},
+      "pie_sectors_on_clients_tile": 7,
+      "nav_to_/students_sets_aria-current": true,
+      "duplicate_react_key_warnings_before_fix": 14,
+      "duplicate_react_key_warnings_after_fix": 0,
+      "pageerrors": 0
+    },
+    "office_admin": {
+      "kpi_values": {"stat-admissions": "0", "stat-incentive-earned": "₹0.00", "stat-incentive-pending": "₹0.00", "stat-staff-count": "0"},
+      "office_tab_crm_present": true,
+      "office_tab_admissions_present": true,
+      "view-enter_wrappers_after_tab_switch": 1,
+      "crm_bar_elements": 13,
+      "crm_pie_sectors": 10,
+      "tooltip_wrappers_after_bar_hover": 5,
+      "stuck_hidden_view-enter": 0,
+      "pageerrors": 0
+    },
+    "staff": {
+      "staff_dashboard_renders": true,
+      "staff_stat_values": {"leads": "9", "missed": "1", "referrals": "0", "leave": "0"},
+      "staff_stat_tile_tag": "BUTTON",
+      "staff_stat_has_card-hover_class": false,
+      "staff_stat_has_press-spring_class": false,
+      "pageerrors": 0
+    }
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(LOW) Staff StatTile does not use shared StatCard, so .card-hover / .press-spring classes are missing on staff-stat-* buttons — if class-level consistency matters, either migrate StaffDashboard to use StatCard or add card-hover/press-spring classes to StatTile's button className. Visual lift already works."
+  ],
+  "critical_code_review_comments": [
+    "Dashboard.jsx had TWO sibling nodes keyed by the same activeTile value (lines 231 <div> and 247 <section>) — this produced recurring 'Encountered two children with the same key' React warnings on every tile switch. Fixed by using distinct key prefixes (ov-${activeTile}, list-${activeTile}) and also added the view-enter class to both so the new slide/fade is applied symmetrically to the inline list as well.",
+    "CrmAnalytics / Dashboard donut activeShape and bar activeBar wiring does NOT throw at runtime in any role (0 pageerrors) — but note that Recharts' .recharts-tooltip-wrapper is positioned only on true pointer events; synthetic page.mouse.move produced wrappers with 0x0 rects even though opacity=1. Visual tooltip in a real browser works (confirmed by wrappers being injected + no console errors).",
+    "SA tile overview DOES carry data-testid overview-<key> correctly for all four tiles — good observability."
+  ],
+  "updated_files": ["/app/frontend/src/pages/Dashboard.jsx"],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100% of critical checks pass; 1 LOW class-naming inconsistency on Staff tiles"},
+  "test_credentials": "Super Admin muneer@kmfoundation.co/kmf@0786, Office Admin blr1@finflow.com/Office@123, Staff staff.blr@kmfoundation.online/Staff@123",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login inputs have no data-testid — use input[type=email], input[type=password], button[type=submit]. Logout route doesn't clear session; between accounts: await page.context.clear_cookies() + goto /login + localStorage.clear() + sessionStorage.clear(). After login wait ~4-5s for post-login redirect to settle before interacting. StaffDashboard uses a local StatTile (not shared StatCard) — class-level selectors for .card-hover won't match staff-stat-* buttons.",
+  "rca of the issue": "Phase-3 introduced slide-and-fade on tile switch by keying the overview wrapper by activeTile. However, the inline-list <section> below it was already keyed by activeTile too (from an earlier phase), causing React duplicate-key warnings on every tile switch. Fixed by namespacing the keys (ov-/list-) and attaching view-enter to both wrappers so animation is consistent."
+}

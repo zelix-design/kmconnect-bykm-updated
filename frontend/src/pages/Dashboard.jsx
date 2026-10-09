@@ -228,7 +228,7 @@ function SuperAdminDashboard() {
       </div>
 
       {/* Tile-driven overview */}
-      <div key={activeTile} data-testid={`overview-${activeTile}`} className="space-y-7 dash-reveal">
+      <div key={`ov-${activeTile}`} data-testid={`overview-${activeTile}`} className="space-y-7 dash-reveal view-enter">
         {activeTile === "transactions" && (
           <TransactionsOverview summary={summary} cashflow={cashflow} byCat={byCat} transactions={transactions} currency={currency} range={range} hideActivityChart={isLightUser} />
         )}
@@ -244,7 +244,7 @@ function SuperAdminDashboard() {
       </div>
 
       {/* Inline list driven by active tile */}
-      <section key={activeTile} data-testid="active-tile-section" className="dash-reveal">
+      <section key={`list-${activeTile}`} data-testid="active-tile-section" className="dash-reveal view-enter">
         <Card className="border border-border bg-card rounded-xl shadow-none">
           <div className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/60">
             <div>

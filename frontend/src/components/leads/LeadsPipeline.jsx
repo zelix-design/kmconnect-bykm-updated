@@ -34,7 +34,7 @@ function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }
   };
   const inner = (
     <>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
+      <div className={`stat-icon w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
       <div className="flex-1 min-w-0">
         <p className="text-2xl font-display font-semibold leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-1">{label}</p>
@@ -50,7 +50,7 @@ function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }
   );
   if (!onClick) {
     return (
-      <Card className="p-4 flex items-center gap-3" data-testid={testid}>{inner}</Card>
+      <Card className="card-hover p-4 flex items-center gap-3" data-testid={testid}>{inner}</Card>
     );
   }
   return (
@@ -59,7 +59,7 @@ function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }
       onClick={onClick}
       data-testid={testid}
       aria-label={ariaLabel || label}
-      className="group text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      className="group card-hover press-spring text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
     >
       {inner}
     </button>

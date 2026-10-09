@@ -1676,3 +1676,16 @@ admissions per year. It's confidential — only super admin can see it."
 - Confirmed the admin staff password-reset route `POST /api/staff/members/{client_id}/login/reset` already exists and works (bogus id → "Staff member not found", short password → 422). The previously-tracked "missing reset route" issue is RESOLVED.
 - Verified frontend (iteration_83.json, 100%): count-ups land on real values, 0 stuck-hidden reveal elements, 0 page errors, campaign badges render. Known pre-existing note: the Leads page mounts two LeadsPipeline tabs → duplicate lead-card testids (not a regression).
 - Remaining (Phase 3 backlog): modal scale-in, shimmer skeleton loaders, animated chart tooltips.
+
+---
+
+## 2026-10-09 (c) — "Dashboards That Move With Purpose" (Phase 1 of plan)
+Applied an interaction/motion layer across all four dashboards (main Super Admin, Office, Staff, CRM) — theme/layout/data unchanged, full prefers-reduced-motion fallback.
+- Interactive charts: new `components/dashboard/ChartInteractions.jsx` (ChartTooltip custom gliding tooltip, activePieShape donut highlight, usePieActive dim-the-rest hook, CHART_CURSOR). Areas get activeDot, bars get activeBar + base opacity, donuts get activeShape+dim; applied in Dashboard.jsx (all 4 overviews) and CrmAnalytics.jsx.
+- Richer hover: `.card-hover` (lift + soft glow), `.stat-icon` (icon reaction), `.press-spring` (springy press) in index.css; wired into StatCard + the Staff/Leads local StatTile/MiniTile + main dashboard tiles for consistency.
+- Live pulse: `components/dashboard/LivePulse.jsx` + `.live-dot`; StatCard gained a `live` prop (shown on "Today's spend").
+- Slide-and-fade view switch: `.view-enter` keyed containers on main dashboard overview+list (namespaced keys ov-/list-) and Office tabs.
+- Animated sidebar: `.nav-rail` in AppShell SidebarContent measures the active aria-current NavLink via useLayoutEffect and slides between items; hover translate cue on others.
+- Tooltip glide via `.recharts-tooltip-wrapper` CSS transition.
+- Verified frontend (iteration_84.json): 100% critical checks, 0 page errors across SA/Office/Staff; testing agent fixed a duplicate-key warning in Dashboard.jsx. LOW staff-tile class inconsistency since fixed.
+- Plan Phase 2 (legend toggle, timeline scrub, animated empty-states, sidebar expand/collapse motion) and Phase 3 (app-wide route transitions, shimmer loaders, animated toasts/dialogs) remain backlog.

@@ -25,7 +25,7 @@ function StatTile({ icon: Icon, label, value, tone, onClick, testid, ariaLabel }
   };
   const inner = (
     <>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
+      <div className={`stat-icon w-10 h-10 rounded-xl flex items-center justify-center ${tones[tone]}`}><Icon size={20} weight="duotone" /></div>
       <div className="flex-1 min-w-0">
         <p className="text-2xl font-display font-semibold leading-none">{value}</p>
         <p className="text-xs text-muted-foreground mt-1">{label}</p>
@@ -48,7 +48,7 @@ function StatTile({ icon: Icon, label, value, tone, onClick, testid, ariaLabel }
       onClick={onClick}
       data-testid={testid}
       aria-label={ariaLabel || label}
-      className="group text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      className="group card-hover press-spring text-left w-full rounded-xl border border-border bg-card p-4 flex items-center gap-3 cursor-pointer hover:ring-2 hover:ring-orange-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
     >
       {inner}
     </button>
@@ -62,7 +62,7 @@ function MiniTile({ label, value, onClick, testid }) {
       onClick={onClick}
       data-testid={testid}
       aria-label={`View ${label} leads`}
-      className="group text-left rounded-lg bg-muted/40 p-3 hover:bg-muted transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+      className="group press-spring text-left rounded-lg bg-muted/40 p-3 hover:bg-muted transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
     >
       <div className="flex items-start justify-between">
         <p className="text-xl font-semibold tabular-nums">{value}</p>
