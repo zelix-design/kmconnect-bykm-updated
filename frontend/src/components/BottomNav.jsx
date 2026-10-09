@@ -47,10 +47,10 @@ const STAFF_SIDE_NAV = [
 const ALL_QUICK_ACTIONS = [
   {
     label: "Add transaction",
-    sub: "Log a credit or debit",
+    sub: "Log a payout, expense or income",
     icon: Wallet,
     color: "from-emerald-500 to-emerald-600",
-    href: "/quick-entry",
+    href: "/quick-entry?view=transaction",
     tid: "qa-add-transaction",
     perm: "quick_entry",
   },

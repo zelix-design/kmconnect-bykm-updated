@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { formatMoney, todayISO } from "@/lib/format";
@@ -9,15 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { PAYMENT_MODES, SC_PAYOUT_CLIENT_TYPES, SC_PAYOUT_CLIENT_TYPE_LABELS } from "@/lib/paymentModes";
+import MoneyOutFields from "@/components/MoneyOutFields";
+import { SC_PAYOUT_CLIENT_TYPES } from "@/lib/paymentModes";
 import {
-  ArrowDownRight, ArrowUpRight, Plus, Check, ArrowLeft,
+  HandCoins, ArrowUpRight, Plus, Check, ArrowLeft,
   Receipt, ReceiptX, Student as StudentIcon, CurrencyInr, ClipboardText,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
-
-const KEYPAD = ["1","2","3","4","5","6","7","8","9",".","0","⌫"];
 
 function HubCard({ icon: Icon, palette, title, subtitle, onClick, testId }) {
   const PAL = {
@@ -33,12 +31,8 @@ function HubCard({ icon: Icon, palette, title, subtitle, onClick, testId }) {
     violet: "bg-violet-500 text-white",
   };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      className={`text-left p-6 rounded-2xl border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg shadow-orange-500/0 hover:shadow-orange-500/10 ${PAL[palette]}`}
-    >
+    <button type="button" onClick={onClick} data-testid={testId}
+      className={`text-left p-6 rounded-2xl border-2 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg shadow-orange-500/0 hover:shadow-orange-500/10 ${PAL[palette]}`}>
       <div className={`w-14 h-14 rounded-xl flex items-center justify-center ${ICON_PAL[palette]} shadow-lg`}>
         <Icon size={26} weight="duotone" />
       </div>
@@ -48,51 +42,55 @@ function HubCard({ icon: Icon, palette, title, subtitle, onClick, testId }) {
   );
 }
 
+const KIND_TABS = [
+  { value: "payout", label: "Payout", icon: HandCoins, active: "border-amber-500 bg-amber-100/50 dark:bg-amber-500/10 ring-2 ring-amber-200 dark:ring-amber-500/30", chip: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400" },
+  { value: "expense", label: "Expense", icon: ReceiptX, active: "border-rose-500 bg-rose-100/50 dark:bg-rose-500/10 ring-2 ring-rose-200 dark:ring-rose-500/30", chip: "bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400" },
+  { value: "income", label: "Income", icon: ArrowUpRight, active: "border-emerald-500 bg-emerald-100/50 dark:bg-emerald-500/10 ring-2 ring-emerald-200 dark:ring-emerald-500/30", chip: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" },
+];
+
 export default function QuickEntry() {
   const { user } = useAuth();
   const nav = useNavigate();
+  const [sp] = useSearchParams();
   const currency = user?.currency || "USD";
   const isOfficeAdmin = user?.role === "office_admin";
   const isSuper = user?.role === "super_admin";
   const isLightUser = user?.role === "user";
   const linkedRef = linkedUserRef(user);
 
-  // Linked sub-agents / consultants: "Quick Entry" is their primary call-to-
-  // action for onboarding a new student. Redirect straight to the public
-  // application form with their referral slug (e.g. /ref=john-doe) so every
-  // prospect they push through it is auto-attributed to them. Use replace()
-  // so the browser back button returns to the dashboard, not into a loop.
   useEffect(() => {
-    if (isLightUser && linkedRef) {
-      navigateToApply(nav, linkedRef, { replace: true });
-    }
+    if (isLightUser && linkedRef) navigateToApply(nav, linkedRef, { replace: true });
   }, [isLightUser, linkedRef, nav]);
 
-  // The lightweight "user" role only needs the debit/credit form — skip the
-  // hub entirely and land them right on the Add Transaction view.
-  const [view, setView] = useState(isLightUser ? "transaction" : "hub"); // "hub" | "transaction"
+  // Open straight on the form when ?view=transaction (used by the mobile FAB).
+  const wantsTxView = sp.get("view") === "transaction";
+  const [view, setView] = useState(isLightUser || wantsTxView ? "transaction" : "hub");
 
-  const [mode, setMode] = useState("debit"); // debit = expense (money out), credit = income (money in)
+  const [kind, setKind] = useState("expense"); // "payout" | "expense" | "income"
   const [amount, setAmount] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [clients, setClients] = useState([]);
+  const [students, setStudents] = useState([]);
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [date, setDate] = useState(todayISO());
   const [description, setDescription] = useState("");
   const [otherSpec, setOtherSpec] = useState("");
   const [saving, setSaving] = useState(false);
-  const [isScPayout, setIsScPayout] = useState(false);
-  const [payoutClientId, setPayoutClientId] = useState("");
-  const [payoutMode, setPayoutMode] = useState("");
+  // money-out fields
+  const [recipientId, setRecipientId] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [expenseOf, setExpenseOf] = useState("");
+  const [paymentMode, setPaymentMode] = useState("");
+  const [resetNonce, setResetNonce] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const [a, c, cl] = await Promise.all([api.get("/accounts"), api.get("/categories"), api.get("/clients")]);
-      setAccounts(a.data);
-      setCategories(c.data);
-      setClients(cl.data);
+      const [a, c, cl, st] = await Promise.all([
+        api.get("/accounts"), api.get("/categories"), api.get("/clients"), api.get("/students"),
+      ]);
+      setAccounts(a.data); setCategories(c.data); setClients(cl.data); setStudents(st.data);
       if (a.data[0]) setAccountId(a.data[0].id);
     })();
   }, []);
@@ -101,46 +99,55 @@ export default function QuickEntry() {
     () => clients.filter((c) => SC_PAYOUT_CLIENT_TYPES.includes(c.client_type)),
     [clients],
   );
+  const recipient = payoutClients.find((c) => c.id === recipientId);
+  const referredStudents = useMemo(() => {
+    if (!recipient) return [];
+    const t = (recipient.name || "").trim().toLowerCase();
+    return students.filter((s) => (s.reference || "").trim().toLowerCase() === t);
+  }, [students, recipient]);
 
-  const txType = mode === "debit" ? "expense" : "income";
-  const filteredCats = useMemo(() => categories.filter(c => c.type === txType), [categories, txType]);
-  const selectedCat = filteredCats.find(c => c.id === categoryId);
+  const isMoneyOut = kind !== "income";
+  const txType = kind === "income" ? "income" : "expense";
+  const filteredCats = useMemo(() => categories.filter((c) => c.type === txType), [categories, txType]);
+  const selectedCat = filteredCats.find((c) => c.id === categoryId);
   const isOther = selectedCat?.name?.toLowerCase().startsWith("other");
 
-  // reset category when switching mode
-  useEffect(() => { setCategoryId(""); setOtherSpec(""); if (mode === "credit") setIsScPayout(false); }, [mode]);
-
-  const tap = (k) => {
-    if (k === "⌫") return setAmount((a) => a.slice(0, -1));
-    if (k === ".") return setAmount((a) => (a.includes(".") ? a : (a || "0") + "."));
-    setAmount((a) => (a === "0" ? k : a + k));
-  };
+  // Reset context-specific fields whenever the kind changes.
+  useEffect(() => {
+    setCategoryId(""); setOtherSpec("");
+    setRecipientId(""); setStudentName(""); setExpenseOf(""); setPaymentMode("");
+    setResetNonce((n) => n + 1);
+  }, [kind]);
 
   const save = async () => {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
     if (!accountId) { toast.error("Pick an account"); return; }
-    if (isScPayout && !payoutClientId) { toast.error("Pick a recipient for the Service Charge payout"); return; }
+    if (isMoneyOut && !recipientId) { toast.error("Pick a recipient"); return; }
+    if (kind === "expense" && !expenseOf) { toast.error("Pick what the expense is of"); return; }
     setSaving(true);
     try {
       const desc = isOther && otherSpec
         ? `${selectedCat.name}: ${otherSpec}${description ? " — " + description : ""}`
         : description;
+      const wantsStudent = kind === "payout" || (kind === "expense" && expenseOf === "campus_visit");
       await api.post("/transactions", {
         type: txType,
         amount: amt,
         account_id: accountId,
-        category_id: categoryId || null,
+        category_id: kind === "income" ? (categoryId || null) : null,
         date,
         description: desc,
-        is_sc_payout: isScPayout,
-        client_id: isScPayout ? payoutClientId : null,
-        payment_mode: isScPayout ? (payoutMode || null) : null,
+        is_sc_payout: kind === "payout",
+        client_id: isMoneyOut ? recipientId : null,
+        payment_mode: isMoneyOut ? (paymentMode || null) : null,
+        student_name: wantsStudent ? (studentName || null) : null,
+        expense_of: kind === "expense" ? expenseOf : null,
       });
-      toast.success(`${mode === "debit" ? "Debit" : "Credit"} entry saved`);
-      // reset
+      toast.success(`${KIND_TABS.find((k) => k.value === kind).label} saved`);
       setAmount(""); setCategoryId(""); setOtherSpec(""); setDescription("");
-      setIsScPayout(false); setPayoutClientId(""); setPayoutMode("");
+      setRecipientId(""); setStudentName(""); setExpenseOf(""); setPaymentMode("");
+      setResetNonce((n) => n + 1);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
     } finally {
@@ -148,11 +155,9 @@ export default function QuickEntry() {
     }
   };
 
-  const tone = mode === "debit"
-    ? { bg: "bg-rose-700 hover:bg-rose-800", soft: "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400", ring: "ring-rose-300" }
-    : { bg: "bg-emerald-700 hover:bg-emerald-800", soft: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-300" };
+  const saveTone = kind === "income" ? "bg-emerald-700 hover:bg-emerald-800" : kind === "payout" ? "bg-amber-gradient" : "bg-rose-700 hover:bg-rose-800";
 
-  // ---- HUB VIEW: 4 quick actions ----
+  // ---- HUB VIEW ----
   if (view === "hub") {
     return (
       <div className="space-y-6 animate-fade-in max-w-5xl" data-testid="quick-entry-page">
@@ -161,49 +166,13 @@ export default function QuickEntry() {
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">What would you like to do?</h1>
           <p className="text-sm text-muted-foreground mt-1">Pick an action — we'll take you straight to it.</p>
         </header>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <HubCard
-            testId="qe-add-transaction"
-            icon={Receipt}
-            palette="amber"
-            title="Add Transaction"
-            subtitle="Log a debit or credit instantly"
-            onClick={() => setView("transaction")}
-          />
-          <HubCard
-            testId="qe-request-expense"
-            icon={ReceiptX}
-            palette="rose"
-            title={isOfficeAdmin ? "Request Expense" : "New Expense Request"}
-            subtitle={isOfficeAdmin ? "Submit for super-admin approval" : "Review office submissions"}
-            onClick={() => nav(isOfficeAdmin ? "/expense-requests?new=1" : "/expense-requests")}
-          />
-          <HubCard
-            testId="qe-add-student"
-            icon={StudentIcon}
-            palette="emerald"
-            title="Add Student"
-            subtitle="Enrol with fees plan & schedule"
-            onClick={() => nav("/students?new=1")}
-          />
-          <HubCard
-            testId="qe-log-payment"
-            icon={CurrencyInr}
-            palette="violet"
-            title="Log Payment"
-            subtitle="Record a student fee receipt"
-            onClick={() => nav("/students?action=log_payment")}
-          />
+          <HubCard testId="qe-add-transaction" icon={Receipt} palette="amber" title="Add Transaction" subtitle="Log a payout, expense or income" onClick={() => setView("transaction")} />
+          <HubCard testId="qe-request-expense" icon={ReceiptX} palette="rose" title={isOfficeAdmin ? "Request Expense" : "New Expense Request"} subtitle={isOfficeAdmin ? "Submit for super-admin approval" : "Review office submissions"} onClick={() => nav(isOfficeAdmin ? "/expense-requests?new=1" : "/expense-requests")} />
+          <HubCard testId="qe-add-student" icon={StudentIcon} palette="emerald" title="Add Student" subtitle="Enrol with fees plan & schedule" onClick={() => nav("/students?new=1")} />
+          <HubCard testId="qe-log-payment" icon={CurrencyInr} palette="violet" title="Log Payment" subtitle="Record a student fee receipt" onClick={() => nav("/students?action=log_payment")} />
           {isSuper && (
-            <HubCard
-              testId="qe-paste-application"
-              icon={ClipboardText}
-              palette="amber"
-              title="Paste Application"
-              subtitle="Auto-parse a pasted student detail blob"
-              onClick={() => nav("/students?paste=1")}
-            />
+            <HubCard testId="qe-paste-application" icon={ClipboardText} palette="amber" title="Paste Application" subtitle="Auto-parse a pasted student detail blob" onClick={() => nav("/students?paste=1")} />
           )}
         </div>
       </div>
@@ -219,72 +188,51 @@ export default function QuickEntry() {
           </button>
         )}
         <p className="label-eyebrow">Quick entry</p>
-        <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Log debit or credit</h1>
-        <p className="text-sm text-muted-foreground mt-1">Fast money-in / money-out logging. Tap the keypad, pick a category, save.</p>
+        <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2">Add transaction</h1>
+        <p className="text-sm text-muted-foreground mt-1">Log a payout, an expense or money coming in.</p>
       </header>
 
-      {/* Mode toggle */}
-      <div className="grid grid-cols-2 gap-3" data-testid="mode-toggle">
-        <button
-          onClick={() => setMode("debit")}
-          data-testid="mode-debit"
-          className={`p-5 rounded-lg border lift text-left ${mode === "debit" ? "border-rose-500 bg-rose-100/50 dark:bg-rose-500/10 ring-2 ring-rose-200 dark:ring-rose-500/30" : "border-border bg-card hover:bg-muted/40"}`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 flex items-center justify-center">
-              <ArrowDownRight size={20} weight="bold" />
-            </div>
-            <div>
-              <p className="font-medium">Debit</p>
-              <p className="text-xs text-muted-foreground">Money out · expense</p>
-            </div>
-          </div>
-        </button>
-        <button
-          onClick={() => setMode("credit")}
-          data-testid="mode-credit"
-          className={`p-5 rounded-lg border lift text-left ${mode === "credit" ? "border-emerald-500 bg-emerald-100/50 dark:bg-emerald-500/10 ring-2 ring-emerald-200 dark:ring-emerald-500/30" : "border-border bg-card hover:bg-muted/40"}`}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-              <ArrowUpRight size={20} weight="bold" />
-            </div>
-            <div>
-              <p className="font-medium">Credit</p>
-              <p className="text-xs text-muted-foreground">Money in · income</p>
-            </div>
-          </div>
-        </button>
+      {/* Kind toggle */}
+      <div className="grid grid-cols-3 gap-3" data-testid="kind-toggle">
+        {KIND_TABS.map((t) => {
+          const Icon = t.icon;
+          const on = kind === t.value;
+          return (
+            <button key={t.value} onClick={() => setKind(t.value)} data-testid={`kind-${t.value}`}
+              className={`p-4 rounded-lg border lift text-left ${on ? t.active : "border-border bg-card hover:bg-muted/40"}`}>
+              <div className={`w-9 h-9 rounded-md flex items-center justify-center ${t.chip}`}>
+                <Icon size={18} weight="bold" />
+              </div>
+              <p className="font-medium mt-2 text-sm">{t.label}</p>
+            </button>
+          );
+        })}
       </div>
 
       <Card className="p-6 border border-border bg-card rounded-lg shadow-none">
-        {/* Big amount display */}
+        {/* Amount — native phone keypad */}
         <div className="text-center pb-6 border-b border-border">
-          <p className="label-eyebrow">{mode === "debit" ? "Amount to deduct" : "Amount to credit"}</p>
-          <div className="mt-3 font-display text-5xl sm:text-6xl tracking-tight tabular-nums" data-testid="amount-display">
-            <span className="text-muted-foreground/70 mr-1">{mode === "debit" ? "−" : "+"}</span>
-            {formatMoney(parseFloat(amount) || 0, currency)}
+          <p className="label-eyebrow">{kind === "income" ? "Amount to credit" : "Amount to deduct"}</p>
+          <div className="mt-3 flex items-center justify-center gap-1">
+            <span className="font-display text-4xl sm:text-5xl text-muted-foreground/70">{kind === "income" ? "+" : "−"}</span>
+            <input
+              type="text" inputMode="decimal" autoFocus
+              value={amount}
+              onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); if ((v.match(/\./g) || []).length <= 1) setAmount(v); }}
+              placeholder="0"
+              data-testid="qe-amount-input"
+              className="w-[min(70vw,16rem)] bg-transparent border-0 outline-none text-center font-display text-5xl sm:text-6xl tracking-tight tabular-nums focus:ring-0 p-0"
+            />
           </div>
+          <p className="text-xs text-muted-foreground mt-2 tabular-nums">{formatMoney(parseFloat(amount) || 0, currency)}</p>
         </div>
 
-        {/* Keypad + Side controls grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          {/* Keypad */}
-          <div className="grid grid-cols-3 gap-2.5" data-testid="keypad">
-            {KEYPAD.map((k) => (
-              <button
-                key={k}
-                onClick={() => tap(k)}
-                data-testid={`key-${k === "⌫" ? "back" : k === "." ? "dot" : k}`}
-                className="h-14 rounded-md bg-muted/40 hover:bg-muted border border-border text-xl font-display lift"
-              >
-                {k}
-              </button>
-            ))}
-          </div>
-
-          {/* Side controls */}
-          <div className="space-y-4">
+        <div className="mt-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Date</Label>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="qe-date" />
+            </div>
             <div>
               <Label>Account</Label>
               <Select value={accountId} onValueChange={setAccountId}>
@@ -294,116 +242,60 @@ export default function QuickEntry() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="qe-date" />
-            </div>
-            <div>
-              <Label>Notes (optional)</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this for?" data-testid="qe-notes" />
-            </div>
           </div>
-        </div>
 
-        {/* SC payout block — only in debit mode */}
-        {mode === "debit" && (
-          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 space-y-3" data-testid="qe-sc-payout-block">
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <Checkbox
-                checked={isScPayout}
-                onCheckedChange={(v) => setIsScPayout(!!v)}
-                data-testid="qe-is-sc-payout"
-                className="mt-0.5"
-              />
-              <div>
-                <p className="text-sm font-medium">This transaction is a Service Charge payout</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Paid to a Sub-Associate / Associate Consultant · reduces their holding in the Ledger</p>
-              </div>
-            </label>
-            {isScPayout && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label>Recipient</Label>
-                  <Select value={payoutClientId} onValueChange={setPayoutClientId}>
-                    <SelectTrigger data-testid="qe-recipient"><SelectValue placeholder="Select recipient" /></SelectTrigger>
-                    <SelectContent>
-                      {payoutClients.length === 0 ? (
-                        <div className="px-2 py-3 text-xs text-muted-foreground text-center">No Sub-Associate / Associate Consultant clients yet.</div>
-                      ) : payoutClients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name} · {SC_PAYOUT_CLIENT_TYPE_LABELS[c.client_type]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Mode of transaction</Label>
-                  <Select value={payoutMode} onValueChange={setPayoutMode}>
-                    <SelectTrigger data-testid="qe-payment-mode"><SelectValue placeholder="Select mode" /></SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          {isMoneyOut && (
+            <MoneyOutFields
+              key={`${kind}-${resetNonce}`}
+              kind={kind}
+              recipientId={recipientId} onRecipientChange={setRecipientId}
+              payoutClients={payoutClients}
+              referredStudents={referredStudents}
+              studentName={studentName} onStudentNameChange={setStudentName}
+              expenseOf={expenseOf} onExpenseOfChange={setExpenseOf}
+              paymentMode={paymentMode} onPaymentModeChange={setPaymentMode}
+              idPrefix="qe"
+            />
+          )}
 
-        {/* Category chips */}
-        <div className="mt-6">
-          <Label>Category</Label>
-          <div className="flex flex-wrap gap-2 mt-2" data-testid="category-chips">
-            {filteredCats.map((c) => {
-              const active = c.id === categoryId;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setCategoryId(c.id)}
-                  data-testid={`chip-${c.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
-                  className={`px-3 h-9 rounded-full text-sm border flex items-center gap-2 lift ${
-                    active
-                      ? "border-orange-500 bg-amber-gradient text-white"
-                      : "border-border bg-card hover:bg-muted/40 text-foreground"
-                  }`}
-                >
-                  <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
-                  {c.name}
-                  {active && <Check size={12} weight="bold" />}
-                </button>
-              );
-            })}
-          </div>
-          {isOther && (
-            <div className="mt-3">
-              <Label>Specify "Other"</Label>
-              <Input
-                value={otherSpec}
-                onChange={(e) => setOtherSpec(e.target.value)}
-                placeholder="e.g., Parking fee, courier charges"
-                data-testid="qe-other-spec"
-              />
+          {kind === "income" && (
+            <div>
+              <Label>Category</Label>
+              <div className="flex flex-wrap gap-2 mt-2" data-testid="category-chips">
+                {filteredCats.map((c) => {
+                  const active = c.id === categoryId;
+                  return (
+                    <button key={c.id} onClick={() => setCategoryId(c.id)}
+                      data-testid={`chip-${c.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}`}
+                      className={`px-3 h-9 rounded-full text-sm border flex items-center gap-2 lift ${active ? "border-orange-500 bg-amber-gradient text-white" : "border-border bg-card hover:bg-muted/40 text-foreground"}`}>
+                      <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
+                      {c.name}
+                      {active && <Check size={12} weight="bold" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {isOther && (
+                <div className="mt-3">
+                  <Label>Specify "Other"</Label>
+                  <Input value={otherSpec} onChange={(e) => setOtherSpec(e.target.value)} placeholder="e.g., Parking fee, courier charges" data-testid="qe-other-spec" />
+                </div>
+              )}
             </div>
           )}
+
+          <div>
+            <Label>Notes (optional)</Label>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What was this for?" data-testid="qe-notes" />
+          </div>
         </div>
 
-        {/* Save */}
         <div className="flex flex-col sm:flex-row gap-3 mt-6">
-          <Button
-            onClick={save}
-            disabled={saving || !amount || !accountId}
-            data-testid="qe-save"
-            className={`flex-1 h-12 text-background lift ${tone.bg}`}
-          >
+          <Button onClick={save} disabled={saving || !amount || !accountId} data-testid="qe-save" className={`flex-1 h-12 text-white border-0 lift ${saveTone}`}>
             <Plus size={18} className="mr-1.5" />
-            {saving ? "Saving…" : `Save ${mode === "debit" ? "debit" : "credit"} entry`}
+            {saving ? "Saving…" : `Save ${KIND_TABS.find((k) => k.value === kind).label.toLowerCase()}`}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => nav("/transactions")}
-            data-testid="qe-view-all"
-            className="h-12"
-          >
+          <Button type="button" variant="outline" onClick={() => nav("/transactions")} data-testid="qe-view-all" className="h-12">
             View all transactions
           </Button>
         </div>

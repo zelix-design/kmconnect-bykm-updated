@@ -19,3 +19,13 @@ export const SC_PAYOUT_CLIENT_TYPE_LABELS = {
   sub_agent_associate: "Sub-Associate",
   associate_consultant: "Associate Consultant",
 };
+
+// "Expense of" options for a recipient-linked expense (non-payout).
+export const EXPENSE_OF_OPTIONS = [
+  { value: "campus_visit", label: "Campus Visit" },
+  { value: "personal", label: "Personal Exp." },
+];
+
+export const EXPENSE_OF_LABELS = Object.fromEntries(
+  EXPENSE_OF_OPTIONS.map((o) => [o.value, o.label]),
+);

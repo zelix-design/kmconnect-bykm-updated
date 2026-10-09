@@ -999,11 +999,13 @@ _CLIENT_TYPE_TO_LEDGER = {
 
 
 async def _sc_payouts_by_agent(user: dict, year: Optional[int]) -> dict[tuple, float]:
-    """Sum Service Charge payout transactions grouped by (ledger_type, name).
+    """Sum money-out lines that reduce an agent's holding, grouped by
+    (ledger_type, name): Service Charge payouts (is_sc_payout) + Campus-Visit
+    expenses (expense_of == campus_visit).
 
     Super admin aggregates across all users (mirrors the all-students ledger);
-    office admins see only their own payouts."""
-    q: dict = {"is_sc_payout": True}
+    office admins see only their own."""
+    q: dict = {"$or": [{"is_sc_payout": True}, {"expense_of": "campus_visit"}]}
     if user.get("role") != "super_admin":
         q["user_id"] = user["id"]
     payouts = await db.transactions.find(q, {"_id": 0}).to_list(5000)
@@ -1286,8 +1288,8 @@ async def agent_payments(
     payout_map = await _sc_payouts_by_agent(user, year)
     if (type, target) in payout_map:
         sc_paid_out = payout_map[(type, target)]
-        # Fetch the individual payout transactions for the detail list.
-        tq: dict = {"is_sc_payout": True}
+        # Fetch the individual money-out transactions for the detail list.
+        tq: dict = {"$or": [{"is_sc_payout": True}, {"expense_of": "campus_visit"}]}
         if user.get("role") != "super_admin":
             tq["user_id"] = user["id"]
         payout_txs = await db.transactions.find(tq, {"_id": 0}).to_list(5000)
@@ -1313,6 +1315,8 @@ async def agent_payments(
                     "payment_mode": t.get("payment_mode"),
                     "description": t.get("description") or "",
                     "account_id": t.get("account_id"),
+                    "kind": "payout" if t.get("is_sc_payout") else "campus_visit",
+                    "student_name": t.get("student_name"),
                 })
         payout_rows.sort(key=lambda r: r["date"] or "", reverse=True)
 

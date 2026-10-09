@@ -25,7 +25,7 @@ import {
 //     Omit (or set falsy) to hide the item from "user" role accounts.
 const ALL_NAV = [
   { to: "/", label: "Overview", icon: House, end: true, tid: "nav-overview", perm: "overview", userRoleAllowed: true },
-  { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry", userRoleAllowed: true },
+  { to: "/quick-entry", label: "Quick entry", icon: PlusCircle, tid: "nav-quick-entry", perm: "quick_entry", userRoleAllowed: true, mobileOnly: true },
   { to: "/transactions", label: "Transactions", icon: Receipt, tid: "nav-transactions", perm: "transactions", userRoleAllowed: true },
   { to: "/accounts", label: "Accounts", icon: Wallet, tid: "nav-accounts", perm: "accounts", userRoleAllowed: true },
   { to: "/my-ledger", label: "My ledger", icon: Coins, tid: "nav-my-ledger", roles: ["user"], userRoleAllowed: true },
@@ -108,7 +108,7 @@ function buildSections(navItems, role) {
   ].filter((s) => s.items.length > 0);
 }
 
-function SidebarContent({ onItemClick, user, onLogout, alerts }) {
+function SidebarContent({ onItemClick, user, onLogout, alerts, variant = "mobile" }) {
   const role = user?.role;
   const alertFor = (to) => {
     if (to === "/messages") return alerts?.messages || 0;
@@ -127,6 +127,7 @@ function SidebarContent({ onItemClick, user, onLogout, alerts }) {
     return init;
   });
   const navItems = ALL_NAV.filter((i) => {
+    if (variant === "desktop" && i.mobileOnly) return false;
     if (i.roles && !i.roles.includes(role)) return false;
     if (i.perm && !canView(user, i.perm)) return false;
     return true;
@@ -365,7 +366,7 @@ export default function AppShell() {
         className="hidden md:flex w-64 shrink-0 flex-col border-r bg-[hsl(var(--sidebar-bg))] border-[hsl(var(--sidebar-border))] sticky top-0 h-screen"
         data-testid="desktop-sidebar"
       >
-        <SidebarContent user={user} alerts={alerts} />
+        <SidebarContent user={user} alerts={alerts} variant="desktop" />
       </aside>
 
       {/* Mobile Drawer */}
@@ -384,7 +385,7 @@ export default function AppShell() {
             }}
             data-testid="mobile-drawer"
           >
-            <SidebarContent user={user} alerts={alerts} onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
+            <SidebarContent user={user} alerts={alerts} variant="mobile" onItemClick={() => setMobileOpen(false)} onLogout={handleLogout} />
           </aside>
         </>
       )}

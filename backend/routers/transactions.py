@@ -63,12 +63,14 @@ SC_PAYOUT_CLIENT_TYPES = {"sub_agent_associate", "associate_consultant"}
 
 @router.get("/sc-payouts")
 async def list_sc_payouts(user: dict = Depends(get_current_user), year: Optional[int] = None):
-    """Service Charge payouts (expense transactions tagged is_sc_payout).
+    """Money-out lines that reduce a sub-agent's holding: Service Charge payouts
+    (is_sc_payout) and Campus-Visit expenses (expense_of == campus_visit).
 
-    Super admin sees payouts across all users; others see only their own.
-    Each row is enriched with recipient client name/type + account name so the
-    Ledger can render edit/delete controls without extra lookups."""
-    q: dict = {"is_sc_payout": True}
+    Super admin sees these across all users; others see only their own.
+    Each row is enriched with recipient client name/type + account name + a
+    `_kind` tag so the Ledger can render edit/delete controls."""
+    ledger_or = [{"is_sc_payout": True}, {"expense_of": "campus_visit"}]
+    q: dict = {"$or": ledger_or}
     if user.get("role") != "super_admin":
         q["user_id"] = user["id"]
     rows = await db.transactions.find(q, {"_id": 0}).sort("date", -1).to_list(5000)
@@ -95,6 +97,7 @@ async def list_sc_payouts(user: dict = Depends(get_current_user), year: Optional
         r["_client_name"] = c.get("name") if c else None
         r["_client_type"] = c.get("client_type") if c else None
         r["_account_name"] = amap.get(r.get("account_id"))
+        r["_kind"] = "payout" if r.get("is_sc_payout") else "campus_visit"
     return rows
 
 

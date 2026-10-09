@@ -199,6 +199,10 @@ class TransactionIn(BaseModel):
     # When True, `client_id` is the recipient and `payment_mode` the method.
     is_sc_payout: bool = False
     payment_mode: Optional[str] = None
+    # Referred student this money-out line relates to (optional link / free text).
+    student_name: Optional[str] = None
+    # For non-payout expenses tied to a recipient: "campus_visit" | "personal".
+    expense_of: Optional[str] = None
 
 
 # ---------- Invoices ----------

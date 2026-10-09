@@ -61,10 +61,10 @@ export default function Agents() {
     holding: acc.holding + r.holding,
   }), { received: 0, paid: 0, sc: 0, paidOut: 0, holding: 0 });
 
-  const openCreate = () => { setEditing(null); setForm({ ...emptyPayout(), account_id: accounts[0]?.id || "" }); setOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ ...emptyPayout(), _kind: "payout", student_name: "", account_id: accounts[0]?.id || "" }); setOpen(true); };
   const openEdit = (p) => {
     setEditing(p);
-    setForm({ amount: String(p.amount), client_id: p.client_id || "", payment_mode: p.payment_mode || "", account_id: p.account_id || "", date: p.date || todayISO(), description: p.description || "" });
+    setForm({ amount: String(p.amount), client_id: p.client_id || "", payment_mode: p.payment_mode || "", account_id: p.account_id || "", date: p.date || todayISO(), description: p.description || "", _kind: p._kind || "payout", student_name: p.student_name || "" });
     setOpen(true);
   };
 
@@ -72,6 +72,7 @@ export default function Agents() {
     e.preventDefault();
     if (!form.client_id) { toast.error("Pick a recipient"); return; }
     if (!form.account_id) { toast.error("Pick an account"); return; }
+    const isCampus = form._kind === "campus_visit";
     const payload = {
       type: "expense",
       amount: parseFloat(form.amount) || 0,
@@ -79,14 +80,16 @@ export default function Agents() {
       category_id: null,
       date: form.date,
       description: form.description,
-      is_sc_payout: true,
+      is_sc_payout: !isCampus,
+      expense_of: isCampus ? "campus_visit" : null,
       client_id: form.client_id,
       payment_mode: form.payment_mode || null,
+      student_name: form.student_name || null,
     };
     try {
       if (editing) {
         await api.patch(`/transactions/${editing.id}`, payload);
-        toast.success("Payout updated");
+        toast.success("Updated");
       } else {
         await api.post("/transactions", payload);
         toast.success("Payout recorded");
@@ -98,7 +101,7 @@ export default function Agents() {
   };
 
   const remove = async (id) => {
-    if (!confirm("Delete this Service Charge payout?")) return;
+    if (!confirm("Delete this entry?")) return;
     await api.delete(`/transactions/${id}`);
     toast.success("Deleted");
     load();
@@ -197,10 +200,11 @@ export default function Agents() {
               <thead>
                 <tr className="text-left bg-muted/40 border-b border-border">
                   <th className="px-6 py-3 label-eyebrow">Date</th>
+                  <th className="px-6 py-3 label-eyebrow">Type</th>
                   <th className="px-6 py-3 label-eyebrow">Recipient</th>
+                  <th className="px-6 py-3 label-eyebrow">Student</th>
                   <th className="px-6 py-3 label-eyebrow">Mode</th>
                   <th className="px-6 py-3 label-eyebrow">Account</th>
-                  <th className="px-6 py-3 label-eyebrow">Notes</th>
                   <th className="px-6 py-3 label-eyebrow text-right">Amount</th>
                   {allowEdit && <th className="px-6 py-3 label-eyebrow"></th>}
                 </tr>
@@ -210,14 +214,19 @@ export default function Agents() {
                   <tr key={p.id} className="hover:bg-muted/40" data-testid={`payout-row-${p.id}`}>
                     <td className="px-6 py-3.5 tabular-nums text-muted-foreground">{formatDate(p.date)}</td>
                     <td className="px-6 py-3.5">
+                      <span className={`inline-flex items-center text-[11px] px-1.5 py-0.5 rounded ${p._kind === "campus_visit" ? "bg-sky-100/70 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-amber-100/70 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"}`}>
+                        {p._kind === "campus_visit" ? "Campus Visit" : "Payout"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3.5">
                       <span className="font-medium">{p._client_name || "—"}</span>
                       {p._client_type && (
                         <span className="block text-[11px] text-muted-foreground">{SC_PAYOUT_CLIENT_TYPE_LABELS[p._client_type] || p._client_type}</span>
                       )}
                     </td>
+                    <td className="px-6 py-3.5 text-muted-foreground">{p.student_name || "—"}</td>
                     <td className="px-6 py-3.5 text-muted-foreground">{PAYMENT_MODE_LABELS[p.payment_mode] || "—"}</td>
                     <td className="px-6 py-3.5 text-muted-foreground">{p._account_name || accountMap[p.account_id]?.name || "—"}</td>
-                    <td className="px-6 py-3.5 text-muted-foreground">{p.description || "—"}</td>
                     <td className="px-6 py-3.5 text-right tabular-nums font-medium text-amber-700 dark:text-amber-400">{formatMoney(p.amount, currency)}</td>
                     {allowEdit && (
                       <td className="px-6 py-3.5 text-right whitespace-nowrap">
