@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend-only testing of the money-out redesign: 3-way kind toggle (Payout/Expense/Income) on Quick Entry and Transactions dialog, MoneyOutFields shared block, ledger Type+Student columns, Campus Visit edit preservation, mobile FAB -> /quick-entry?view=transaction, and desktop sidebar hiding Quick entry. All critical flows verified end-to-end on preview URL as super_admin (muneer@kmfoundation.co). 16/16 effective assertions passed after cleanup. Note: initially 2 appeared to fail — (a) ledger_type_student_cols flagged false but the actual thead has 'Type' + 'Student' columns (label-eyebrow renders them uppercase; the string-match was case-sensitive) — this is a test-script false negative, feature works (verified via inspecting row inner_text showing Type badge + Student column); (b) mobile FAB had a PIN-setup overlay blocking the FAB click — once Skip-for-now is dismissed, FAB opens the quick-actions-sheet and qa-add-transaction navigates correctly to /quick-entry?view=transaction and renders the form (not hub). Super admin had 0 accounts; created a TEST account via API, then cleaned up.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile — first-login overlay", "issues": ["A 'Set a 4-digit PIN' modal (DialogOverlay with class data-[state=open]) auto-opens on first mobile landing and intercepts pointer events for the bottom-nav FAB until the user clicks 'Skip for now'. Not a blocker since Skip exists, but worth flagging — users on narrow screens cannot interact with the bottom nav until they dismiss it. Consider deferring the PIN prompt or at least not stealing pointer events."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "QuickEntry.jsx (305 lines) and Transactions.jsx (355 lines) are getting long but still focused — fine for now; MoneyOutFields extraction is a good DRY improvement.",
+    "Agents.jsx `openEdit` persists `_kind` on form state only; the submit path recomputes `is_sc_payout = !isCampus` and `expense_of = isCampus ? 'campus_visit' : null`, which correctly preserves kind on edit — verified.",
+    "QuickEntry save button disables when `!accountId` (line 294). If a super_admin has 0 accounts, the Account select stays empty and users cannot save — not a bug per spec, but could show a hint like 'Create an account first' near the picker.",
+    "MoneyOutFields: when switching recipient while 'Other…' is open, the free-text name field keeps its value from the previous recipient (no reset tied to recipient change). Low-impact but could be surprising."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100%" },
+  "test_credentials": "muneer@kmfoundation.co / kmf@0786",
+  "seed_data_creation": "Created 1 TEST account (TEST_IT88_Acc / TEST_IT88b_Acc) + several TEST_IT88* transactions during testing; all deleted at the end via DELETE /api/transactions/{id} + DELETE /api/accounts/{id}. The pre-existing GIBI PHILIP ₹2500 payout was left untouched as instructed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All redesign assertions passed. Super admin had 0 accounts initially — create one before saving transactions. Mobile FAB flow needs 'Skip for now' click on first login (PIN prompt). Payout chip renders in both mobile+desktop views (two chip elements per row — mobile card + desktop table).",
+  "verified_assertions": {
+    "direct_view_transaction_opens_form": true,
+    "date_before_account_ordering": true,
+    "amount_native_input_no_keypad": true,
+    "payout_err_no_recipient_toast": true,
+    "recipients_filtered_to_sub_assoc_and_consultant_only": true,
+    "payout_saved_persists": true,
+    "expense_shows_expense_of_select": true,
+    "expense_err_no_expense_of_toast": true,
+    "campus_visit_reveals_student_dropdown_with_Other": true,
+    "other_reveals_name_text_field": true,
+    "expense_saved_persists": true,
+    "income_hides_recipient_shows_category_chips": true,
+    "income_saved_persists": true,
+    "transactions_dialog_three_way_toggle_and_moneyoutfields": true,
+    "transactions_income_shows_category_select": true,
+    "amber_tx_payout_chip_renders_with_correct_text": true,
+    "sc_payouts_filter_excludes_campus_visit_rows": true,
+    "ledger_type_and_student_columns_rendered": true,
+    "ledger_shows_payout_and_campus_visit_rows_reducing_holding": true,
+    "edit_payout_dialog_preserves_campus_visit_kind": true,
+    "add_payout_btn_still_opens_dialog": true,
+    "desktop_sidebar_hides_quick_entry_nav_item": true,
+    "mobile_quick_add_fab_sheet_navigates_to_quick_entry_view_transaction": true
+  }
+}

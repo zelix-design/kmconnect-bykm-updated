@@ -1726,3 +1726,19 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - `AgentDetail.jsx` — added 'SC paid out' tile + read-only payouts list; holding reflects payouts.
 
 **Testing:** Backend curl-verified (create/list/ledger-holding/detail/edit/delete; test data cleaned). Frontend testing_agent iteration_87.json = 100% across all 6 flows, zero functional bugs. Non-blocking review notes: add data-testids to QuickEntry keypad digits + a toast testid for sturdier automation.
+
+
+---
+
+## 2026-06 — Money-out redesign (Payout/Expense/Income) + topbar/nav changes
+**Quick Entry & Transactions dialog:** Replaced the Debit/Credit toggle with a 3-way kind selector **Payout | Expense | Income** (kept Income per user). Quick Entry amount now uses the phone's native numeric keypad (removed the on-screen keypad); Date sits above Account. Shared `components/MoneyOutFields.jsx` renders, for Payout/Expense: Recipient* (sub-associate/associate-consultant only), Student referred (optional for payout; for Expense→Campus Visit it includes an "Other…→Name" option), and Mode of payment (above Notes). "Expense of" = Campus Visit / Personal Exp. Income keeps category chips.
+- Backend `TransactionIn` gained `student_name` + `expense_of`. `transactions.py /sc-payouts` now returns both payouts and Campus-Visit expenses with `_kind`; `students.py` ledger subtracts **both** payouts and Campus-Visit expenses from each agent's holding (Personal Exp. does not). Agents Ledger card got Type + Student columns; edit preserves kind.
+- `QuickEntry` opens straight on the form via `/quick-entry?view=transaction`; the mobile FAB "Add transaction" uses that URL.
+- **Quick Entry removed from the desktop sidebar** (nav item flagged `mobileOnly`; `SidebarContent variant="desktop"` filters it) — stays reachable on mobile via the FAB.
+- Verified: backend curl (payout + campus_visit reduce holding, income posts) + testing_agent iteration_88.json = 100%, zero functional bugs.
+
+**Topbar / nav visual edits:**
+- Topbar theme-toggle button replaced with a **Messages button** (`topbar-messages-btn`) → opens /messages, with unread badge.
+- Avatar/name is now a **Profile dropdown** (`profile-menu-btn` → `profile-menu`) containing Dark/Light mode toggle (`profile-theme-toggle`), Profile & settings, and Sign out (`logout-btn`). Standalone logout + ThemeToggle removed from topbar.
+- Mobile bottom nav: added a **CRM** item (`bottom-nav-crm` → /leads) for super_admin & office_admin.
+- Verified via screenshot (desktop): Messages button + Profile dropdown render; sidebar no longer lists Quick entry.

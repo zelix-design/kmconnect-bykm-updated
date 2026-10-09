@@ -11,10 +11,13 @@ import AcademicYearSelect from "@/components/AcademicYearSelect";
 import BottomNav from "@/components/BottomNav";
 import InstallPrompt from "@/components/InstallPrompt";
 import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import {
   House, Receipt, Wallet, FileText, UsersThree, Tag, Gear, SignOut, PlusCircle,
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
-  Target, IdentificationBadge, Handshake, UserCircle, CaretRight, FolderSimplePlus,
+  Target, IdentificationBadge, Handshake, UserCircle, CaretRight, CaretDown, FolderSimplePlus,
   ClockCounterClockwise, Clock,
 } from "@phosphor-icons/react";
 
@@ -298,27 +301,13 @@ function SidebarContent({ onItemClick, user, onLogout, alerts, variant = "mobile
   );
 }
 
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      data-testid="theme-toggle"
-      title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-      className="relative w-10 h-10 rounded-full bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors"
-    >
-      {theme === "dark" ? <Sun size={18} weight="fill" className="text-amber-400" /> : <Moon size={18} weight="fill" className="text-orange-600" />}
-    </button>
-  );
-}
-
 export default function AppShell() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [alerts, setAlerts] = useState({ messages: 0, approvals: 0 });
+  const { theme, toggle: toggleTheme } = useTheme();
 
   // Attention signals for the sidebar: unread messages (all roles) and pending
   // expense approvals (super admin). Refreshed on navigation + every 60s so the
@@ -438,34 +427,76 @@ export default function AppShell() {
               </a>
             )}
             <NotificationsBell />
-            <ThemeToggle />
-            <div className="flex items-center gap-2 sm:gap-2.5 pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8">
-              <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden" data-testid="topbar-avatar">
-                {user?.photo_url ? (
-                  <AuthedImage
-                    url={user.photo_url}
-                    alt={user?.name || "profile"}
-                    className="w-full h-full object-cover"
-                    testid="topbar-avatar-img"
-                    fallback={initialsOf(user?.name).toUpperCase()}
-                  />
-                ) : (
-                  initialsOf(user?.name).toUpperCase()
-                )}
-              </div>
-              <div className="hidden lg:block min-w-0">
-                <p className="text-xs font-medium leading-tight truncate max-w-[140px]" data-testid="topbar-user-name">{user?.name}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">{user?.business_name || user?.currency || "USD"}</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                data-testid="logout-btn"
-                title="Sign out"
-                className="ml-0.5 sm:ml-1 w-9 h-9 rounded-full bg-muted/60 hover:bg-rose-500/15 text-foreground hover:text-rose-600 dark:hover:text-rose-400 flex items-center justify-center transition-colors"
-              >
-                <SignOut size={16} />
-              </button>
+            <button
+              type="button"
+              onClick={() => nav("/messages")}
+              data-testid="topbar-messages-btn"
+              title="Messages"
+              className="relative w-10 h-10 rounded-full bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors"
+            >
+              <ChatCircleDots size={18} />
+              {alerts.messages > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-semibold flex items-center justify-center">
+                  {alerts.messages > 9 ? "9+" : alerts.messages}
+                </span>
+              )}
+            </button>
+            <div className="pl-2 sm:pl-3 ml-0.5 sm:ml-1 border-l border-border h-8 flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="profile-menu-btn"
+                    className="flex items-center gap-2 sm:gap-2.5 rounded-full hover:bg-muted/60 pl-0.5 pr-1.5 py-0.5 transition-colors"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-amber-gradient text-white text-xs font-semibold flex items-center justify-center shrink-0 overflow-hidden" data-testid="topbar-avatar">
+                      {user?.photo_url ? (
+                        <AuthedImage
+                          url={user.photo_url}
+                          alt={user?.name || "profile"}
+                          className="w-full h-full object-cover"
+                          testid="topbar-avatar-img"
+                          fallback={initialsOf(user?.name).toUpperCase()}
+                        />
+                      ) : (
+                        initialsOf(user?.name).toUpperCase()
+                      )}
+                    </div>
+                    <div className="hidden lg:block min-w-0 text-left">
+                      <p className="text-xs font-medium leading-tight truncate max-w-[140px]" data-testid="topbar-user-name">{user?.name}</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight">{user?.business_name || user?.currency || "USD"}</p>
+                    </div>
+                    <CaretDown size={13} className="text-muted-foreground shrink-0" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56" data-testid="profile-menu">
+                  <DropdownMenuLabel>
+                    <p className="text-sm font-medium truncate">{user?.name}</p>
+                    <p className="text-xs text-muted-foreground font-normal truncate">{user?.email}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onSelect={(e) => { e.preventDefault(); toggleTheme(); }}
+                    data-testid="profile-theme-toggle"
+                    className="cursor-pointer"
+                  >
+                    {theme === "dark"
+                      ? <><Sun size={16} weight="fill" className="mr-2 text-amber-400" /> Light mode</>
+                      : <><Moon size={16} weight="fill" className="mr-2 text-orange-600" /> Dark mode</>}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => nav("/settings")} data-testid="profile-settings" className="cursor-pointer">
+                    <UserCircle size={16} className="mr-2" /> Profile &amp; settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    data-testid="logout-btn"
+                    className="cursor-pointer text-rose-600 dark:text-rose-400 focus:text-rose-600 dark:focus:text-rose-400"
+                  >
+                    <SignOut size={16} className="mr-2" /> Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
           </div>
