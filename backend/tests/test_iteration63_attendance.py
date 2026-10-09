@@ -1,7 +1,7 @@
 """Attendance & Payroll module tests (iteration 63)."""
 import os
 import calendar
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 import pytest
 import requests

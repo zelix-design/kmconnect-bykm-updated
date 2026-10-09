@@ -954,7 +954,6 @@ async def lead_analytics(user: dict = Depends(get_current_user), office: Optiona
     total_leads = len(leads)
     converted = sum(by_status[s] for s in CONVERTED_STATUSES)
     lost = by_status["lost"]
-    positive = by_status["not_connected"] + by_status["interested"] + by_status["follow_up"]
 
     students = await db.students.find(
         student_scope,

@@ -11,7 +11,6 @@ Covers:
 - GET /api/students/me/referrals includes back-mapped students
 """
 import os
-import time
 import uuid
 
 import pytest

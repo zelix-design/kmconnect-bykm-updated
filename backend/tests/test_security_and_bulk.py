@@ -3,7 +3,6 @@ import os
 import time
 import uuid
 import requests
-import subprocess
 import pytest
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")

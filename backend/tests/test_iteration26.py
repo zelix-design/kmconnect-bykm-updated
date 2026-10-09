@@ -10,8 +10,6 @@ Coverage:
 - Paste application admin endpoint still works without supplying a declaration.
 """
 import os
-import sys
-import asyncio
 import uuid
 import pytest
 import requests

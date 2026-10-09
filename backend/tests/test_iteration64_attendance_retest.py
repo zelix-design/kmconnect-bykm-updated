@@ -16,7 +16,6 @@ import calendar
 import asyncio
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
-from typing import Optional
 
 import pytest
 import requests

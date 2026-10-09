@@ -3,7 +3,6 @@
 Covers uploads/image, uploads/document, lead attach/detach, serve, soft-delete-by-id,
 scope, MIME/size rejection, and the round-trip through the real Emergent object storage.
 """
-import io
 import os
 import struct
 import zlib
