@@ -20,6 +20,10 @@ import LeadsBoard from "./LeadsBoard";
 import StageChangeDialog from "./StageChangeDialog";
 import LeadsBulkActionBar from "./LeadsBulkActionBar";
 import UserAvatar from "@/components/UserAvatar";
+import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
+import Reveal from "@/components/Reveal";
+
+const countFmt = (n) => String(Math.round(n));
 
 function StatTile({ icon: Icon, label, value, tone, testid, onClick, ariaLabel }) {
   const tones = {
@@ -287,14 +291,14 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
       )}
 
       {!campaignId && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="leads-stats">
-          <StatTile icon={Target} label="Total leads" value={stats.total} tone="amber"
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 dash-stagger" data-testid="leads-stats">
+          <StatTile icon={Target} label="Total leads" value={<AnimatedNumber value={stats.total} format={countFmt} />} tone="amber"
             testid="stat-total-leads" onClick={() => { setStatusFilter("all"); setView("list"); }} />
-          <StatTile icon={ClockCountdown} label="Follow-up" value={stats.by_status?.follow_up || 0} tone="sky"
+          <StatTile icon={ClockCountdown} label="Follow-up" value={<AnimatedNumber value={stats.by_status?.follow_up || 0} format={countFmt} />} tone="sky"
             testid="stat-followup-leads" onClick={() => { setStatusFilter("follow_up"); setView("list"); }} />
-          <StatTile icon={ClockCountdown} label="Missed" value={stats.missed} tone="rose"
+          <StatTile icon={ClockCountdown} label="Missed" value={<AnimatedNumber value={stats.missed} format={countFmt} />} tone="rose"
             testid="stat-missed-leads" onClick={() => { setStatusFilter("missed"); setView("list"); }} />
-          <StatTile icon={CheckCircle} label="Converted" value={stats.by_status?.converted || 0} tone="emerald"
+          <StatTile icon={CheckCircle} label="Converted" value={<AnimatedNumber value={stats.by_status?.converted || 0} format={countFmt} />} tone="emerald"
             testid="stat-converted-leads" onClick={() => { setStatusFilter("converted"); setView("list"); }} />
         </div>
       )}
@@ -409,7 +413,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
               </label>
             </>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="leads-grid">
+          <Reveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" testid="leads-grid">
             {leads.map((l) => {
               const meta = LEAD_STATUS_META[l.status] || LEAD_STATUS_META.new;
               const isChecked = selectedIds.has(l.id);
@@ -456,13 +460,13 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                           {l.assigned_to_name}
                         </span>
                       )}
-                      {allLeadsMode ? (
-                        <span className={`px-2 py-0.5 rounded-full ${l.campaign_id ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" : "bg-muted text-muted-foreground"}`} data-testid={`lead-campaign-badge-${l.id}`}>
-                          {l.campaign_id ? (l.campaign_name || campaignMap[l.campaign_id] || "Campaign") : "Uncategorised"}
-                        </span>
-                      ) : (isStaff && l.campaign_id) ? (
+                      {l.campaign_id ? (
                         <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" data-testid={`lead-campaign-badge-${l.id}`}>
                           {l.campaign_name || campaignMap[l.campaign_id] || "Campaign"}
+                        </span>
+                      ) : allLeadsMode ? (
+                        <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground" data-testid={`lead-campaign-badge-${l.id}`}>
+                          Uncategorised
                         </span>
                       ) : null}
                       {l.next_follow_up && (
@@ -475,7 +479,7 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                 </div>
               );
             })}
-          </div>
+          </Reveal>
         </div>
       )}
 

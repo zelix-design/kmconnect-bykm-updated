@@ -25,6 +25,7 @@ import { COLLEGE_PLACES, normalizePlace } from "@/lib/places";
 import { navigateToApply, buildApplyUrl, linkedUserRef } from "@/lib/applyUrl";
 import PasteApplicationDialog from "@/components/students/PasteApplicationDialog";
 import StudentBulkUploadDialog from "@/components/student-detail/StudentBulkUploadDialog";
+import Reveal from "@/components/Reveal";
 
 const STATUS_OPTIONS = [
   { value: "inquiry", label: "Inquiry" },
@@ -680,7 +681,7 @@ export default function Students() {
               ? `Other cities — ${filtered.length} enrollments`
               : `${qCity} — ${filtered.length} enrollments`}
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="students-grid">
+          <Reveal className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" testid="students-grid">
             {filtered.map((s) => (
               <StudentCard
                 key={s.id} s={s} currency={currency} isSuper={isSuper}
@@ -689,7 +690,7 @@ export default function Students() {
                 onToggleSelect={() => toggleSel(s.id)}
               />
             ))}
-          </div>
+          </Reveal>
         </>
       )}
 

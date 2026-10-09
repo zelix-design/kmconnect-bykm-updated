@@ -11,6 +11,10 @@ import {
   Copy, ShareNetwork, ArrowRight, Student as StudentIcon, Clock,
 } from "@phosphor-icons/react";
 import LeaveRequestDialog from "@/components/leave/LeaveRequestDialog";
+import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
+import Reveal from "@/components/Reveal";
+
+const countFmt = (n) => String(Math.round(n));
 
 function StatTile({ icon: Icon, label, value, tone, onClick, testid, ariaLabel }) {
   const tones = {
@@ -122,14 +126,14 @@ export default function StaffDashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="staff-stats">
-        <StatTile icon={Target} label="My leads" value={stats.total} tone="amber"
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 dash-stagger" data-testid="staff-stats">
+        <StatTile icon={Target} label="My leads" value={<AnimatedNumber value={stats.total} format={countFmt} />} tone="amber"
           testid="staff-stat-leads" onClick={() => nav("/leads")} />
-        <StatTile icon={ClockCountdown} label="Missed follow-ups" value={stats.missed} tone="rose"
+        <StatTile icon={ClockCountdown} label="Missed follow-ups" value={<AnimatedNumber value={stats.missed} format={countFmt} />} tone="rose"
           testid="staff-stat-missed" onClick={() => nav("/leads?filter=missed")} />
-        <StatTile icon={GraduationCap} label="Students referred" value={referrals.length} tone="emerald"
+        <StatTile icon={GraduationCap} label="Students referred" value={<AnimatedNumber value={referrals.length} format={countFmt} />} tone="emerald"
           testid="staff-stat-referrals" onClick={() => nav("/my-students")} />
-        <StatTile icon={CalendarCheck} label="Pending leave" value={leaveStats.pending_mine} tone="sky"
+        <StatTile icon={CalendarCheck} label="Pending leave" value={<AnimatedNumber value={leaveStats.pending_mine} format={countFmt} />} tone="sky"
           testid="staff-stat-leave" onClick={() => nav("/attendance?tab=leave")} />
       </div>
 
@@ -164,7 +168,7 @@ export default function StaffDashboard() {
       </Card>
 
       {/* Two columns: leads shortcut + referred students */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="font-medium text-foreground flex items-center gap-1.5"><Target size={16} className="text-orange-600 dark:text-orange-400" /> Leads</p>
@@ -173,13 +177,13 @@ export default function StaffDashboard() {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
-            <MiniTile label="Follow-up" value={stats.by_status?.follow_up || 0}
+            <MiniTile label="Follow-up" value={<AnimatedNumber value={stats.by_status?.follow_up || 0} format={countFmt} />}
               onClick={() => nav("/leads?filter=follow_up")} testid="staff-mini-follow_up" />
-            <MiniTile label="Interested" value={stats.by_status?.interested || 0}
+            <MiniTile label="Interested" value={<AnimatedNumber value={stats.by_status?.interested || 0} format={countFmt} />}
               onClick={() => nav("/leads?filter=interested")} testid="staff-mini-interested" />
-            <MiniTile label="New" value={stats.by_status?.new || 0}
+            <MiniTile label="New" value={<AnimatedNumber value={stats.by_status?.new || 0} format={countFmt} />}
               onClick={() => nav("/leads?filter=new")} testid="staff-mini-new" />
-            <MiniTile label="Converted" value={stats.by_status?.converted || 0}
+            <MiniTile label="Converted" value={<AnimatedNumber value={stats.by_status?.converted || 0} format={countFmt} />}
               onClick={() => nav("/leads?filter=converted")} testid="staff-mini-converted" />
           </div>
         </Card>
@@ -207,7 +211,7 @@ export default function StaffDashboard() {
             </div>
           )}
         </Card>
-      </div>
+      </Reveal>
 
       <LeaveRequestDialog open={leaveOpen} onOpenChange={setLeaveOpen} onSubmitted={refreshLeave} />
     </div>
