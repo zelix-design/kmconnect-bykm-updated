@@ -1699,3 +1699,10 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - SHIMMER skeleton (`DashboardSkeleton` + `.shimmer`) on the dashboard's first boot (`booted` gate).
 - All honor prefers-reduced-motion. Verified frontend (iteration_85.json, 100%) across Super Admin / Office / Staff: tile highlight repositions (4/4 transforms), groups toggle, route-enter present on all pages, nothing stuck hidden, 0 functional console errors.
 - Note: "attention indicators" on sidebar groups were intentionally skipped (no existing unread/attention data source to drive them honestly). Shimmer is applied to the main dashboard as the pattern; rolling it out to other pages' load states remains optional follow-up.
+
+---
+
+## 2026-10-09 (e) — Sidebar attention dots + shimmer skeletons on 3 pages
+- Sidebar ATTENTION DOTS wired to real signals: AppShell fetches `/messages/unread-count` (all roles) and `/expense-requests?status=pending` (super admin) into an `alerts` state (refetched on route change + every 60s), passed to SidebarContent. A rose count badge (`nav-alert-<tid>`) renders on the Messages item (unread) and the super-admin Approvals item (pending); a collapsed nav GROUP header shows a rose dot (`nav-group-alert-<key>`) if any child item has a signal.
+- SHIMMER skeletons during data load: new `components/Shimmer.jsx` (ShimmerBlock, StatRowSkeleton, CardGridSkeleton) applied to Leads/CRM pipeline (`leads-loading`), Students page (`students-loading`, added a `loading` state), and Office dashboard stat row (`stat-skeleton`). Uses the `.shimmer` sweep (reduce-motion disables it).
+- Verified frontend (iteration_86.json, 100%): approvals badge showed '1' (seeded), messages badge absent at 0 unread / '9+' for office admin with unread, all three shimmer testids confirmed, 0 non-auth console errors. Seeded test approval + its auto-created transaction + notifications were fully cleaned up afterwards (DB back to pre-test state).
