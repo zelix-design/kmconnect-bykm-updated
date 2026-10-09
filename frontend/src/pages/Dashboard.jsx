@@ -180,11 +180,6 @@ function SuperAdminDashboard() {
           <Link to="/quick-entry" data-testid="quick-add-tx" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg btn-amber text-sm font-medium">
             <Receipt size={16} /> Quick entry
           </Link>
-          {!isLightUser && (
-            <Link to="/invoices" data-testid="quick-add-invoice" className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-sm hover:bg-muted lift">
-              <FileText size={16} /> New invoice
-            </Link>
-          )}
         </div>
       </header>
 

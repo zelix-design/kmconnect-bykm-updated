@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import MoneyOutFields from "@/components/MoneyOutFields";
 import { SC_PAYOUT_CLIENT_TYPES } from "@/lib/paymentModes";
 import {
-  HandCoins, ArrowUpRight, Plus, ArrowLeft,
+  HandCoins, ArrowUpRight, Plus, ArrowLeft, FileText,
   Receipt, ReceiptX, Student as StudentIcon, CurrencyInr, ClipboardText,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -297,6 +297,11 @@ export default function QuickEntry() {
           <Button type="button" variant="outline" onClick={() => nav("/transactions")} data-testid="qe-view-all" className="h-12">
             View all transactions
           </Button>
+          {!isLightUser && (
+            <Button type="button" variant="outline" onClick={() => nav("/invoices")} data-testid="qe-generate-invoice" className="h-12">
+              <FileText size={16} className="mr-1.5" /> Generate Invoice
+            </Button>
+          )}
         </div>
       </Card>
     </div>
