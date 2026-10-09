@@ -1749,3 +1749,12 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Topbar: theme toggle replaced by a Messages button (topbar-messages-btn → /messages); avatar is a Profile dropdown (profile-menu-btn) with Dark/Light toggle, Profile & settings, Sign out.
 - Bottom nav: CRM (→/leads) + Clients (→/clients) surfaced for admins (order: Home, CRM, Clients, Students); Messages moved off the bar (now in topbar).
 - Verified via screenshots (Payout/Expense dialogs show Recipient|Student & Recipient|ExpenseOf, Mode|Category; profile dropdown). Cleaned all testing-agent leftover accounts/transactions.
+
+## 2026-06 — Per-client Add Transaction / Invoice + placement tweaks
+- MoneyOutFields: Category dropdown now hidden for Payout (shows for Expense; Income has its own dropdown).
+- AppShell: topbar Messages button is now mobile-only (md:hidden); desktop uses the sidebar Messages item.
+- Dashboard: removed the "New invoice" header button.
+- QuickEntry: added a "Generate Invoice" button — right of the "Add transaction" heading on desktop, below the subtitle on mobile (non-light-user roles). Reads ?client=<id> to preselect the payout/expense recipient.
+- ClientDetail: added "Add Transaction" (→ /quick-entry?view=transaction&client=<id>, recipient prefilled) and "New Invoice" (super_admin → /invoices?new=1&client=<id>, opens the create dialog with the client preselected) on every client detail page.
+- Invoices: supports /invoices?new=1&client=<id> to auto-open the create dialog with the client preselected.
+- Verified via screenshots: ClientDetail buttons render; Add Transaction prefills recipient "SAJIN · Sub-Associate".

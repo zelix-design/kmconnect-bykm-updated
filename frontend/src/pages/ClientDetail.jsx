@@ -6,7 +6,7 @@ import { formatMoney, formatDate } from "@/lib/format";
 import { buildApplyUrl, slugifyRef } from "@/lib/applyUrl";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon, IdentificationBadge, MapPin, House, CalendarCheck, PencilSimple } from "@phosphor-icons/react";
+import { ArrowLeft, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, ArrowsClockwise, Check, DownloadSimple, Link as LinkIcon, IdentificationBadge, MapPin, House, CalendarCheck, PencilSimple, Receipt, FileText } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { clientTypeLabel } from "@/pages/Clients";
 import AuthedImage from "@/components/AuthedImage";
@@ -117,6 +117,22 @@ export default function ClientDetail() {
             </div>
           </div>
           <div className="flex gap-2 self-start flex-wrap">
+            <Button
+              onClick={() => nav(`/quick-entry?view=transaction&client=${c.id}`)}
+              data-testid="client-add-transaction"
+              className="btn-amber border-0"
+            >
+              <Receipt size={14} className="mr-1.5" /> Add Transaction
+            </Button>
+            {user?.role === "super_admin" && (
+              <Button
+                variant="outline"
+                onClick={() => nav(`/invoices?new=1&client=${c.id}`)}
+                data-testid="client-new-invoice"
+              >
+                <FileText size={14} className="mr-1.5" /> New Invoice
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {

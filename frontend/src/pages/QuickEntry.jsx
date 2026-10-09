@@ -99,6 +99,11 @@ export default function QuickEntry() {
     () => clients.filter((c) => SC_PAYOUT_CLIENT_TYPES.includes(c.client_type)),
     [clients],
   );
+  // Preselect the recipient when arriving from a client's detail page.
+  useEffect(() => {
+    const cid = sp.get("client");
+    if (cid && payoutClients.some((c) => c.id === cid)) setRecipientId(cid);
+  }, [payoutClients, sp]);
   const recipient = payoutClients.find((c) => c.id === recipientId);
   const referredStudents = useMemo(() => {
     if (!recipient) return [];
