@@ -432,7 +432,7 @@ export default function AppShell() {
               onClick={() => nav("/messages")}
               data-testid="topbar-messages-btn"
               title="Messages"
-              className="relative w-10 h-10 rounded-full bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors"
+              className="md:hidden relative w-10 h-10 rounded-full bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors"
             >
               <ChatCircleDots size={18} />
               {alerts.messages > 0 && (

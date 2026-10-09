@@ -112,23 +112,25 @@ export default function MoneyOutFields({
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label>Category</Label>
-          <Select value={categoryId || NONE} onValueChange={(v) => onCategoryChange(v === NONE ? "" : v)}>
-            <SelectTrigger data-testid={`${idPrefix}-category`}><SelectValue placeholder="Select category" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>— None —</SelectItem>
-              {expenseCategories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
-                    {c.name}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {kind === "expense" && (
+          <div>
+            <Label>Category</Label>
+            <Select value={categoryId || NONE} onValueChange={(v) => onCategoryChange(v === NONE ? "" : v)}>
+              <SelectTrigger data-testid={`${idPrefix}-category`}><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>— None —</SelectItem>
+                {expenseCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
+                      {c.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
     </div>
   );
