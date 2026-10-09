@@ -74,36 +74,6 @@ export default function MoneyOutFields({
           </div>
         )}
 
-        {kind === "expense" && expenseOf !== "personal" && (
-          <div>
-            <Label>Category</Label>
-            <Select value={categoryId || NONE} onValueChange={(v) => onCategoryChange(v === NONE ? "" : v)}>
-              <SelectTrigger data-testid={`${idPrefix}-category`}><SelectValue placeholder="Select category" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>— None —</SelectItem>
-                {expenseCategories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
-                      {c.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <div>
-          <Label>Mode of payment</Label>
-          <Select value={paymentMode || ""} onValueChange={onPaymentModeChange}>
-            <SelectTrigger data-testid={`${idPrefix}-payment-mode`}><SelectValue placeholder="Select mode" /></SelectTrigger>
-            <SelectContent>
-              {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
         {showStudents && recipientId && (
           <div>
             <Label>Student referred {kind === "payout" ? "(optional)" : ""}</Label>
@@ -133,6 +103,36 @@ export default function MoneyOutFields({
             />
           </div>
         )}
+
+        {kind === "expense" && expenseOf !== "personal" && (
+          <div>
+            <Label>Category</Label>
+            <Select value={categoryId || NONE} onValueChange={(v) => onCategoryChange(v === NONE ? "" : v)}>
+              <SelectTrigger data-testid={`${idPrefix}-category`}><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>— None —</SelectItem>
+                {expenseCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-sm" style={{ background: c.color }} />
+                      {c.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div>
+          <Label>Mode of payment</Label>
+          <Select value={paymentMode || ""} onValueChange={onPaymentModeChange}>
+            <SelectTrigger data-testid={`${idPrefix}-payment-mode`}><SelectValue placeholder="Select mode" /></SelectTrigger>
+            <SelectContent>
+              {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );
