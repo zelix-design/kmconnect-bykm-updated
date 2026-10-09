@@ -987,6 +987,47 @@ async def bulk_students(payload: StudentBulkIn, user: dict = Depends(require_edi
 
 _AGENT_TYPES = {"sub_agent", "associate", "km"}
 
+# Map a client_type to the ledger agent-type so SC payouts (which reference a
+# client) can be attributed to the matching sub-agent ledger row.
+_CLIENT_TYPE_TO_LEDGER = {
+    "sub_agent_associate": "sub_agent",
+    "associate_consultant": "associate",
+    "km_blr_office": "km",
+    "km_tcr_office": "km",
+    "km_kmly_office": "km",
+}
+
+
+async def _sc_payouts_by_agent(user: dict, year: Optional[int]) -> dict[tuple, float]:
+    """Sum Service Charge payout transactions grouped by (ledger_type, name).
+
+    Super admin aggregates across all users (mirrors the all-students ledger);
+    office admins see only their own payouts."""
+    q: dict = {"is_sc_payout": True}
+    if user.get("role") != "super_admin":
+        q["user_id"] = user["id"]
+    payouts = await db.transactions.find(q, {"_id": 0}).to_list(5000)
+    client_ids = list({p.get("client_id") for p in payouts if p.get("client_id")})
+    cmap: dict = {}
+    if client_ids:
+        clients = await db.clients.find(
+            {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "name": 1, "client_type": 1}
+        ).to_list(2000)
+        cmap = {c["id"]: c for c in clients}
+    out: dict[tuple, float] = {}
+    for p in payouts:
+        if not in_year(p.get("date"), year):
+            continue
+        c = cmap.get(p.get("client_id"))
+        if not c:
+            continue
+        lt = _CLIENT_TYPE_TO_LEDGER.get(c.get("client_type"))
+        if not lt:
+            continue
+        name = (c.get("name") or "—").strip() or "—"
+        out[(lt, name)] = out.get((lt, name), 0.0) + float(p.get("amount") or 0)
+    return out
+
 
 class StudentBulkActionIn(BaseModel):
     ids: List[str]
@@ -1079,7 +1120,7 @@ def _new_ledger_bucket(kind: str, name: str) -> dict:
     return {
         "type": kind, "name": name,
         "total_received": 0.0, "paid_to_college": 0.0, "sc_adjusted": 0.0,
-        "holding": 0.0, "payments_count": 0, "students": set(),
+        "sc_paid_out": 0.0, "holding": 0.0, "payments_count": 0, "students": set(),
     }
 
 
@@ -1087,11 +1128,12 @@ def _finalise_ledger_row(row: dict) -> dict:
     """Round monetary totals, derive holding + students_count, expand the
     students set to a list so the row is JSON-serialisable."""
     row["holding"] = round(
-        row["total_received"] - row["paid_to_college"] - row["sc_adjusted"], 2
+        row["total_received"] - row["paid_to_college"] - row["sc_adjusted"] - row.get("sc_paid_out", 0.0), 2
     )
     row["total_received"] = round(row["total_received"], 2)
     row["paid_to_college"] = round(row["paid_to_college"], 2)
     row["sc_adjusted"] = round(row["sc_adjusted"], 2)
+    row["sc_paid_out"] = round(row.get("sc_paid_out", 0.0), 2)
     row["students_count"] = len(row["students"])
     row["students"] = list(row["students"])
     return row
@@ -1140,6 +1182,11 @@ async def agent_ledger(user: dict = Depends(get_current_user), year: Optional[in
                 row = ledger.setdefault(key, _new_ledger_bucket(adj_type, adj_name))
                 row["sc_adjusted"] += float(adj.get("amount") or 0)
                 row["students"].add(st["id"])
+
+    # Fold in Service Charge payouts so they reduce each agent's holding.
+    for (lt, name), amt in (await _sc_payouts_by_agent(user, year)).items():
+        row = ledger.setdefault((lt, name), _new_ledger_bucket(lt, name))
+        row["sc_paid_out"] = row.get("sc_paid_out", 0.0) + amt
 
     out = [_finalise_ledger_row(row) for row in ledger.values()]
     out.sort(key=lambda r: r["total_received"], reverse=True)
@@ -1233,16 +1280,53 @@ async def agent_payments(
             student_ids.add(st["id"])
             rows.append(_agent_payment_row(st, p, paid, sc))
 
+    # Service Charge payouts attributed to this exact agent (type + name).
+    sc_paid_out = 0.0
+    payout_rows: list[dict] = []
+    payout_map = await _sc_payouts_by_agent(user, year)
+    if (type, target) in payout_map:
+        sc_paid_out = payout_map[(type, target)]
+        # Fetch the individual payout transactions for the detail list.
+        tq: dict = {"is_sc_payout": True}
+        if user.get("role") != "super_admin":
+            tq["user_id"] = user["id"]
+        payout_txs = await db.transactions.find(tq, {"_id": 0}).to_list(5000)
+        client_ids = list({t.get("client_id") for t in payout_txs if t.get("client_id")})
+        cmap: dict = {}
+        if client_ids:
+            clients = await db.clients.find(
+                {"id": {"$in": client_ids}}, {"_id": 0, "id": 1, "name": 1, "client_type": 1}
+            ).to_list(2000)
+            cmap = {c["id"]: c for c in clients}
+        for t in payout_txs:
+            if not in_year(t.get("date"), year):
+                continue
+            c = cmap.get(t.get("client_id"))
+            if not c:
+                continue
+            lt = _CLIENT_TYPE_TO_LEDGER.get(c.get("client_type"))
+            nm = (c.get("name") or "—").strip() or "—"
+            if lt == type and nm == target:
+                payout_rows.append({
+                    "id": t["id"], "date": t.get("date"),
+                    "amount": round(float(t.get("amount") or 0), 2),
+                    "payment_mode": t.get("payment_mode"),
+                    "description": t.get("description") or "",
+                    "account_id": t.get("account_id"),
+                })
+        payout_rows.sort(key=lambda r: r["date"] or "", reverse=True)
+
     totals = {
         "total_received": round(total_received, 2),
         "paid_to_college": round(paid_to_college_total, 2),
         "sc_adjusted": round(sc_adjusted_total, 2),
-        "holding": round(total_received - paid_to_college_total - sc_adjusted_total, 2),
+        "sc_paid_out": round(sc_paid_out, 2),
+        "holding": round(total_received - paid_to_college_total - sc_adjusted_total - sc_paid_out, 2),
         "payments_count": len(rows),
         "students_count": len(student_ids),
     }
     rows.sort(key=lambda r: r["date"] or "", reverse=True)
-    return {"type": type, "name": target, "totals": totals, "payments": rows}
+    return {"type": type, "name": target, "totals": totals, "payments": rows, "payouts": payout_rows}
 
 
 @router.get("/{student_id}")

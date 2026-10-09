@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PAYMENT_MODES, SC_PAYOUT_CLIENT_TYPES, SC_PAYOUT_CLIENT_TYPE_LABELS } from "@/lib/paymentModes";
 import {
   ArrowDownRight, ArrowUpRight, Plus, Check, ArrowLeft,
   Receipt, ReceiptX, Student as StudentIcon, CurrencyInr, ClipboardText,
@@ -74,21 +76,31 @@ export default function QuickEntry() {
   const [amount, setAmount] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [clients, setClients] = useState([]);
   const [accountId, setAccountId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [date, setDate] = useState(todayISO());
   const [description, setDescription] = useState("");
   const [otherSpec, setOtherSpec] = useState("");
   const [saving, setSaving] = useState(false);
+  const [isScPayout, setIsScPayout] = useState(false);
+  const [payoutClientId, setPayoutClientId] = useState("");
+  const [payoutMode, setPayoutMode] = useState("");
 
   useEffect(() => {
     (async () => {
-      const [a, c] = await Promise.all([api.get("/accounts"), api.get("/categories")]);
+      const [a, c, cl] = await Promise.all([api.get("/accounts"), api.get("/categories"), api.get("/clients")]);
       setAccounts(a.data);
       setCategories(c.data);
+      setClients(cl.data);
       if (a.data[0]) setAccountId(a.data[0].id);
     })();
   }, []);
+
+  const payoutClients = useMemo(
+    () => clients.filter((c) => SC_PAYOUT_CLIENT_TYPES.includes(c.client_type)),
+    [clients],
+  );
 
   const txType = mode === "debit" ? "expense" : "income";
   const filteredCats = useMemo(() => categories.filter(c => c.type === txType), [categories, txType]);
@@ -96,7 +108,7 @@ export default function QuickEntry() {
   const isOther = selectedCat?.name?.toLowerCase().startsWith("other");
 
   // reset category when switching mode
-  useEffect(() => { setCategoryId(""); setOtherSpec(""); }, [mode]);
+  useEffect(() => { setCategoryId(""); setOtherSpec(""); if (mode === "credit") setIsScPayout(false); }, [mode]);
 
   const tap = (k) => {
     if (k === "⌫") return setAmount((a) => a.slice(0, -1));
@@ -108,6 +120,7 @@ export default function QuickEntry() {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { toast.error("Enter an amount"); return; }
     if (!accountId) { toast.error("Pick an account"); return; }
+    if (isScPayout && !payoutClientId) { toast.error("Pick a recipient for the Service Charge payout"); return; }
     setSaving(true);
     try {
       const desc = isOther && otherSpec
@@ -120,10 +133,14 @@ export default function QuickEntry() {
         category_id: categoryId || null,
         date,
         description: desc,
+        is_sc_payout: isScPayout,
+        client_id: isScPayout ? payoutClientId : null,
+        payment_mode: isScPayout ? (payoutMode || null) : null,
       });
       toast.success(`${mode === "debit" ? "Debit" : "Credit"} entry saved`);
       // reset
       setAmount(""); setCategoryId(""); setOtherSpec(""); setDescription("");
+      setIsScPayout(false); setPayoutClientId(""); setPayoutMode("");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
     } finally {
@@ -287,6 +304,50 @@ export default function QuickEntry() {
             </div>
           </div>
         </div>
+
+        {/* SC payout block — only in debit mode */}
+        {mode === "debit" && (
+          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 space-y-3" data-testid="qe-sc-payout-block">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <Checkbox
+                checked={isScPayout}
+                onCheckedChange={(v) => setIsScPayout(!!v)}
+                data-testid="qe-is-sc-payout"
+                className="mt-0.5"
+              />
+              <div>
+                <p className="text-sm font-medium">This transaction is a Service Charge payout</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Paid to a Sub-Associate / Associate Consultant · reduces their holding in the Ledger</p>
+              </div>
+            </label>
+            {isScPayout && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label>Recipient</Label>
+                  <Select value={payoutClientId} onValueChange={setPayoutClientId}>
+                    <SelectTrigger data-testid="qe-recipient"><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                    <SelectContent>
+                      {payoutClients.length === 0 ? (
+                        <div className="px-2 py-3 text-xs text-muted-foreground text-center">No Sub-Associate / Associate Consultant clients yet.</div>
+                      ) : payoutClients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name} · {SC_PAYOUT_CLIENT_TYPE_LABELS[c.client_type]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Mode of transaction</Label>
+                  <Select value={payoutMode} onValueChange={setPayoutMode}>
+                    <SelectTrigger data-testid="qe-payment-mode"><SelectValue placeholder="Select mode" /></SelectTrigger>
+                    <SelectContent>
+                      {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Category chips */}
         <div className="mt-6">

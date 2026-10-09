@@ -9,10 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, PencilSimple, Trash, Funnel } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, Funnel, HandCoins } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { PAYMENT_MODES, PAYMENT_MODE_LABELS, SC_PAYOUT_CLIENT_TYPES, SC_PAYOUT_CLIENT_TYPE_LABELS } from "@/lib/paymentModes";
+import { Checkbox } from "@/components/ui/checkbox";
 
-const empty = { type: "expense", amount: "", account_id: "", category_id: "", date: todayISO(), description: "" };
+const empty = { type: "expense", amount: "", account_id: "", category_id: "", date: todayISO(), description: "", is_sc_payout: false, client_id: "", payment_mode: "" };
 
 export default function Transactions() {
   const { user } = useAuth();
@@ -21,21 +23,34 @@ export default function Transactions() {
   const [list, setList] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [clients, setClients] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
   const [filterType, setFilterType] = useState("all");
 
   const load = useCallback(async () => {
-    const params = filterType !== "all" ? { type: filterType } : {};
-    const [t, a, c] = await Promise.all([
+    const params = filterType === "sc_payout"
+      ? { sc_payout: true }
+      : (filterType !== "all" ? { type: filterType } : {});
+    const [t, a, c, cl] = await Promise.all([
       api.get("/transactions", { params }),
       api.get("/accounts"),
       api.get("/categories"),
+      api.get("/clients"),
     ]);
-    setList(t.data); setAccounts(a.data); setCategories(c.data);
+    setList(t.data); setAccounts(a.data); setCategories(c.data); setClients(cl.data);
   }, [filterType]);
   useEffect(() => { load(); }, [load]);
+
+  const payoutClients = useMemo(
+    () => clients.filter((c) => SC_PAYOUT_CLIENT_TYPES.includes(c.client_type)),
+    [clients],
+  );
+  const clientMap = useMemo(
+    () => Object.fromEntries(clients.map((c) => [c.id, c])),
+    [clients],
+  );
 
   const accountMap = useMemo(
     () => Object.fromEntries(accounts.map(a => [a.id, a])),
@@ -53,16 +68,20 @@ export default function Transactions() {
   };
   const openEdit = (t) => {
     setEditing(t);
-    setForm({ ...t, category_id: t.category_id || "" });
+    setForm({ ...t, category_id: t.category_id || "", is_sc_payout: !!t.is_sc_payout, client_id: t.client_id || "", payment_mode: t.payment_mode || "" });
     setOpen(true);
   };
 
   const submit = async (e) => {
     e.preventDefault();
+    if (form.is_sc_payout && !form.client_id) { toast.error("Pick a recipient for the Service Charge payout"); return; }
     const payload = {
       ...form,
+      type: form.is_sc_payout ? "expense" : form.type,
       amount: parseFloat(form.amount) || 0,
       category_id: form.category_id || null,
+      client_id: form.is_sc_payout ? form.client_id : (form.client_id || null),
+      payment_mode: form.is_sc_payout ? (form.payment_mode || null) : null,
     };
     try {
       if (editing) {
@@ -106,6 +125,7 @@ export default function Transactions() {
               <option value="all">All</option>
               <option value="income">Income</option>
               <option value="expense">Expense</option>
+              <option value="sc_payout">SC payouts</option>
             </select>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
@@ -119,10 +139,52 @@ export default function Transactions() {
             <DialogContent className="bg-card" data-testid="transaction-dialog">
               <DialogHeader><DialogTitle className="font-display">{editing ? "Edit" : "Add"} transaction</DialogTitle></DialogHeader>
               <form onSubmit={submit} className="space-y-4">
+                <div className="rounded-md border border-border bg-muted/40 p-3 space-y-3" data-testid="tx-sc-payout-block">
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <Checkbox
+                      checked={!!form.is_sc_payout}
+                      onCheckedChange={(v) => setForm({ ...form, is_sc_payout: !!v, type: v ? "expense" : form.type })}
+                      data-testid="tx-is-sc-payout"
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">This transaction is a Service Charge payout</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Paid to a Sub-Associate / Associate Consultant · reduces their holding in the Ledger</p>
+                    </div>
+                  </label>
+                  {form.is_sc_payout && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Recipient</Label>
+                        <Select value={form.client_id || ""} onValueChange={(v) => setForm({ ...form, client_id: v })}>
+                          <SelectTrigger data-testid="tx-recipient"><SelectValue placeholder="Select recipient" /></SelectTrigger>
+                          <SelectContent>
+                            {payoutClients.length === 0 ? (
+                              <div className="px-2 py-3 text-xs text-muted-foreground text-center">No Sub-Associate / Associate Consultant clients yet.</div>
+                            ) : payoutClients.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name} · {SC_PAYOUT_CLIENT_TYPE_LABELS[c.client_type]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Mode of transaction</Label>
+                        <Select value={form.payment_mode || ""} onValueChange={(v) => setForm({ ...form, payment_mode: v })}>
+                          <SelectTrigger data-testid="tx-payment-mode"><SelectValue placeholder="Select mode" /></SelectTrigger>
+                          <SelectContent>
+                            {PAYMENT_MODES.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <Label>Type</Label>
-                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, category_id: "" })}>
+                    <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v, category_id: "" })} disabled={form.is_sc_payout}>
                       <SelectTrigger data-testid="tx-type"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="income">Income</SelectItem>
@@ -186,6 +248,11 @@ export default function Transactions() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{t.description || "—"}</p>
+                      {t.is_sc_payout && (
+                        <span className="inline-flex items-center gap-1 mt-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-100/70 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" data-testid={`tx-payout-chip-${t.id}`}>
+                          <HandCoins size={11} /> SC payout · {t._client_name || clientMap[t.client_id]?.name || "—"}{t.payment_mode ? ` · ${PAYMENT_MODE_LABELS[t.payment_mode] || t.payment_mode}` : ""}
+                        </span>
+                      )}
                       <p className="text-xs text-muted-foreground mt-0.5 tabular-nums">{t.date}</p>
                     </div>
                     <p className={`text-sm font-semibold tabular-nums whitespace-nowrap ${t.type === 'income' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
@@ -232,7 +299,14 @@ export default function Transactions() {
                   {list.map(t => (
                     <tr key={t.id} className="hover:bg-muted/40">
                       <td className="px-6 py-3.5 tabular-nums text-muted-foreground">{t.date}</td>
-                      <td className="px-6 py-3.5">{t.description || "—"}</td>
+                      <td className="px-6 py-3.5">
+                        <div>{t.description || "—"}</div>
+                        {t.is_sc_payout && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-100/70 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" data-testid={`tx-payout-chip-${t.id}`}>
+                            <HandCoins size={11} /> SC payout · {t._client_name || clientMap[t.client_id]?.name || "—"}{t.payment_mode ? ` · ${PAYMENT_MODE_LABELS[t.payment_mode] || t.payment_mode}` : ""}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-3.5 text-muted-foreground">{accountMap[t.account_id]?.name || "—"}</td>
                       <td className="px-6 py-3.5">
                         {categoryMap[t.category_id] ? (

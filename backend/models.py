@@ -195,6 +195,10 @@ class TransactionIn(BaseModel):
     description: Optional[str] = ""
     client_id: Optional[str] = None
     linked_invoice_id: Optional[str] = None
+    # Service Charge payout to a sub-associate / associate consultant.
+    # When True, `client_id` is the recipient and `payment_mode` the method.
+    is_sc_payout: bool = False
+    payment_mode: Optional[str] = None
 
 
 # ---------- Invoices ----------
