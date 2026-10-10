@@ -23,16 +23,30 @@ export default function Reveal({ as: Tag = "div", className = "", children, test
     if (prefersReducedMotion()) { setVisible(true); return undefined; }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") { setVisible(true); return undefined; }
+
+    // Reveal as soon as any part of the element enters the viewport. A low
+    // threshold (0) is essential: a tall element (e.g. a long list of cards)
+    // can never show 12% of its own height on screen, which would otherwise
+    // leave it stuck at opacity:0 forever.
     const obs = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) { setVisible(true); obs.disconnect(); }
         });
       },
-      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+      { threshold: 0, rootMargin: "0px 0px -5% 0px" }
     );
     obs.observe(el);
-    return () => obs.disconnect();
+
+    // Safety net: if the element is already on screen at mount (common for
+    // above-the-fold lists) or the observer never fires, reveal anyway so
+    // content is never permanently hidden.
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (rect.top < vh && rect.bottom > 0) { setVisible(true); obs.disconnect(); }
+    const fallback = setTimeout(() => { setVisible(true); obs.disconnect(); }, 700);
+
+    return () => { clearTimeout(fallback); obs.disconnect(); };
   }, []);
 
   return (
