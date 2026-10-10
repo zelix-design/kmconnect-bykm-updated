@@ -1,0 +1,22 @@
+{
+  "summary": "Verified the Reveal.jsx fix for the leads list visibility bug. Super admin: /leads → All leads → List view renders leads-grid with 78 cards, opacity=1, classes include 'reveal-in' (fade-in applied). Board view regression check passed (lead nodes visible). Staff user (staff.blr@kmfoundation.online): auto-lands on /leads (My Leads page) which defaults to List view and renders leads-grid with 9 assigned cards, opacity=1, reveal-in applied. leads-empty is NOT shown. No scroll required; cards are visibly rendered in viewport. Fix is confirmed working.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reveal.jsx fix is sound: threshold=0 + immediate in-viewport check at mount + 700ms setTimeout fallback guarantees content is never permanently hidden. Verified in both admin (78 cards) and staff (9 cards) flows that the 'reveal-in' class is applied on initial render (childCount matches opacity:1 at t=600ms)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "Super admin muneer@kmfoundation.co / kmf@0786 and staff staff.blr@kmfoundation.online / Staff@123 both from /app/memory/test_credentials.md",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The leads list visibility bug (Reveal IntersectionObserver 12% threshold) is fixed. Verified via browser automation: admin list=78 cards opacity 1, staff My Leads=9 cards opacity 1. Note: staff role has a dedicated 'My Leads' page (route /leads) with a different layout than admin's CRM page but reuses the same LeadsPipeline grid, so the Reveal wrapper fix covers both.",
+  "rca of the issue": "Reveal component used IntersectionObserver threshold 0.12 meaning 12% of the observed element had to be in the viewport. For a tall leads grid (hundreds of px tall), 12% of its own height could never fit in a 1080px viewport, so isIntersecting stayed false and the element remained at opacity:0. Fix lowers threshold to 0, immediately checks getBoundingClientRect at mount, and adds a 700ms safety timeout. All three paths independently reveal the grid now."
+}

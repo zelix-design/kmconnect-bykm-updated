@@ -1763,3 +1763,8 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - ClientDetail "Add Transaction" now opens an in-page popup (new ClientTxnDialog): Payout | Expense only (no Income), recipient locked to the client, amount/date/account, student-referred/expense-of/mode/category, notes. On save it POSTs /transactions (client_id = this client) and stays on the client page (reloads detail). Verified via screenshot — dialog titled "Add transaction — SAJIN", recipient prefilled "SAJIN · Sub-Associate".
 - ClientDetail "New Invoice" (super_admin) opens an in-page popup (new InvoiceCreateDialog wrapping InvoiceForm with the same create logic as Invoices.jsx); on create it stays on the client page (reloads detail). Verified dialog opens with auto invoice number + full form.
 - Both reuse verified backend create paths; no navigation away from the client detail page.
+
+## 2026-06 — BUG FIX: leads invisible in list view / staff My Leads
+- Root cause: Reveal.jsx IntersectionObserver used threshold 0.12; a long leads grid is far taller than the viewport so 12% could never be visible → the grid stayed at opacity:0 (reveal-on-scroll never got reveal-in). Board view is not wrapped in Reveal, so only list view + staff My Leads were affected.
+- Fix: threshold 0.12 -> 0, added an immediate in-viewport check on mount + a 700ms fallback timer so content is never permanently hidden on tall lists.
+- Verified by testing_agent iteration_89.json = 100%: super-admin list shows 78 cards (opacity 1), staff My Leads shows 9 assigned cards, board view regression OK.
