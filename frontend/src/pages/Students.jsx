@@ -355,7 +355,6 @@ export default function Students() {
                   }`}
                 >
                   <SquaresFour size={15} weight={view === "card" ? "fill" : "regular"} />
-                  <span className="hidden sm:inline">Card</span>
                 </button>
                 <button
                   type="button"
@@ -370,7 +369,6 @@ export default function Students() {
                   }`}
                 >
                   <Rows size={15} weight={view === "list" ? "fill" : "regular"} />
-                  <span className="hidden sm:inline">List</span>
                 </button>
               </div>
             )}
@@ -437,8 +435,15 @@ export default function Students() {
               </Button>
             )}
             {(allowEdit || role === "user") && (
-              <Button onClick={openAddStudent} data-testid="add-student-btn" className="h-10 btn-amber border-0">
-                <Plus size={16} className="mr-1.5" /> Add student
+              <Button
+                onClick={openAddStudent}
+                data-testid="add-student-btn"
+                size="icon"
+                className="h-10 w-10 btn-amber border-0"
+                title="Add student"
+                aria-label="Add student"
+              >
+                <Plus size={18} />
               </Button>
             )}
           </div>
