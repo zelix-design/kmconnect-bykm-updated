@@ -84,8 +84,9 @@ export default function Students() {
 
   // Filters
   const [qName, setQName] = useState("");
-  const [qCollege, setQCollege] = useState("");
-  const [qRef, setQRef] = useState("");
+  const [qCollege, setQCollege] = useState("_all");
+  const [qCourse, setQCourse] = useState("_all");
+  const [qRef, setQRef] = useState("_all");
   const [qCity, setQCity] = useState("_all"); // "_all" | one of COLLEGE_PLACES | "_other"
   const [view, setView] = useState(() => {
     try { return localStorage.getItem("students-view") || "card"; }
@@ -256,10 +257,35 @@ export default function Students() {
     return counts;
   }, [list, cityOfStudent]);
 
+  // Distinct enrolled colleges / references across the loaded students, for
+  // the filter dropdowns. Course options are scoped to the selected college.
+  const collegeOptions = useMemo(() => {
+    const set = new Set();
+    for (const s of list) { if (s.college) set.add(String(s.college).trim()); }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [list]);
+
+  const courseOptions = useMemo(() => {
+    const set = new Set();
+    for (const s of list) {
+      if (!s.course) continue;
+      if (qCollege !== "_all" && String(s.college).trim() !== qCollege) continue;
+      set.add(String(s.course).trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [list, qCollege]);
+
+  const referenceOptions = useMemo(() => {
+    const set = new Set();
+    for (const s of list) { if (s.reference) set.add(String(s.reference).trim()); }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [list]);
+
   const filtered = useMemo(() => {
     const m = (v, q) => !q || String(v || "").toLowerCase().includes(q.toLowerCase());
+    const eq = (v, q) => q === "_all" || String(v || "").trim() === q;
     return [...list]
-      .filter((s) => m(s.name, qName) && m(s.college, qCollege) && m(s.reference, qRef))
+      .filter((s) => m(s.name, qName) && eq(s.college, qCollege) && eq(s.course, qCourse) && eq(s.reference, qRef))
       .filter((s) => {
         if (qCity === "_all") return true;
         const c = cityOfStudent(s);
@@ -267,7 +293,7 @@ export default function Students() {
         return c === qCity;
       })
       .sort((a, b) => String(recentRank(b)).localeCompare(String(recentRank(a))));
-  }, [list, qName, qCollege, qRef, qCity, cityOfStudent]);
+  }, [list, qName, qCollege, qCourse, qRef, qCity, cityOfStudent]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -598,7 +624,7 @@ export default function Students() {
       <StudentBulkUploadDialog open={bulkOpen} onOpenChange={setBulkOpen} onDone={() => load()} />
 
       {/* Filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-testid="students-filters">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="students-filters">
         <div className="relative">
           <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <Input
@@ -610,24 +636,48 @@ export default function Students() {
           />
         </div>
         <div className="relative">
-          <Buildings size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-          <Input
-            value={qCollege}
-            onChange={(e) => setQCollege(e.target.value)}
-            placeholder="College"
-            className="pl-9 bg-card"
-            data-testid="filter-college"
-          />
+          <Buildings size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
+          <Select value={qCollege} onValueChange={(v) => { setQCollege(v); setQCourse("_all"); }}>
+            <SelectTrigger className="pl-9 bg-card" data-testid="filter-college">
+              <SelectValue placeholder="All colleges" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all" data-testid="filter-college-all">All colleges</SelectItem>
+              {collegeOptions.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="relative">
-          <UserCircle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-          <Input
-            value={qRef}
-            onChange={(e) => setQRef(e.target.value)}
-            placeholder="Reference"
-            className="pl-9 bg-card"
-            data-testid="filter-reference"
-          />
+          <StudentIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
+          <Select value={qCourse} onValueChange={setQCourse}>
+            <SelectTrigger className="pl-9 bg-card" data-testid="filter-course">
+              <SelectValue placeholder="All courses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all" data-testid="filter-course-all">
+                {qCollege === "_all" ? "All courses" : `All courses in ${qCollege}`}
+              </SelectItem>
+              {courseOptions.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="relative">
+          <UserCircle size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />
+          <Select value={qRef} onValueChange={setQRef}>
+            <SelectTrigger className="pl-9 bg-card" data-testid="filter-reference">
+              <SelectValue placeholder="All references" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all" data-testid="filter-reference-all">All references</SelectItem>
+              {referenceOptions.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="relative">
           <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 z-10 pointer-events-none" />

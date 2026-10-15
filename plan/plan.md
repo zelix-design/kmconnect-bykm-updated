@@ -1,52 +1,54 @@
-# Dashboards That Move With Purpose
+# Deploying FinFlow to a Webuzo VPS
 
-Borrow the motion language of the Farider dashboard reference and bring it to every dashboard in the app: charts that react to the cursor, cards that lift on hover, sections that glide in and out, a live heartbeat on "today" numbers, and a sliding highlight on the menu. The look stays exactly as it is now — the app's crimson/amber theme, layout, and content do not change; only how things respond and transition does.
+A repeatable setup to run the existing FinFlow app (React frontend, FastAPI backend, MongoDB) on a single VPS managed by the Webuzo control panel, served over one domain with HTTPS.
+The work produces a written step-by-step guide plus ready-to-use configuration files added to the project; the actual install runs on the user's own server.
 
 ## Who it's for
-The people who live in these dashboards every day — Super Admins, Office Admins, and Staff — who want the numbers and charts to feel responsive and alive, so each hover and tab switch gives a quick, confident "the app heard me" moment.
+The FinFlow owner/admin who wants to self-host on their own VPS instead of the managed preview — keeping full control of the data and the server.
 
 ## Core features and experience
-- **Interactive charts**: hovering a bar, line point, or donut slice gently highlights it (the rest dims slightly) and a smooth tooltip glides to the cursor showing that figure. Moving across the chart animates the highlight from one point to the next, so reading the data feels fluid rather than static.
-- **Richer card & button hover**: dashboard cards lift a touch with a soft shadow/glow and their icon reacts on hover; buttons and clickable tiles get a subtle, springy press feel. Consistent across all dashboards.
-- **Smooth section transitions**: switching the dashboard tile/tab (or sub-view) slides the outgoing content out and eases the incoming content in, instead of a hard swap — a short, quick crossfade-and-slide.
-- **Live "today" pulse**: figures that represent the current moment (for example today's spend / real-time counts) carry a soft pulsing dot so it's clear they are live and refreshing, not a frozen snapshot.
-- **Animated sidebar**: the active menu item is marked by a highlight that slides smoothly from the old item to the new one as the user moves between pages, with a light hover cue on the others.
-- **Respects "reduce motion"**: anyone whose device is set to minimize animation sees the final state instantly — highlights, tooltips, and transitions resolve with no movement, and nothing is ever hidden behind an animation.
+- MongoDB running on the same VPS via Webuzo's built-in MongoDB, with a dedicated database and user, authentication on, and the database reachable only from the server itself.
+- The FastAPI backend running as an always-on service that restarts automatically after a crash or a server reboot.
+- The React frontend built into static files and served by the web server.
+- A reverse proxy that serves the frontend, forwards `/api` requests to the backend, and handles HTTPS.
+- One domain, with the API living under `/api` on that same domain.
+- A free Let's Encrypt HTTPS certificate.
+- Production environment templates (with no real secrets committed) and a single build command to produce the frontend and prepare the backend.
 
-## User flow
-1. User opens any dashboard (main, Office, Staff, or CRM). Content is already present; cards and buttons now respond to hover with a gentle lift.
-2. User moves the cursor over a chart → the nearest bar/point/slice highlights and a tooltip glides in with the value; sliding across moves the highlight smoothly.
-3. User switches a tile/tab → the current view slides out and the new one eases in.
-4. User glances at a "today" figure → a soft pulse signals it is live.
-5. User clicks a different item in the sidebar → the active highlight slides to it as the page changes.
+## User flow (operator steps, high level)
+1. Point the domain at the VPS, install Webuzo, then install MongoDB, Node, and Python from Webuzo.
+2. Create the MongoDB database and user; fill in the backend settings (database connection, database name, and any integration keys).
+3. Build the frontend against the production domain and place the static files in the web root.
+4. Start the backend service and enable the reverse proxy; issue the HTTPS certificate.
+5. Open the domain, create the first admin account, and verify the main flows (login, dashboard, students, leads, transactions).
 
 ## UI/UX feel
-Subtle, premium, and fast — motion that is noticeable but never makes the user wait (short, ~150–300ms interactions; smooth chart highlight tracking). It reads as the "purposeful, professional" end of the reference, not a flashy social-reel treatment. The reference's dark + lime-green palette is explicitly not adopted; the app keeps its crimson/amber identity, and colours, layout, and content stay as they are.
+No change to how the app looks or behaves — this is an operations/hosting setup. The deliverables (guide and config files) are plain, copy‑paste friendly, and ordered so each step can be checked off.
 
 ## Implementation phases
 
 ### Phase 1 — MVP (built now)
-Across all four dashboards (main Super Admin, Office, Staff, and CRM analytics):
-- Interactive charts: hover highlight + dim-the-rest + smooth cursor-following tooltip, with the highlight animating between points.
-- Richer, consistent card and button/tile hover (lift, soft glow, icon reaction, springy press).
-- Smooth slide-and-fade transition when switching tiles/tabs/sub-views.
-- Live pulse indicator on "today"/real-time figures.
-- Animated sliding active-highlight in the sidebar, with hover cues.
-- Full reduce-motion fallback for all of the above.
+Deliverables added to the project:
+- A step-by-step Webuzo deployment guide (install, MongoDB, env, build, service, reverse proxy, SSL, firewall, first-admin, verification, and update/redeploy steps).
+- A reverse-proxy configuration for serving the frontend and forwarding `/api` to the backend.
+- An always-on backend service definition (auto-start, auto-restart).
+- Production environment templates for the frontend and backend (placeholders only — no secrets).
+- A one-command build script for the frontend/backend.
+- Notes for running MongoDB on the VPS, enabling HTTPS, basic firewall rules, and creating the first admin.
 
-### Phase 2 — later
-- Deeper chart interactivity: tapping a legend animates that series in/out; scrubbing a timeline; animated, friendly empty-states when a chart has no data.
-- Richer sidebar: section expand/collapse motion and a subtle indicator for unread/attention items.
+Note: installation and commands run on the user's VPS; this agent cannot access that server, so the user follows the guide. Deployment to the existing managed Emergent environment is a separate option and is not part of this plan.
 
-### Phase 3 — later
-- App-wide polish beyond dashboards: smooth page/route transitions throughout the app, shimmer skeleton loaders while data is fetching, and animated toasts/dialogs.
+### Phase 2 — Later
+Hardening and convenience: scheduled MongoDB backups with a restore procedure, log rotation, a scheduled-tasks runner for any recurring jobs, a smoother redeploy script, and basic uptime/health monitoring.
+
+### Phase 3 — Later
+Optional container packaging (Docker/Compose) of the whole stack for one-command bring-up, and an optional automated build/ship step on code push.
 
 ## Assumptions
-- Keep the current crimson/amber theme; colours, layout, and content are unchanged — only motion/interaction is added. The reference's green scheme is not used.
-- Applies to all four dashboards (main, Office, Staff, CRM) as requested.
-- Charts animate and react using the data already shown; no new metrics, cards, or charts are introduced.
-- Hover effects are the primary desktop experience; on touch devices they degrade gracefully (tap/select still works, no "stuck" hover states), and chart tooltips appear on tap.
-- Motion intensity is subtle and professional, tuned for a finance app rather than the bolder reference style.
-- The "today/live" pulse is purely a visual cue on existing figures; it does not change how often data refreshes.
-- The animated sidebar keeps the existing menu structure and items; only the active/hover indication becomes animated.
-- All new motion honours the device "reduce motion" setting by resolving instantly with no movement.
+- Database runs on the same VPS via Webuzo's MongoDB, with authentication enabled and bound to localhost.
+- The backend is kept alive by an always-on service behind a reverse proxy (not the Webuzo Passenger/Application Manager path).
+- The app is served on one domain with the API under `/api`, using a free Let's Encrypt certificate, assuming a domain is pointed at the VPS. If no domain is ready, the same setup works over the server IP and HTTPS is added later.
+- Delivery includes the written guide plus ready-to-use config files and a build script committed to the project.
+- Existing third-party integrations (WhatsApp, Resend, Web Push, Google) continue to work through backend settings; their keys are the user's to supply and are never committed.
+- No application feature changes are part of this hosting work.
+- The two recently requested Students screen edits (sorting/filtering by enrolled college and course, and a reference dropdown) are unrelated to hosting and are tracked separately, to be applied after this plan is approved.
