@@ -1794,3 +1794,8 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Per-college breakdown: SC earned vs cleared vs pending for the academic year (auto-scoped by the global year switcher via api.js). Cancelled admissions counted separately (SC not earned).
 - KPI cards (Earned/Cleared/Pending) + sortable By-college table with filter + totals row. Cleared = earned - max(0, balance_vs_sc); pending = max(0, balance_vs_sc).
 - New sidebar nav "SC Report" (ChartBar icon) for super_admin + office_admin; route gated by ADMIN_ROLES. Verified via curl + screenshot.
+
+## 2026-06 — ClientDetail money-trail = credits only + Paid-to-College debit + removed SC Status col
+- Paid-to-College adjustments now post an EXPENSE (debit) on the SAME account the fee was received into, so account balance nets (received − paid-to-college). Verified: balance 375700→400700 (+30k −5k) →375700 after delete.
+- ClientDetail money trail now lists CREDITS ONLY (SC earned). Retitled "Service charge credited to {client}"; payout debits are intentionally shown only on the Transactions page + Sub-agent Ledger (per user). Total row = "Total credited".
+- Removed the "SC Status" column from the Admissions table on ClientDetail (SC_STATUS const still used by the SC tile list dialog). sc_status still returned by backend (harmless).

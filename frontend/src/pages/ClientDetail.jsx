@@ -80,6 +80,10 @@ export default function ClientDetail() {
   const t = data.totals;
   const isStaff = !!data.is_staff;
   const loginUser = data.staff_login_user;
+  // Money trail shows CREDITS only (SC earned). Debits (SC payouts) live on the
+  // Transactions page and the Sub-agent Ledger, not here.
+  const creditRows = (data.transactions || []).filter((tx) => tx.type === "income");
+  const creditTotal = creditRows.reduce((sum, tx) => sum + (tx.amount || 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="client-detail">
@@ -244,7 +248,6 @@ export default function ClientDetail() {
                 <th className="px-6 py-3 label-eyebrow">Status</th>
                 <th className="px-6 py-3 label-eyebrow">Enrolled</th>
                 {!isStaff && <th className="px-6 py-3 label-eyebrow text-right">SC Earned</th>}
-                {!isStaff && <th className="px-6 py-3 label-eyebrow">SC Status</th>}
                 {isStaff && <th className="px-6 py-3 label-eyebrow text-right">Incentive</th>}
               </tr>
             </thead>
@@ -264,13 +267,6 @@ export default function ClientDetail() {
                   <td className="px-6 py-3 tabular-nums text-muted-foreground">{st.enrollment_date ? formatDate(st.enrollment_date) : "—"}</td>
                   {!isStaff && (
                     <td className="px-6 py-3 text-right tabular-nums">{formatMoney(st.sc_out_fixed, currency)}</td>
-                  )}
-                  {!isStaff && (
-                    <td className="px-6 py-3">
-                      <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${(SC_STATUS[st.sc_status] || SC_STATUS.pending).cls}`} data-testid={`client-st-sc-status-${st.id}`}>
-                        {(SC_STATUS[st.sc_status] || SC_STATUS.pending).label}
-                      </span>
-                    </td>
                   )}
                   {isStaff && (
                     <td className="px-6 py-3 text-right">
@@ -299,7 +295,6 @@ export default function ClientDetail() {
                 {!isStaff && (
                   <td className="px-6 py-3 text-right tabular-nums" data-testid="client-st-total-sc">{formatMoney(t.sc_earned, currency)}</td>
                 )}
-                {!isStaff && <td className="px-6 py-3" />}
                 {isStaff && (
                   <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="client-st-total-incentive">
                     {formatMoney(t.incentive_earned, currency)}
@@ -317,11 +312,12 @@ export default function ClientDetail() {
         <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
           <div className="px-6 py-4 border-b border-border">
             <p className="label-eyebrow">Money trail</p>
-            <h3 className="font-display text-lg mt-0.5">Credits &amp; debits linked to {c.name}</h3>
+            <h3 className="font-display text-lg mt-0.5">Service charge credited to {c.name}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Payouts appear on the Transactions page and the Sub-agent Ledger.</p>
           </div>
-          {data.transactions.length === 0 ? (
+          {creditRows.length === 0 ? (
             <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-client-tx">
-              No transactions tagged to this client yet.
+              No service charge credited to this client yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -336,17 +332,17 @@ export default function ClientDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {data.transactions.map((tx) => (
+                {creditRows.map((tx) => (
                   <tr key={tx.id} className="hover:bg-muted/40" data-testid={`client-tx-row-${tx.id}`}>
                     <td className="px-6 py-3 tabular-nums text-muted-foreground">{formatDate(tx.date)}</td>
                     <td className="px-6 py-3">{tx.description || "—"}</td>
                     <td className="px-6 py-3">
-                      <span className={`uppercase tracking-wider text-[10px] px-2 py-0.5 rounded ${tx.type === "income" ? "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400"}`}>
-                        {tx.type === "income" ? "Credit" : "Debit"}
+                      <span className="uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                        Credit
                       </span>
                     </td>
-                    <td className={`px-6 py-3 text-right tabular-nums font-medium ${tx.type === "income" ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
-                      {tx.type === "income" ? "+" : "-"} {formatMoney(tx.amount, currency)}
+                    <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
+                      + {formatMoney(tx.amount, currency)}
                     </td>
                     <td className="px-6 py-3 text-right whitespace-nowrap">
                       {tx.is_sc_earned ? (
@@ -370,9 +366,9 @@ export default function ClientDetail() {
                   </tr>
                 ))}
                 <tr className="bg-muted/40 font-medium">
-                  <td colSpan={3} className="px-6 py-3 text-muted-foreground label-eyebrow">Net</td>
-                  <td className={`px-6 py-3 text-right tabular-nums ${t.net >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`} data-testid="client-tx-net">
-                    {formatMoney(t.net, currency)}
+                  <td colSpan={3} className="px-6 py-3 text-muted-foreground label-eyebrow">Total credited</td>
+                  <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="client-tx-net">
+                    {formatMoney(creditTotal, currency)}
                   </td>
                   <td></td>
                 </tr>
