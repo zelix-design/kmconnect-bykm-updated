@@ -1,5 +1,8 @@
 """Client CRUD."""
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
@@ -265,6 +268,10 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
                             "amount": round(float(a.get("amount") or 0), 2),
                             "is_sc_earned": True,
                             "sc_given": bool(a.get("sc_given")),
+                            "_sc_student_id": st["id"],
+                            "_sc_payment_id": p.get("id"),
+                            "_sc_adj_idx": idx,
+                            "_sc_student_name": st.get("name"),
                         })
         if sc_rows:
             txs = txs + sc_rows
@@ -307,3 +314,69 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
             enriched_students, txs, incentive_amount=incentive_amount
         ),
     }
+
+
+class ScPayoutIn(BaseModel):
+    student_id: str
+    payment_id: str
+    adjustment_idx: int
+    amount: float
+    account_id: str
+    payment_mode: str = "bank_transfer"
+    date: Optional[str] = None
+
+
+@router.post("/{client_id}/sc-payout")
+async def pay_sc_now(
+    client_id: str,
+    payload: ScPayoutIn,
+    user: dict = Depends(require_edit("transactions")),
+):
+    """One-click SC payout: pay the SC a sub-agent/associate earned on a specific
+    student fee adjustment. Marks that adjustment `sc_given=True` and logs a real
+    SC-payout expense transaction (reduces the agent's holding, shows as a debit
+    in their money trail)."""
+    client = await db.clients.find_one(_client_filter(client_id, user), {"_id": 0})
+    if not client:
+        raise HTTPException(404, "Client not found")
+
+    st_filter = {"id": payload.student_id}
+    if user.get("role") != "super_admin":
+        st_filter.update(_office_visibility_clause(user))
+    student = await db.students.find_one(st_filter, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "Student not found")
+
+    payment = next((p for p in (student.get("payments") or []) if p.get("id") == payload.payment_id), None)
+    if not payment:
+        raise HTTPException(404, "Payment not found")
+    adjustments = payment.get("adjustments") or []
+    if not (0 <= payload.adjustment_idx < len(adjustments)):
+        raise HTTPException(404, "Adjustment not found")
+    adj = adjustments[payload.adjustment_idx]
+    if adj.get("kind") != "sc_adjusted" or adj.get("client_id") != client_id:
+        raise HTTPException(400, "Adjustment does not match this client")
+
+    await db.students.update_one(
+        {"id": payload.student_id, "payments.id": payload.payment_id},
+        {"$set": {f"payments.$.adjustments.{payload.adjustment_idx}.sc_given": True}},
+    )
+
+    doc = {
+        "id": gen_id(),
+        "user_id": user["id"],
+        "created_at": now_iso(),
+        "type": "expense",
+        "amount": round(float(payload.amount), 2),
+        "account_id": payload.account_id,
+        "category_id": None,
+        "date": payload.date or now_iso()[:10],
+        "description": f"SC payout — {student.get('name')} · to {client.get('name')}",
+        "client_id": client_id,
+        "is_sc_payout": True,
+        "payment_mode": payload.payment_mode,
+        "student_name": student.get("name"),
+    }
+    await db.transactions.insert_one(doc)
+    doc.pop("_id", None)
+    return {"ok": True, "transaction": doc}

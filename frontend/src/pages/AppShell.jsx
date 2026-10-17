@@ -18,7 +18,7 @@ import {
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
   Target, IdentificationBadge, Handshake, UserCircle, CaretRight, CaretDown, FolderSimplePlus,
-  ClockCounterClockwise, Clock,
+  ClockCounterClockwise, Clock, ChartBar,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -44,6 +44,7 @@ const ALL_NAV = [
   { to: "/attendance", label: "Attendance", icon: Clock, tid: "nav-attendance", roles: ["super_admin", "office_admin", "staff"], perm: "attendance" },
   { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
   { to: "/admission-revenue", label: "Admission Revenue", icon: Coins, tid: "nav-admission-revenue", roles: ["super_admin"] },
+  { to: "/sc-report", label: "SC Report", icon: ChartBar, tid: "nav-sc-report", roles: ["super_admin", "office_admin"] },
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
@@ -72,6 +73,7 @@ const PAGE_TITLES = {
   "/attendance": "Attendance & Payroll",
   "/colleges": "Colleges",
   "/admission-revenue": "Admission Revenue",
+  "/sc-report": "SC Report",
   "/agents": "Sub-agent Ledger",
   "/categories": "Categories",
   "/settings": "Settings",
@@ -102,7 +104,7 @@ function buildSections(navItems, role) {
     return [{ type: "items", label: "Workspace", items: navItems }];
   }
   return [
-    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry", "/admission-revenue"]) },
+    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry", "/admission-revenue", "/sc-report"]) },
     { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(GROUP_ROUTES.accounts) },
     { type: "items", items: pick(["/messages", "/clients", "/students"]) },
     { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(GROUP_ROUTES.office) },

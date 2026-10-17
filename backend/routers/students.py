@@ -1334,6 +1334,52 @@ async def agent_payments(
     return {"type": type, "name": target, "totals": totals, "payments": rows, "payouts": payout_rows}
 
 
+@router.get("/sc-by-college")
+async def sc_by_college(user: dict = Depends(get_current_user), year: Optional[int] = None):
+    """Per-college breakdown of Service Charge earned vs still pending for the
+    selected academic year. Cancelled admissions are counted separately (SC not
+    earned). Scope: super_admin = all; office_admin = office-visible records."""
+    from lib.student_math import compute_summary
+    scope = {} if user.get("role") == "super_admin" else _office_visibility_clause(user)
+    students = await db.students.find(scope, {"_id": 0}).to_list(5000)
+    buckets: dict[str, dict] = {}
+    for st in students:
+        if not in_year(st.get("enrollment_date") or st.get("created_at"), year):
+            continue
+        college = (st.get("college") or "—").strip() or "—"
+        b = buckets.setdefault(college, {
+            "college": college, "students": 0, "cancelled": 0,
+            "earned": 0.0, "cleared": 0.0, "pending": 0.0,
+        })
+        b["students"] += 1
+        if (st.get("status") or "").lower() == "cancelled":
+            b["cancelled"] += 1
+            continue
+        st["payments"] = [_normalize_legacy_payment(p) for p in (st.get("payments") or [])]
+        summ = compute_summary(st)
+        earned = summ["sc_earned_effective"]
+        pending = max(0.0, summ["balance_vs_sc"])
+        b["earned"] += earned
+        b["pending"] += pending
+        b["cleared"] += max(0.0, earned - pending)
+
+    out = []
+    for b in buckets.values():
+        for k in ("earned", "cleared", "pending"):
+            b[k] = round(b[k], 2)
+        out.append(b)
+    out.sort(key=lambda r: r["earned"], reverse=True)
+    totals = {
+        "earned": round(sum(r["earned"] for r in out), 2),
+        "cleared": round(sum(r["cleared"] for r in out), 2),
+        "pending": round(sum(r["pending"] for r in out), 2),
+        "students": sum(r["students"] for r in out),
+        "cancelled": sum(r["cancelled"] for r in out),
+        "colleges": len(out),
+    }
+    return {"rows": out, "totals": totals}
+
+
 @router.get("/{student_id}")
 async def get_student(student_id: str, user: dict = Depends(get_current_user)):
     s = await db.students.find_one(_student_filter(student_id, user), {"_id": 0})

@@ -1783,3 +1783,14 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - AdjustmentsSection: when kind = SUB AGENT / ASSOCIATE CONSULTANT, a checkbox "SC already given..." sets sc_given.
 - StudentDetail adjustment detail rows now label all 3 kinds (Paid to College / SC to KM Foundation / SC to Client), show the KM account name for internal_credit ("credited to <account>"), and an SC given/pending badge for sc_adjusted.
 - Decision (user): College Acc. collections intentionally do NOT auto-log income (unchanged). Fee income already logs to bank/cash accounts.
+
+## 2026-06 — One-Click SC Payout + College SC Report
+### One-Click SC Payout (clients.py POST /{client_id}/sc-payout, ClientDetail.jsx)
+- On the client money trail, each un-given "SC earned" credit row has a "Pay SC now" button → opens Pay service charge dialog (pick account + payment mode; amount prefilled).
+- Backend marks the underlying student payment adjustment sc_given=True AND logs a real SC-payout expense (is_sc_payout, client_id, payment_mode, student_name) on the actor's books. Given rows then show a green "SC given" badge; the payout shows as a debit so net nets to 0.
+- Synthetic money-trail rows now carry _sc_student_id / _sc_payment_id / _sc_adj_idx / _sc_student_name for the action. ClientDetail now also loads /accounts.
+- Verified E2E via curl: add sc_adjusted payment → SC earned credit → pay-sc flips sc_given + adds debit → net 0 → cleaned up. UI dialog screenshot-verified.
+### College SC Report (students.py GET /sc-by-college, SCReport.jsx, route /sc-report)
+- Per-college breakdown: SC earned vs cleared vs pending for the academic year (auto-scoped by the global year switcher via api.js). Cancelled admissions counted separately (SC not earned).
+- KPI cards (Earned/Cleared/Pending) + sortable By-college table with filter + totals row. Cleared = earned - max(0, balance_vs_sc); pending = max(0, balance_vs_sc).
+- New sidebar nav "SC Report" (ChartBar icon) for super_admin + office_admin; route gated by ADMIN_ROLES. Verified via curl + screenshot.
