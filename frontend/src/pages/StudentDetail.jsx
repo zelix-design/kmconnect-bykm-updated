@@ -426,6 +426,7 @@ export default function StudentDetail() {
                                 ? "bg-amber-100 text-amber-700 dark:text-amber-400"
                                 : "bg-emerald-100 text-emerald-700 dark:text-emerald-400";
                               const kmAccount = isKm ? (accounts.find((x) => x.id === a.account_id)?.name) : null;
+                              const recvAccount = isCollege ? (accounts.find((x) => x.id === p.received_in?.account_id)?.name) : null;
                               return (
                               <div key={a.id || idx} className="flex items-center gap-2 text-xs text-foreground flex-wrap" data-testid={`adj-detail-${p.id}-${idx}`}>
                                 <span className={`px-1.5 py-0.5 rounded ${kindCls}`}>
@@ -433,6 +434,9 @@ export default function StudentDetail() {
                                 </span>
                                 <span className="tabular-nums font-medium">{formatMoney(a.amount, currency)}</span>
                                 <span className="text-muted-foreground">on {formatDate(a.payment_date)} · {PAYMENT_MODES.find((m) => m.value === a.payment_mode)?.label}</span>
+                                {isCollege && recvAccount && (
+                                  <span className="text-muted-foreground" data-testid={`adj-college-account-${p.id}-${idx}`}>· debited from {recvAccount}</span>
+                                )}
                                 {isKm && (
                                   <span className="text-muted-foreground" data-testid={`adj-km-account-${p.id}-${idx}`}>· credited to {kmAccount || "an account"}</span>
                                 )}

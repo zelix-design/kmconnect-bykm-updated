@@ -479,6 +479,37 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
             "linked_adjustment_idx": idx,
         })
 
+    # Paid-to-College adjustments create an EXPENSE (debit) on the SAME account
+    # the fee was received into, so the account balance nets correctly
+    # (received − paid-to-college) and both lines show on the Transactions page.
+    # Only when there's a real received account (College-Acc. collections carry
+    # no account_id, so nothing lands on the books either way).
+    if account_id:
+        exp_cat = await db.categories.find_one(
+            {"user_id": user_id, "type": "expense", "name": "Paid to College"},
+            {"_id": 0, "id": 1},
+        )
+        for idx, adj in enumerate(payment.get("adjustments") or []):
+            if adj.get("kind") != "paid_to_college":
+                continue
+            await db.transactions.insert_one({
+                "id": gen_id(),
+                "user_id": user_id,
+                "created_at": now_iso(),
+                "type": "expense",
+                "amount": round(float(adj.get("amount") or 0), 2),
+                "account_id": account_id,
+                "category_id": exp_cat["id"] if exp_cat else None,
+                "date": adj.get("payment_date") or payment.get("date"),
+                "description": " · ".join(filter(None, [
+                    f"Paid to College — {student.get('name')}",
+                    adj.get("remarks") or "",
+                ])),
+                "linked_student_id": student.get("id"),
+                "linked_student_payment_id": payment["id"],
+                "linked_adjustment_idx": idx,
+            })
+
 
 async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
     await db.transactions.delete_many({
