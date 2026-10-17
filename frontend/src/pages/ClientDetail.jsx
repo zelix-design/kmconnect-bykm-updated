@@ -14,6 +14,7 @@ import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
 import StaffQuotaDialog from "@/components/leave/StaffQuotaDialog";
 import ClientTxnDialog from "@/components/ClientTxnDialog";
 import InvoiceCreateDialog from "@/components/InvoiceCreateDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
@@ -31,6 +32,12 @@ const STATUS_BADGE = {
   completed: "bg-sky-100/60 dark:bg-sky-500/15 text-sky-700 dark:text-sky-400",
 };
 
+const SC_STATUS = {
+  pending: { label: "Pending", cls: "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  cleared: { label: "Cleared", cls: "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  not_earned: { label: "Not Earned", cls: "bg-muted text-muted-foreground" },
+};
+
 export default function ClientDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -41,6 +48,7 @@ export default function ClientDetail() {
   const [quotaOpen, setQuotaOpen] = useState(false);
   const [txnOpen, setTxnOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [tileKey, setTileKey] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,17 +177,17 @@ export default function ClientDetail() {
 
       {/* Stat tiles */}
       <div className={`grid grid-cols-2 gap-3 ${isStaff ? "lg:grid-cols-3" : "lg:grid-cols-4"}`} data-testid="client-tiles">
-        <Tile label="Students admitted" value={t.students_count} data-testid="tile-students-admitted" />
+        <Tile label="Students admitted" value={t.students_count} onClick={() => setTileKey("students")} data-testid="tile-students-admitted" />
         {isStaff ? (
           <>
-            <Tile label="Incentive earned" value={formatMoney(t.incentive_earned, currency)} tone="info" data-testid="tile-incentive-earned" />
-            <Tile label="Incentive pending" value={formatMoney(t.incentive_pending, currency)} tone={t.incentive_pending > 0 ? "danger" : "default"} data-testid="tile-incentive-pending" />
+            <Tile label="Incentive earned" value={formatMoney(t.incentive_earned, currency)} tone="info" onClick={() => setTileKey("incentive_earned")} data-testid="tile-incentive-earned" />
+            <Tile label="Incentive pending" value={formatMoney(t.incentive_pending, currency)} tone={t.incentive_pending > 0 ? "danger" : "default"} onClick={() => setTileKey("incentive_pending")} data-testid="tile-incentive-pending" />
           </>
         ) : (
           <>
-            <Tile label="SC Earned" value={formatMoney(t.sc_earned, currency)} tone="success" data-testid="tile-sc-earned" />
-            <Tile label="Total credits" value={formatMoney(t.total_income, currency)} tone="success" data-testid="tile-total-credits" />
-            <Tile label="Total debits" value={formatMoney(t.total_expense, currency)} tone="danger" data-testid="tile-total-debits" />
+            <Tile label="SC Earned" value={formatMoney(t.sc_earned, currency)} tone="success" onClick={() => setTileKey("sc")} data-testid="tile-sc-earned" />
+            <Tile label="Total credits" value={formatMoney(t.total_income, currency)} tone="success" onClick={() => setTileKey("credits")} data-testid="tile-total-credits" />
+            <Tile label="Total debits" value={formatMoney(t.total_expense, currency)} tone="danger" onClick={() => setTileKey("debits")} data-testid="tile-total-debits" />
           </>
         )}
       </div>
@@ -228,6 +236,7 @@ export default function ClientDetail() {
                 <th className="px-6 py-3 label-eyebrow">Status</th>
                 <th className="px-6 py-3 label-eyebrow">Enrolled</th>
                 {!isStaff && <th className="px-6 py-3 label-eyebrow text-right">SC Earned</th>}
+                {!isStaff && <th className="px-6 py-3 label-eyebrow">SC Status</th>}
                 {isStaff && <th className="px-6 py-3 label-eyebrow text-right">Incentive</th>}
               </tr>
             </thead>
@@ -247,6 +256,13 @@ export default function ClientDetail() {
                   <td className="px-6 py-3 tabular-nums text-muted-foreground">{st.enrollment_date ? formatDate(st.enrollment_date) : "—"}</td>
                   {!isStaff && (
                     <td className="px-6 py-3 text-right tabular-nums">{formatMoney(st.sc_out_fixed, currency)}</td>
+                  )}
+                  {!isStaff && (
+                    <td className="px-6 py-3">
+                      <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${(SC_STATUS[st.sc_status] || SC_STATUS.pending).cls}`} data-testid={`client-st-sc-status-${st.id}`}>
+                        {(SC_STATUS[st.sc_status] || SC_STATUS.pending).label}
+                      </span>
+                    </td>
                   )}
                   {isStaff && (
                     <td className="px-6 py-3 text-right">
@@ -275,6 +291,7 @@ export default function ClientDetail() {
                 {!isStaff && (
                   <td className="px-6 py-3 text-right tabular-nums" data-testid="client-st-total-sc">{formatMoney(t.sc_earned, currency)}</td>
                 )}
+                {!isStaff && <td className="px-6 py-3" />}
                 {isStaff && (
                   <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="client-st-total-incentive">
                     {formatMoney(t.incentive_earned, currency)}
@@ -349,19 +366,152 @@ export default function ClientDetail() {
       {user?.role === "super_admin" && (
         <InvoiceCreateDialog open={invoiceOpen} onOpenChange={setInvoiceOpen} presetClientId={c.id} onCreated={load} />
       )}
+      <TileListDialog
+        tileKey={tileKey}
+        onClose={() => setTileKey(null)}
+        data={data}
+        currency={currency}
+      />
     </div>
   );
 }
 
-function Tile({ label, value, tone, "data-testid": tid }) {
+function Tile({ label, value, tone, onClick, "data-testid": tid }) {
+  const clickable = typeof onClick === "function";
   return (
-    <Card className="p-4 border border-border bg-card rounded-lg shadow-none" data-testid={tid}>
+    <Card
+      onClick={onClick}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      className={`p-4 border border-border bg-card rounded-lg shadow-none transition-colors ${clickable ? "cursor-pointer hover:border-orange-400/60 hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/60" : ""}`}
+      data-testid={tid}
+    >
       <p className="label-eyebrow">{label}</p>
       <p className={`font-display text-2xl mt-2 tabular-nums ${
         tone === "success" ? "text-emerald-700 dark:text-emerald-400" :
         tone === "danger" ? "text-rose-700 dark:text-rose-400" :
         tone === "info" ? "text-sky-700 dark:text-sky-400" : "text-foreground"
       }`}>{value}</p>
+      {clickable && <p className="text-[11px] text-muted-foreground mt-1">Click to view list</p>}
     </Card>
   );
+}
+
+const TILE_META = {
+  students: { title: "Students admitted", desc: "All students linked to this client." },
+  sc: { title: "Service charge earned", desc: "Per-student service charge and clearance status." },
+  credits: { title: "Total credits", desc: "Income transactions linked to this client." },
+  debits: { title: "Total debits", desc: "Expense transactions linked to this client." },
+  incentive_earned: { title: "Incentive earned", desc: "Admissions eligible for incentive." },
+  incentive_pending: { title: "Incentive pending", desc: "Eligible admissions not yet paid." },
+};
+
+function TileListDialog({ tileKey, onClose, data, currency }) {
+  const meta = tileKey ? TILE_META[tileKey] : null;
+  const students = data?.students || [];
+  const txs = data?.transactions || [];
+
+  let rows = null;
+  if (tileKey === "students") {
+    rows = students.length ? (
+      <ListTable
+        head={["Student", "Course", "College", "Status", "Enrolled"]}
+        body={students.map((s) => [
+          s.name,
+          s.course || "—",
+          s.college || "—",
+          <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${STATUS_BADGE[s.status] || "bg-muted text-foreground"}`}>{s.status}</span>,
+          s.enrollment_date ? formatDate(s.enrollment_date) : "—",
+        ])}
+        keys={students.map((s) => s.id)}
+      />
+    ) : <Empty text="No students linked yet." />;
+  } else if (tileKey === "sc") {
+    rows = students.length ? (
+      <ListTable
+        head={["Student", "College", "SC Earned", "SC Status"]}
+        align={{ 2: "right" }}
+        body={students.map((s) => [
+          s.name,
+          s.college || "—",
+          formatMoney(s.sc_out_fixed, currency),
+          <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${(SC_STATUS[s.sc_status] || SC_STATUS.pending).cls}`}>{(SC_STATUS[s.sc_status] || SC_STATUS.pending).label}</span>,
+        ])}
+        keys={students.map((s) => s.id)}
+      />
+    ) : <Empty text="No service charge earned yet." />;
+  } else if (tileKey === "credits" || tileKey === "debits") {
+    const filtered = txs.filter((tx) => tx.type === (tileKey === "credits" ? "income" : "expense"));
+    rows = filtered.length ? (
+      <ListTable
+        head={["Date", "Description", "Amount"]}
+        align={{ 2: "right" }}
+        body={filtered.map((tx) => [
+          formatDate(tx.date),
+          tx.description || "—",
+          <span className={tileKey === "credits" ? "text-emerald-700 dark:text-emerald-400 font-medium" : "text-rose-700 dark:text-rose-400 font-medium"}>
+            {tileKey === "credits" ? "+" : "-"} {formatMoney(tx.amount, currency)}
+          </span>,
+        ])}
+        keys={filtered.map((tx) => tx.id)}
+      />
+    ) : <Empty text={tileKey === "credits" ? "No credits yet." : "No debits yet."} />;
+  } else if (tileKey === "incentive_earned" || tileKey === "incentive_pending") {
+    const filtered = students.filter((s) => s.incentive_eligible && (tileKey === "incentive_earned" || !s.incentive_paid));
+    rows = filtered.length ? (
+      <ListTable
+        head={["Student", "Enrolled", "Amount", "Status"]}
+        align={{ 2: "right" }}
+        body={filtered.map((s) => [
+          s.name,
+          s.enrollment_date ? formatDate(s.enrollment_date) : "—",
+          formatMoney(s.incentive_amount, currency),
+          <span className={`uppercase tracking-wider px-2 py-0.5 rounded text-[10px] ${s.incentive_paid ? "bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-amber-100/60 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400"}`}>{s.incentive_paid ? "Paid" : "Pending"}</span>,
+        ])}
+        keys={filtered.map((s) => s.id)}
+      />
+    ) : <Empty text="Nothing here yet." />;
+  }
+
+  return (
+    <Dialog open={!!tileKey} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="bg-card max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="tile-list-dialog">
+        <DialogHeader>
+          <DialogTitle className="font-display">{meta?.title}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">{meta?.desc}</DialogDescription>
+        </DialogHeader>
+        {rows}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ListTable({ head, body, keys, align = {} }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left bg-muted/40 border-b border-border">
+            {head.map((h, i) => (
+              <th key={i} className={`px-3 py-2 label-eyebrow ${align[i] === "right" ? "text-right" : ""}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {body.map((cells, r) => (
+            <tr key={keys?.[r] ?? r} className="hover:bg-muted/40" data-testid={`tile-list-row-${keys?.[r] ?? r}`}>
+              {cells.map((cell, ci) => (
+                <td key={ci} className={`px-3 py-2 ${align[ci] === "right" ? "text-right tabular-nums" : ""}`}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Empty({ text }) {
+  return <div className="p-8 text-center text-sm text-muted-foreground">{text}</div>;
 }

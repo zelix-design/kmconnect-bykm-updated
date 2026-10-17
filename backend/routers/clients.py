@@ -207,6 +207,26 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
     ]
     enriched_students.sort(key=lambda x: x.get("enrollment_date") or "", reverse=True)
 
+    # Per-student service-charge clearance: a student's SC is "Cleared" once a
+    # service_charge invoice naming that student exists against this client.
+    sc_invoices = await db.invoices.find(
+        {"client_id": client_id, "invoice_type": "service_charge"},
+        {"_id": 0, "student_name": 1},
+    ).to_list(2000)
+    sc_cleared_names = {
+        (inv.get("student_name") or "").strip().lower()
+        for inv in sc_invoices
+        if (inv.get("student_name") or "").strip()
+    }
+    for s in enriched_students:
+        st = (s.get("status") or "").lower()
+        if st == "cancelled":
+            s["sc_status"] = "not_earned"
+        elif (s.get("name") or "").strip().lower() in sc_cleared_names:
+            s["sc_status"] = "cleared"
+        else:
+            s["sc_status"] = "pending"
+
     if user.get("role") == "super_admin":
         tx_query: dict = {"client_id": client_id}
     else:
