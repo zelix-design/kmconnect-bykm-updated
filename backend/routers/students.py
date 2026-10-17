@@ -117,6 +117,7 @@ class Adjustment(BaseModel):
     sub_agent_name: Optional[str] = None
     account_id: Optional[str] = None  # only when kind=internal_credit
     client_id: Optional[str] = None   # references clients._id when picked from list
+    sc_given: bool = False            # SC already handed to the sub-agent/associate
     remarks: Optional[str] = ""
 
     @model_validator(mode="after")

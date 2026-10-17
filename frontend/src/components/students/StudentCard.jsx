@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard } from "@phosphor-icons/react";
+import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard, CurrencyInr } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 
 const STATUS_STYLES = {
@@ -28,6 +28,7 @@ const CARD_TINT = {
 };
 
 export default function StudentCard({ s, currency, isSuper, selectable, selected, onToggleSelect }) {
+  const scCleared = (s.sc_earned_effective || 0) > 0 && (s.balance_vs_sc || 0) <= 0.01;
   return (
     <Link
       key={s.id}
@@ -55,9 +56,20 @@ export default function StudentCard({ s, currency, isSuper, selectable, selected
               {s.course && <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {s.course}</p>}
             </div>
           </div>
-          <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${STATUS_STYLES[s.status] || "bg-muted text-foreground"}`}>
-            {STATUS_LABEL[s.status] || s.status}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {scCleared && (
+              <span
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white shadow-sm shadow-emerald-500/30"
+                data-testid={`st-card-sc-cleared-${s.id}`}
+                title="Service charge cleared / collected"
+              >
+                <CurrencyInr size={13} weight="bold" />
+              </span>
+            )}
+            <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_STYLES[s.status] || "bg-muted text-foreground"}`}>
+              {STATUS_LABEL[s.status] || s.status}
+            </span>
+          </div>
         </div>
 
         {isSuper && s._creator_office && (

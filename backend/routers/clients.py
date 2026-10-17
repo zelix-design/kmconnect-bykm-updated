@@ -243,6 +243,33 @@ async def client_detail(client_id: str, user: dict = Depends(get_current_user)) 
         tx_query, {"_id": 0}
     ).sort("date", -1).to_list(500)
 
+    # SC the client EARNED as a sub-agent / associate: surfaced from student
+    # payment adjustments (kind=sc_adjusted) that reference this client. These
+    # are synthetic *credit* rows in the money trail — NOT real DB transactions
+    # — so they never pollute account balances or the main Transactions page.
+    if not is_staff:
+        sc_students = await db.students.find(
+            {"payments.adjustments.client_id": client_id},
+            {"_id": 0, "id": 1, "name": 1, "payments": 1},
+        ).to_list(2000)
+        sc_rows = []
+        for st in sc_students:
+            for p in (st.get("payments") or []):
+                for idx, a in enumerate(p.get("adjustments") or []):
+                    if a.get("client_id") == client_id and a.get("kind") == "sc_adjusted":
+                        sc_rows.append({
+                            "id": f"sc-{st['id']}-{p.get('id')}-{idx}",
+                            "date": a.get("payment_date") or p.get("date"),
+                            "description": f"SC earned — {st.get('name')}",
+                            "type": "income",
+                            "amount": round(float(a.get("amount") or 0), 2),
+                            "is_sc_earned": True,
+                            "sc_given": bool(a.get("sc_given")),
+                        })
+        if sc_rows:
+            txs = txs + sc_rows
+            txs.sort(key=lambda t: t.get("date") or "", reverse=True)
+
     # Best-effort: resolve a matching staff LOGIN user (role="staff") for this
     # employee record so the UI can surface / edit their leave quota. Matched
     # by exact (case-insensitive) name within the same office.

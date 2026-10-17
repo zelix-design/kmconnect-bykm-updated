@@ -1768,3 +1768,18 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Root cause: Reveal.jsx IntersectionObserver used threshold 0.12; a long leads grid is far taller than the viewport so 12% could never be visible → the grid stayed at opacity:0 (reveal-on-scroll never got reveal-in). Board view is not wrapped in Reveal, so only list view + staff My Leads were affected.
 - Fix: threshold 0.12 -> 0, added an immediate in-viewport check on mount + a 700ms fallback timer so content is never permanently hidden on tall lists.
 - Verified by testing_agent iteration_89.json = 100%: super-admin list shows 78 cards (opacity 1), staff My Leads shows 9 assigned cards, board view regression OK.
+
+## 2026-06 — Students filters, ClientDetail tiles/SC status, Student fee SC money-trail
+### Students page (Students.jsx, StudentCard.jsx)
+- Filters: College/Course dropdowns (course scoped to chosen college), Reference dropdown, City + name search.
+- View toggle (Card/List) made icon-only; "Add student" became a compact "+" icon button.
+- StudentCard: ₹ badge (emerald circle, CurrencyInr) shows when SC is cleared/collected (sc_earned_effective>0 && balance_vs_sc<=0). testid st-card-sc-cleared-{id}.
+### ClientDetail (ClientDetail.jsx + backend clients.py client_detail)
+- Stat tiles are clickable → open a TileListDialog listing underlying rows (students / SC / credits / debits / incentive). testid tile-list-dialog.
+- Admissions table: new "SC Status" column (non-staff): Pending / Cleared / Not Earned. Backend sc_status per student = not_earned if cancelled, cleared if a service_charge invoice names the student under this client, else pending.
+- Money trail now also shows SC the client EARNED as sub-agent: synthetic credit rows from student payment adjustments (kind=sc_adjusted, client_id match). is_sc_earned + sc_given flags. These are NOT real DB transactions (account_id untouched) so account balances / main Transactions page stay clean. Verified E2E via curl (SAJIN +₹8000 then cleaned up).
+### Student fee adjustments (students.py Adjustment model, StudentDetail.jsx, AdjustmentsSection.jsx)
+- Adjustment model gained sc_given: bool (SC already handed to the sub-agent/associate).
+- AdjustmentsSection: when kind = SUB AGENT / ASSOCIATE CONSULTANT, a checkbox "SC already given..." sets sc_given.
+- StudentDetail adjustment detail rows now label all 3 kinds (Paid to College / SC to KM Foundation / SC to Client), show the KM account name for internal_credit ("credited to <account>"), and an SC given/pending badge for sc_adjusted.
+- Decision (user): College Acc. collections intentionally do NOT auto-log income (unchanged). Fee income already logs to bank/cash accounts.

@@ -135,6 +135,7 @@ export function emptyAdjustment(date) {
     sub_agent_name: "",
     account_id: "",
     client_id: "",
+    sc_given: false,
     remarks: "",
   };
 }
