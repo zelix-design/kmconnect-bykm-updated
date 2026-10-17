@@ -2,16 +2,18 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useAcademicYear } from "@/lib/academicYear";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CurrencyInr, Coins, CheckCircle, Warning, ArrowsClockwise, Buildings, GraduationCap } from "@phosphor-icons/react";
+import { CurrencyInr, Coins, CheckCircle, Warning, ArrowsClockwise, Buildings, GraduationCap, ArrowLeft } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 
 export default function SCReport() {
   const { user } = useAuth();
   const { year } = useAcademicYear();
+  const nav = useNavigate();
   const currency = user?.currency || "INR";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,16 @@ export default function SCReport() {
     <div className="space-y-6 animate-fade-in" data-testid="sc-report-page">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div>
+          {user?.role === "super_admin" && (
+            <button
+              type="button"
+              onClick={() => nav("/admission-revenue")}
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-2"
+              data-testid="sc-report-back"
+            >
+              <ArrowLeft size={14} /> Admission Revenue
+            </button>
+          )}
           <p className="label-eyebrow">Service Charge</p>
           <h1 className="font-display text-3xl sm:text-4xl tracking-tight mt-2 flex items-center gap-2">
             <Coins size={28} className="text-amber-700 dark:text-amber-400" weight="duotone" />

@@ -44,7 +44,7 @@ const ALL_NAV = [
   { to: "/attendance", label: "Attendance", icon: Clock, tid: "nav-attendance", roles: ["super_admin", "office_admin", "staff"], perm: "attendance" },
   { to: "/colleges", label: "Colleges", icon: Buildings, tid: "nav-colleges", roles: ["super_admin"] },
   { to: "/admission-revenue", label: "Admission Revenue", icon: Coins, tid: "nav-admission-revenue", roles: ["super_admin"] },
-  { to: "/sc-report", label: "SC Report", icon: ChartBar, tid: "nav-sc-report", roles: ["super_admin", "office_admin"] },
+  { to: "/sc-report", label: "SC Report", icon: ChartBar, tid: "nav-sc-report", roles: ["office_admin"] },
   { to: "/agents", label: "Ledger", icon: Notebook, tid: "nav-ledger", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Approvals", icon: ReceiptX, tid: "nav-approvals", roles: ["super_admin"] },
   { to: "/expense-requests", label: "Office expenses", icon: ReceiptX, tid: "nav-office-expenses", roles: ["office_admin"], perm: "expense_requests" },
@@ -104,7 +104,7 @@ function buildSections(navItems, role) {
     return [{ type: "items", label: "Workspace", items: navItems }];
   }
   return [
-    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry", "/admission-revenue", "/sc-report"]) },
+    { type: "items", label: "Workspace", items: pick(["/", "/quick-entry", "/admission-revenue"]) },
     { type: "group", key: "accounts", label: "Accounts", icon: Wallet, items: pick(GROUP_ROUTES.accounts) },
     { type: "items", items: pick(["/messages", "/clients", "/students"]) },
     { type: "group", key: "office", label: "Office", icon: Buildings, items: pick(GROUP_ROUTES.office) },

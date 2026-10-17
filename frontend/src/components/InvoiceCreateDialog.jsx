@@ -3,7 +3,7 @@ import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { todayISO } from "@/lib/format";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular } from "@/components/InvoiceForm";
+import InvoiceForm, { PARTICULAR_PRESETS, emptyParticular, serviceParticular } from "@/components/InvoiceForm";
 import { toast } from "sonner";
 
 const blankForm = () => ({
@@ -53,7 +53,7 @@ function particularsToItems(particulars) {
 
 // Self-contained invoice-create popup. Used where we want to generate an
 // invoice without leaving the current page (e.g. the client detail page).
-export default function InvoiceCreateDialog({ open, onOpenChange, presetClientId, onCreated }) {
+export default function InvoiceCreateDialog({ open, onOpenChange, presetClientId, preset, onCreated }) {
   const { user } = useAuth();
   const currency = user?.currency || "USD";
   const [clients, setClients] = useState([]);
@@ -65,14 +65,24 @@ export default function InvoiceCreateDialog({ open, onOpenChange, presetClientId
     (async () => {
       const [i, c, a] = await Promise.all([api.get("/invoices"), api.get("/clients"), api.get("/accounts")]);
       setClients(c.data); setAccounts(a.data);
-      setForm({
+      const base = {
         ...blankForm(),
         invoice_number: nextInvoiceNumber(i.data),
         client_id: presetClientId || c.data[0]?.id || "",
         expense_account_id: a.data[0]?.id || "",
-      });
+      };
+      const p = preset || {};
+      if (p.invoice_type === "service_charge") {
+        base.invoice_type = "service_charge";
+        base.auto_log_expenses = false;
+        base.particulars = [{ ...serviceParticular(), amount: p.sc_amount != null ? String(p.sc_amount) : "" }];
+        base.student_name = p.student_name || "";
+        base.college = p.college || "";
+        base.course = p.course || "";
+      }
+      setForm(base);
     })();
-  }, [open, presetClientId]);
+  }, [open, presetClientId, preset]);
 
   const submit = async (e) => {
     e.preventDefault();

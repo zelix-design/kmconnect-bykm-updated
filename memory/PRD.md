@@ -1799,3 +1799,11 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Paid-to-College adjustments now post an EXPENSE (debit) on the SAME account the fee was received into, so account balance nets (received − paid-to-college). Verified: balance 375700→400700 (+30k −5k) →375700 after delete.
 - ClientDetail money trail now lists CREDITS ONLY (SC earned). Retitled "Service charge credited to {client}"; payout debits are intentionally shown only on the Transactions page + Sub-agent Ledger (per user). Total row = "Total credited".
 - Removed the "SC Status" column from the Admissions table on ClientDetail (SC_STATUS const still used by the SC tile list dialog). sc_status still returned by backend (harmless).
+
+## 2026-06 — SC-invoice payout flow + Account statements + SC Report back nav
+- "Pay SC now" (ClientDetail) now opens the Service Charge Invoice popup (InvoiceCreateDialog gained a `preset` prop) prefilled with student+amount. When a service_charge invoice is created/updated/marked PAID naming the student, backend `_sync_sc_given_from_invoice` flips the matching sc_adjusted adjustment to sc_given=True (money-trail "SC given" badge). Verified E2E + cleaned up.
+- Paid-to-College adjustment posts a debit on the same received account (verified balance netting).
+- Accounts page: each account card is clickable → detail popup (Balance, Last 10 txns, Download statement); icon buttons stopPropagation. Per-account Credit/Debit Statement PDF via /lib/accountStatementPdf.js (jsPDF+autotable, running balance). Verified download.
+- SC Report moved out of super_admin sidebar → button inside Admission Revenue header (near FY select); still in office_admin sidebar. Added "← Admission Revenue" back button on SC Report.
+- PinLock now persists unlocked state in sessionStorage per basePath → returning to Admission Revenue from SC Report no longer re-prompts PIN.
+- Shared dialog padding p-4→p-5 (sm:p-6); fixed grid min-width overflow in account detail dialog via min-w-0.

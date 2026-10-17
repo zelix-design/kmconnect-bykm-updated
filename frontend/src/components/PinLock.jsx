@@ -33,8 +33,12 @@ export default function PinLock({
 }) {
   const [status, setStatus] = useState(null); // null | {is_set, locked, seconds_remaining}
   const [mode, setMode] = useState("check"); // "check" | "setup" | "enter"
-  // Deliberately NOT persisted — re-locks on every navigation back to the page.
-  const [unlocked, setUnlocked] = useState(false);
+  // Persisted per browser-tab session so navigating away and back (e.g. to the
+  // SC Report and back to Admission Revenue) does NOT re-prompt the PIN.
+  const _skey = `pinlock_unlocked_${basePath}`;
+  const [unlocked, setUnlocked] = useState(() => {
+    try { return sessionStorage.getItem(_skey) === "1"; } catch { return false; }
+  });
 
   useEffect(() => {
     if (unlocked) return;
@@ -50,7 +54,10 @@ export default function PinLock({
     })();
   }, [basePath, unlocked]);
 
-  const doUnlock = () => setUnlocked(true);
+  const doUnlock = () => {
+    try { sessionStorage.setItem(_skey, "1"); } catch { /* ignore */ }
+    setUnlocked(true);
+  };
 
   if (unlocked) return <>{children}</>;
   if (!status) {

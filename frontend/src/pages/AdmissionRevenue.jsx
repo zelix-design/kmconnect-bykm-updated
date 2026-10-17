@@ -14,6 +14,7 @@ import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 import PinLock from "@/components/PinLock";
 import CollegeCoursesDrilldown from "@/components/admission-revenue/CollegeCoursesDrilldown";
+import { useNavigate } from "react-router-dom";
 
 /** Wrapper: gate the whole dashboard behind a 4-digit PIN (per super admin,
  * per browser-tab session). Non-super-admin fall-through renders the
@@ -43,6 +44,7 @@ export default function AdmissionRevenueGate() {
 function AdmissionRevenue() {
   const { user } = useAuth();
   const isSuper = user?.role === "super_admin";
+  const nav = useNavigate();
   const currency = user?.currency || "INR";
   const [fyOptions, setFyOptions] = useState([]);
   const [fy, setFy] = useState("");
@@ -124,6 +126,16 @@ function AdmissionRevenue() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => nav("/sc-report")}
+            className="h-10"
+            data-testid="go-sc-report-btn"
+            title="Per-college SC earned vs pending"
+          >
+            <GraduationCap size={14} className="mr-1.5" /> SC Report
+          </Button>
           <Button
             type="button"
             variant="outline"

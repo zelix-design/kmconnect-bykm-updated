@@ -14,10 +14,7 @@ import { downloadClientStatementPDF } from "@/lib/clientStatementPdf";
 import StaffQuotaDialog from "@/components/leave/StaffQuotaDialog";
 import ClientTxnDialog from "@/components/ClientTxnDialog";
 import InvoiceCreateDialog from "@/components/InvoiceCreateDialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { PAYMENT_MODES } from "@/lib/paymentModes";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const TYPE_BADGE = {
   staff: "bg-orange-100/60 dark:bg-orange-500/15 text-orange-700 dark:text-orange-400",
@@ -52,8 +49,7 @@ export default function ClientDetail() {
   const [txnOpen, setTxnOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [tileKey, setTileKey] = useState(null);
-  const [accounts, setAccounts] = useState([]);
-  const [scPayout, setScPayout] = useState(null); // the SC-earned row being paid
+  const [scInvoice, setScInvoice] = useState(null); // SC-earned row being invoiced
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,9 +64,6 @@ export default function ClientDetail() {
     }
   }, [id, nav]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    api.get("/accounts").then((r) => setAccounts(r.data || [])).catch(() => {});
-  }, []);
 
   if (loading || !data) {
     return <div className="p-8 text-sm text-muted-foreground" data-testid="loading">Loading…</div>;
@@ -355,7 +348,7 @@ export default function ClientDetail() {
                             size="sm"
                             variant="outline"
                             className="h-7 text-xs"
-                            onClick={() => setScPayout(tx)}
+                            onClick={() => setScInvoice(tx)}
                             data-testid={`client-pay-sc-${tx.id}`}
                           >
                             <HandCoins size={13} className="mr-1" /> Pay SC now
@@ -398,12 +391,10 @@ export default function ClientDetail() {
         currency={currency}
       />
       <ScPayoutDialog
-        row={scPayout}
-        onClose={() => setScPayout(null)}
+        row={scInvoice}
+        onClose={() => setScInvoice(null)}
         clientId={c.id}
-        accounts={accounts}
-        currency={currency}
-        onPaid={() => { setScPayout(null); load(); }}
+        onPaid={() => { setScInvoice(null); load(); }}
       />
     </div>
   );
@@ -549,81 +540,20 @@ function Empty({ text }) {
   return <div className="p-8 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
-function ScPayoutDialog({ row, onClose, clientId, accounts, currency, onPaid }) {
-  const [accountId, setAccountId] = useState("");
-  const [mode, setMode] = useState("bank_transfer");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (row) {
-      setAccountId(accounts[0]?.id || "");
-      setMode("bank_transfer");
-    }
-  }, [row, accounts]);
-
-  const submit = async () => {
-    if (!accountId) { toast.error("Pick an account to pay from"); return; }
-    setSaving(true);
-    try {
-      await api.post(`/clients/${clientId}/sc-payout`, {
-        student_id: row._sc_student_id,
-        payment_id: row._sc_payment_id,
-        adjustment_idx: row._sc_adj_idx,
-        amount: row.amount,
-        account_id: accountId,
-        payment_mode: mode,
-      });
-      toast.success("SC paid out");
-      onPaid();
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Could not log the SC payout");
-    } finally {
-      setSaving(false);
-    }
-  };
-
+function ScPayoutDialog({ row, onClose, clientId, onPaid }) {
+  // "Pay SC now" opens the Service Charge Invoice popup prefilled for the
+  // student + amount. When that invoice is saved with status "paid", the
+  // backend flips the matching SC adjustment to sc_given (money trail badge).
+  const preset = row
+    ? { invoice_type: "service_charge", student_name: row._sc_student_name, sc_amount: row.amount }
+    : null;
   return (
-    <Dialog open={!!row} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="bg-card max-w-md" data-testid="sc-payout-dialog">
-        <DialogHeader>
-          <DialogTitle className="font-display">Pay service charge</DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            {row ? `${row._sc_student_name} · ${formatMoney(row.amount, currency)} earned by this agent. This logs a payout and marks the SC as given.` : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Pay from account</Label>
-            <Select value={accountId} onValueChange={setAccountId}>
-              <SelectTrigger data-testid="sc-payout-account"><SelectValue placeholder="Pick account" /></SelectTrigger>
-              <SelectContent>
-                {accounts.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">No accounts found.</div>
-                ) : accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Mode of payment</Label>
-            <Select value={mode} onValueChange={setMode}>
-              <SelectTrigger data-testid="sc-payout-mode"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PAYMENT_MODES.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button className="btn-amber border-0" onClick={submit} disabled={saving} data-testid="sc-payout-confirm">
-            {saving ? "Paying…" : "Confirm payout"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <InvoiceCreateDialog
+      open={!!row}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      presetClientId={clientId}
+      preset={preset}
+      onCreated={onPaid}
+    />
   );
 }
