@@ -73,10 +73,13 @@ export default function ClientDetail() {
   const t = data.totals;
   const isStaff = !!data.is_staff;
   const loginUser = data.staff_login_user;
-  // Money trail shows CREDITS only (SC earned). Debits (SC payouts) live on the
-  // Transactions page and the Sub-agent Ledger, not here.
-  const creditRows = (data.transactions || []).filter((tx) => tx.type === "income");
-  const creditTotal = creditRows.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  // Money trail shows BOTH credits (SC earned / amounts credited to KM
+  // Foundation from this client) and debits (SC payout transactions, with
+  // their transaction details).
+  const trailRows = data.transactions || [];
+  const creditTotal = trailRows.filter((tx) => tx.type === "income").reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  const debitTotal = trailRows.filter((tx) => tx.type === "expense").reduce((sum, tx) => sum + (tx.amount || 0), 0);
+  const netTotal = creditTotal - debitTotal;
 
   return (
     <div className="space-y-6 animate-fade-in" data-testid="client-detail">
@@ -305,12 +308,12 @@ export default function ClientDetail() {
         <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
           <div className="px-6 py-4 border-b border-border">
             <p className="label-eyebrow">Money trail</p>
-            <h3 className="font-display text-lg mt-0.5">Service charge credited to {c.name}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Payouts appear on the Transactions page and the Sub-agent Ledger.</p>
+            <h3 className="font-display text-lg mt-0.5">Credits &amp; debits for {c.name}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Credits to KM Foundation from this client, plus SC payout transaction details.</p>
           </div>
-          {creditRows.length === 0 ? (
+          {trailRows.length === 0 ? (
             <div className="p-12 text-center text-sm text-muted-foreground" data-testid="empty-client-tx">
-              No service charge credited to this client yet.
+              No transactions for this client yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -325,17 +328,25 @@ export default function ClientDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {creditRows.map((tx) => (
+                {trailRows.map((tx) => {
+                  const isCredit = tx.type === "income";
+                  return (
                   <tr key={tx.id} className="hover:bg-muted/40" data-testid={`client-tx-row-${tx.id}`}>
                     <td className="px-6 py-3 tabular-nums text-muted-foreground">{formatDate(tx.date)}</td>
                     <td className="px-6 py-3">{tx.description || "—"}</td>
                     <td className="px-6 py-3">
-                      <span className="uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                        Credit
-                      </span>
+                      {isCredit ? (
+                        <span className="uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-emerald-100/60 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+                          Credit
+                        </span>
+                      ) : (
+                        <span className="uppercase tracking-wider text-[10px] px-2 py-0.5 rounded bg-rose-100/60 dark:bg-rose-500/15 text-rose-700 dark:text-rose-400">
+                          Debit
+                        </span>
+                      )}
                     </td>
-                    <td className="px-6 py-3 text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
-                      + {formatMoney(tx.amount, currency)}
+                    <td className={`px-6 py-3 text-right tabular-nums font-medium ${isCredit ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+                      {isCredit ? "+" : "-"} {formatMoney(tx.amount, currency)}
                     </td>
                     <td className="px-6 py-3 text-right whitespace-nowrap">
                       {tx.is_sc_earned ? (
@@ -357,11 +368,12 @@ export default function ClientDetail() {
                       ) : null}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 <tr className="bg-muted/40 font-medium">
-                  <td colSpan={3} className="px-6 py-3 text-muted-foreground label-eyebrow">Total credited</td>
-                  <td className="px-6 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400" data-testid="client-tx-net">
-                    {formatMoney(creditTotal, currency)}
+                  <td colSpan={3} className="px-6 py-3 text-muted-foreground label-eyebrow">Net (credits − debits)</td>
+                  <td className={`px-6 py-3 text-right tabular-nums ${netTotal >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`} data-testid="client-tx-net">
+                    {netTotal < 0 ? "-" : ""}{formatMoney(Math.abs(netTotal), currency)}
                   </td>
                   <td></td>
                 </tr>
