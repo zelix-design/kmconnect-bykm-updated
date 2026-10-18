@@ -18,7 +18,7 @@ import {
   Student, Notebook, Sun, Moon, List as ListIcon, MagnifyingGlass,
   ShieldCheck, ReceiptX, Buildings, Coins, ChatCircleDots, ArrowUpRight,
   Target, IdentificationBadge, Handshake, UserCircle, CaretRight, CaretDown, FolderSimplePlus,
-  ClockCounterClockwise, Clock, ChartBar,
+  ClockCounterClockwise, Clock, ChartBar, SidebarSimple,
 } from "@phosphor-icons/react";
 
 // Sidebar nav with role gating.
@@ -308,6 +308,14 @@ export default function AppShell() {
   const nav = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try { return localStorage.getItem("sidebarHidden") === "1"; } catch { return false; }
+  });
+  const toggleSidebar = () => setSidebarHidden((v) => {
+    const next = !v;
+    try { localStorage.setItem("sidebarHidden", next ? "1" : "0"); } catch { /* ignore */ }
+    return next;
+  });
   const [alerts, setAlerts] = useState({ messages: 0, approvals: 0 });
   const { theme, toggle: toggleTheme } = useTheme();
 
@@ -353,12 +361,14 @@ export default function AppShell() {
   return (
     <div className="min-h-screen w-full bg-background text-foreground flex">
       {/* Desktop Sidebar */}
+      {!sidebarHidden && (
       <aside
         className="hidden md:flex w-64 shrink-0 flex-col border-r bg-[hsl(var(--sidebar-bg))] border-[hsl(var(--sidebar-border))] sticky top-0 h-screen"
         data-testid="desktop-sidebar"
       >
         <SidebarContent user={user} alerts={alerts} variant="desktop" />
       </aside>
+      )}
 
       {/* Mobile Drawer */}
       {mobileOpen && (
@@ -391,6 +401,16 @@ export default function AppShell() {
         >
           <div className="h-16 px-4 md:px-8 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              data-testid="desktop-sidebar-toggle"
+              title={sidebarHidden ? "Show menu" : "Hide menu"}
+              aria-label={sidebarHidden ? "Show menu" : "Hide menu"}
+              className="hidden md:flex w-10 h-10 rounded-lg bg-muted/60 text-foreground items-center justify-center hover:bg-muted transition-colors"
+            >
+              <SidebarSimple size={20} weight={sidebarHidden ? "fill" : "regular"} />
+            </button>
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
