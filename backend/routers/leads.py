@@ -1804,7 +1804,7 @@ async def update_followup(
         after={"at": new_at if new_at is not None else old_at,
                "note": new_note if new_note is not None else entry.get("note", "")},
         office=fresh.get("office"),
-        note=f"Follow-up rescheduled" if new_at is not None else "Follow-up note edited",
+        note="Follow-up rescheduled" if new_at is not None else "Follow-up note edited",
         reversible=True,
     )
 
@@ -2188,7 +2188,7 @@ async def bulk_upload(
             subject_type="lead", subject_label=f"{len(created)} leads",
             after={"count": len(created), "campaign_id": campaign_id},
             office=office,
-            note=f"Uploaded {len(created)} leads" + (f" to a campaign" if campaign_id else ""),
+            note=f"Uploaded {len(created)} leads" + (" to a campaign" if campaign_id else ""),
             reversible=True,
             extras={"lead_ids": created_ids, "campaign_id": campaign_id},
         )
