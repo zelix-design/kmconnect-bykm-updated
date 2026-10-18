@@ -80,6 +80,22 @@ export default function Accounts() {
     }
   };
 
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const applyPreset = (key) => {
+    const now = new Date();
+    if (key === "this_month") {
+      setRange({ from: iso(new Date(now.getFullYear(), now.getMonth(), 1)), to: iso(now) });
+    } else if (key === "last_month") {
+      const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const last = new Date(now.getFullYear(), now.getMonth(), 0);
+      setRange({ from: iso(first), to: iso(last) });
+    } else if (key === "this_fy") {
+      // Indian FY: Apr 1 – Mar 31
+      const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      setRange({ from: iso(new Date(fyStartYear, 3, 1)), to: iso(now) });
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in" data-testid="accounts-page">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -186,6 +202,11 @@ export default function Accounts() {
               </div>
               <div className="rounded-md border border-border p-3 space-y-3">
                 <p className="label-eyebrow">Statement period</p>
+                <div className="flex flex-wrap gap-2">
+                  {[["this_month", "This month"], ["last_month", "Last month"], ["this_fy", "This FY"]].map(([k, lbl]) => (
+                    <button key={k} type="button" onClick={() => applyPreset(k)} data-testid={`statement-preset-${k}`} className="text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-orange-400/60 transition-colors">{lbl}</button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">From</Label>
