@@ -31,6 +31,7 @@ export default function Accounts() {
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
   const [detail, setDetail] = useState(null); // { account, txns, loading }
+  const [range, setRange] = useState({ from: "", to: "" });
 
   const load = async () => {
     const { data } = await api.get("/accounts");
@@ -58,10 +59,10 @@ export default function Accounts() {
     toast.success("Deleted"); load();
   };
 
-  const downloadStatement = async (a) => {
+  const downloadStatement = async (a, fromDate = "", toDate = "") => {
     try {
       const { data } = await api.get(`/transactions?account_id=${a.id}&limit=5000`);
-      downloadAccountStatementPDF({ account: a, transactions: data || [], user, currency });
+      downloadAccountStatementPDF({ account: a, transactions: data || [], user, currency, fromDate, toDate });
       toast.success("Statement downloaded");
     } catch {
       toast.error("Could not generate statement");
@@ -69,6 +70,7 @@ export default function Accounts() {
   };
 
   const openDetail = async (a) => {
+    setRange({ from: "", to: "" });
     setDetail({ account: a, txns: [], loading: true });
     try {
       const { data } = await api.get(`/transactions?account_id=${a.id}&limit=10`);
@@ -181,8 +183,27 @@ export default function Accounts() {
                   </p>
                   <p className="text-xs text-muted-foreground capitalize mt-0.5">{detail.account.type.replace("_", " ")}</p>
                 </div>
-                <Button variant="outline" onClick={() => downloadStatement(detail.account)} data-testid="account-detail-statement" className="h-9">
-                  <DownloadSimple size={15} className="mr-1.5" /> Download statement
+              </div>
+              <div className="rounded-md border border-border p-3 space-y-3">
+                <p className="label-eyebrow">Statement period</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">From</Label>
+                    <Input type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} data-testid="statement-from-date" className="h-9" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">To</Label>
+                    <Input type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} data-testid="statement-to-date" className="h-9" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">{range.from || range.to ? "Leave a field blank for an open-ended range." : "Blank dates export the full history."}</p>
+                  {(range.from || range.to) && (
+                    <button type="button" onClick={() => setRange({ from: "", to: "" })} data-testid="statement-clear-range" className="text-xs text-muted-foreground hover:text-foreground underline shrink-0">Clear</button>
+                  )}
+                </div>
+                <Button variant="outline" onClick={() => downloadStatement(detail.account, range.from, range.to)} data-testid="account-detail-statement" className="h-9 w-full">
+                  <DownloadSimple size={15} className="mr-1.5" /> Download statement{range.from || range.to ? " (period)" : ""}
                 </Button>
               </div>
               <div>

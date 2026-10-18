@@ -5,10 +5,21 @@ import { formatMoneyForPdf as formatMoney, formatDate } from "@/lib/format";
 
 const TYPE_LABEL = { bank: "Bank", cash: "Cash", credit_card: "Credit Card" };
 
-export function downloadAccountStatementPDF({ account, transactions, user, currency }) {
+export function downloadAccountStatementPDF({ account, transactions, user, currency, fromDate, toDate }) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 48;
+
+  const dateOnly = (d) => (d || "").slice(0, 10);
+  const inRange = (d) => {
+    const day = dateOnly(d);
+    if (fromDate && day < fromDate) return false;
+    if (toDate && day > toDate) return false;
+    return true;
+  };
+  const periodLabel = fromDate || toDate
+    ? `${fromDate ? formatDate(fromDate) : "Start"} → ${toDate ? formatDate(toDate) : "Today"}`
+    : "All time";
 
   // Header
   doc.setFont("helvetica", "bold");
@@ -20,6 +31,7 @@ export function downloadAccountStatementPDF({ account, transactions, user, curre
   doc.setFontSize(9);
   doc.setTextColor(120, 113, 108);
   doc.text(`${account.name} · ${TYPE_LABEL[account.type] || account.type}`, margin, 86);
+  doc.text(`Period: ${periodLabel}`, margin, 99);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -34,21 +46,31 @@ export function downloadAccountStatementPDF({ account, transactions, user, curre
   const sorted = [...(transactions || [])].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const opening = Number(account.opening_balance || 0);
   let running = opening;
+  let openingForPeriod = opening; // balance carried into the selected period
   let totalCr = 0;
   let totalDr = 0;
 
-  const body = sorted.map((t) => {
+  const body = [];
+  sorted.forEach((t) => {
     const amt = Number(t.amount || 0);
     const isCredit = t.type === "income";
+    if (!inRange(t.date)) {
+      // Fold pre-period movement into the period's opening balance.
+      if (dateOnly(t.date) < (fromDate || "")) {
+        running += isCredit ? amt : -amt;
+        openingForPeriod = running;
+      }
+      return;
+    }
     if (isCredit) { running += amt; totalCr += amt; }
     else { running -= amt; totalDr += amt; }
-    return [
+    body.push([
       formatDate(t.date),
       t.description || "—",
       isCredit ? formatMoney(amt, currency) : "",
       isCredit ? "" : formatMoney(amt, currency),
       formatMoney(running, currency),
-    ];
+    ]);
   });
 
   const closing = running;
@@ -66,7 +88,7 @@ export function downloadAccountStatementPDF({ account, transactions, user, curre
     doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...(color || [28, 25, 23]));
     doc.text(value, x, y + 40);
   };
-  cell(0, "Opening", formatMoney(opening, currency));
+  cell(0, "Opening", formatMoney(openingForPeriod, currency));
   cell(1, "Credits", formatMoney(totalCr, currency), [21, 128, 61]);
   cell(2, "Debits", formatMoney(totalDr, currency), [190, 24, 38]);
   cell(3, "Closing", formatMoney(closing, currency));
@@ -74,7 +96,7 @@ export function downloadAccountStatementPDF({ account, transactions, user, curre
   autoTable(doc, {
     startY: y + 70,
     head: [["Date", "Description", "Credit", "Debit", "Balance"]],
-    body: body.length ? body : [["—", "No transactions in this account yet.", "", "", formatMoney(opening, currency)]],
+    body: body.length ? body : [["—", "No transactions in this period.", "", "", formatMoney(openingForPeriod, currency)]],
     styles: { font: "helvetica", fontSize: 9, cellPadding: 6, textColor: [41, 37, 36] },
     headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontStyle: "bold" },
     columnStyles: {
@@ -88,5 +110,6 @@ export function downloadAccountStatementPDF({ account, transactions, user, curre
   });
 
   const safe = (account.name || "account").replace(/[^a-z0-9]+/gi, "_");
-  doc.save(`statement_${safe}.pdf`);
+  const suffix = fromDate || toDate ? `_${fromDate || "start"}_${toDate || "today"}` : "";
+  doc.save(`statement_${safe}${suffix}.pdf`);
 }
