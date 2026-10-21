@@ -28,7 +28,6 @@ import AnimatedNumber from "@/components/dashboard/AnimatedNumber";
 import { ChartTooltip, activePieShape, usePieActive, CHART_CURSOR, CHART_CURSOR_LINE } from "@/components/dashboard/ChartInteractions";
 import { TxList, StudentList, ClientList, LedgerList } from "@/components/dashboard/OverviewLists";
 import AnnouncementBanners from "@/components/messages/AnnouncementBanners";
-import LeadFunnel from "@/components/leads/LeadFunnel";
 
 const TILES = [
   { key: "transactions", label: "Accounts", icon: Receipt, palette: "amber" },
@@ -310,7 +309,6 @@ function SuperAdminDashboard() {
         </Card>
       </section>
 
-      {role === "super_admin" && <div className="dash-reveal"><LeadFunnel /></div>}
       </>
       )}
     </div>
