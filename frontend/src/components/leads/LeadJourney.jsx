@@ -3,7 +3,7 @@ import {
   Sparkle, ArrowRight, ChatCircleDots, Bus, GraduationCap, PhoneCall,
   WhatsappLogo, CheckCircle, XCircle, ArrowClockwise, PencilSimple, ArrowsLeftRight,
 } from "@phosphor-icons/react";
-import { fmtDateTime, statusLabel, LEAD_STATUS_META } from "./constants";
+import { fmtDateTime, statusLabel, LEAD_STATUS_META, CALL_OUTCOME_META, NUMBER_TYPE_LABEL } from "./constants";
 import FollowUpEditDialog from "./FollowUpEditDialog";
 
 /**
@@ -52,6 +52,19 @@ function buildEvents(lead) {
     });
   });
 
+  (lead.call_logs || []).forEach((cl) => {
+    events.push({
+      kind: "call",
+      at: cl.at,
+      outcome: cl.outcome,
+      number: cl.number,
+      numberType: cl.number_type,
+      note: cl.note,
+      who: cl.by_name,
+      id: cl.id,
+    });
+  });
+
   if (lead.visit && lead.visit.created_at) {
     events.push({
       kind: "visit",
@@ -84,6 +97,7 @@ function EventDot({ kind }) {
     created: { icon: Sparkle, cls: "bg-sky-500/15 text-sky-600 dark:text-sky-400 ring-sky-500/30" },
     status: { icon: ArrowRight, cls: "bg-amber-500/15 text-amber-700 dark:text-amber-300 ring-amber-500/30" },
     followup: { icon: PhoneCall, cls: "bg-blue-500/15 text-blue-600 dark:text-blue-400 ring-blue-500/30" },
+    call: { icon: PhoneCall, cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-emerald-500/30" },
     visit: { icon: Bus, cls: "bg-violet-500/15 text-violet-600 dark:text-violet-400 ring-violet-500/30" },
     conversion: { icon: GraduationCap, cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-emerald-500/30" },
     assignment: { icon: ArrowsLeftRight, cls: "bg-teal-500/15 text-teal-600 dark:text-teal-400 ring-teal-500/30" },
@@ -198,6 +212,23 @@ function EventRow({ ev, canResend, onResendLink, resending, canEditFollowup, onE
             >
               <PencilSimple size={11} /> Edit
             </button>
+          )}
+        </div>
+        {ev.note && <p className="text-sm text-muted-foreground mt-0.5">{ev.note}</p>}
+        <p className="text-[11px] text-muted-foreground">{timestamp}{who}</p>
+      </>
+    ),
+    call: (
+      <>
+        <div className="flex flex-wrap items-center gap-1.5 text-sm text-foreground">
+          <span className="font-medium">Call</span>
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${(CALL_OUTCOME_META[ev.outcome] || {}).cls || "bg-muted text-muted-foreground border-border"}`}>
+            {(CALL_OUTCOME_META[ev.outcome] || {}).label || ev.outcome}
+          </span>
+          {ev.number && (
+            <span className="text-xs text-muted-foreground">
+              {NUMBER_TYPE_LABEL[ev.numberType] || "Primary"} · {ev.number}
+            </span>
           )}
         </div>
         {ev.note && <p className="text-sm text-muted-foreground mt-0.5">{ev.note}</p>}

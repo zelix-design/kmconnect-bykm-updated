@@ -95,6 +95,18 @@ export const VISIT_STATUS_META = {
 
 export const TRAVEL_MODES = ["Bus", "Train", "Flight", "Own vehicle", "Cab / Taxi", "Other"];
 
+// Quick call-log outcomes, offered right after tapping a lead's phone number.
+export const CALL_OUTCOMES = ["connected", "no_answer", "busy", "call_back", "wrong_number"];
+export const CALL_OUTCOME_META = {
+  connected:    { label: "Connected",       cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30" },
+  no_answer:    { label: "No answer",        cls: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30" },
+  busy:         { label: "Busy",             cls: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30" },
+  call_back:    { label: "Call back later",  cls: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30" },
+  wrong_number: { label: "Wrong number",     cls: "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30" },
+};
+export const NUMBER_TYPE_LABEL = { phone: "Primary", parent: "Parent", alternate: "Alternate" };
+
+
 export function toLocalInput(iso) {
   if (!iso) return "";
   const d = new Date(iso);

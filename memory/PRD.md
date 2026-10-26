@@ -1807,3 +1807,11 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - SC Report moved out of super_admin sidebar → button inside Admission Revenue header (near FY select); still in office_admin sidebar. Added "← Admission Revenue" back button on SC Report.
 - PinLock now persists unlocked state in sessionStorage per basePath → returning to Admission Revenue from SC Report no longer re-prompts PIN.
 - Shared dialog padding p-4→p-5 (sm:p-6); fixed grid min-width overflow in account detail dialog via min-w-0.
+
+## Quick Call Log (2026-10-26)
+- After tapping a lead's phone/parent/alternate number (tel: links in LeadDetailDialog), a "How did the call go?" prompt appears — on mobile when returning to the app (visibilitychange), on desktop via a 6s fallback timer.
+- Outcomes: Connected, No answer, Busy, Call back later, Wrong number. Optional note. Save disabled until an outcome is picked; Skip closes without saving.
+- "Call back later" reveals a follow-up datetime (default tomorrow 10:00); saving logs the call AND schedules the follow-up (lead moves to Follow-up stage, assignee notified).
+- Each call renders in the Journey as a green phone entry (outcome, number dialled, note, time, who).
+- Backend: POST /api/leads/{id}/call-log (CallLogIn) → appends to lead.call_logs; invalid outcome → 400. Frontend: CallLogDialog.jsx, LeadJourney "call" kind, CALL_OUTCOME_META in constants.
+- Verified: backend curl (connected / call_back+followup / 400) and desktop UI flow (trigger, chips, save-gating, call_back datetime, skip). Mobile visibility trigger not automated.

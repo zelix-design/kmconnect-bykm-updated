@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import api, { formatApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +18,15 @@ import ConvertDialog from "./ConvertDialog";
 import LeadJourney from "./LeadJourney";
 import LeadAttachments from "./LeadAttachments";
 import StageChangeDialog from "./StageChangeDialog";
+import CallLogDialog from "./CallLogDialog";
 import UserAvatar from "@/components/UserAvatar";
 
-function InfoRow({ icon: Icon, href, children }) {
+function InfoRow({ icon: Icon, href, onActivate, children }) {
   if (!children) return null;
   const inner = href ? (
     <a
       href={href}
+      onClick={onActivate}
       className="truncate text-primary underline-offset-2 hover:underline active:opacity-70"
       data-testid="lead-call-link"
     >
@@ -69,6 +71,43 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
   const [resending, setResending] = useState(false);
   const editable = canEdit(user, "leads");
   const isAdmin = user?.role === "super_admin" || user?.role === "office_admin";
+
+  // --- Quick Call Log: after tapping a number, ask how the call went. On
+  // mobile the dialer takes over (tab hidden → visible) so we prompt on return;
+  // on desktop tapping doesn't switch apps, so a 6s fallback timer opens it.
+  const [callPrompt, setCallPrompt] = useState(null); // { number, numberType }
+  const pendingCall = useRef(null); // { number, numberType, sawHidden, timer }
+
+  const clearPending = () => {
+    if (pendingCall.current?.timer) clearTimeout(pendingCall.current.timer);
+    pendingCall.current = null;
+  };
+  const openCallPrompt = useCallback(() => {
+    const p = pendingCall.current;
+    if (!p) return;
+    clearPending();
+    setCallPrompt({ number: p.number, numberType: p.numberType });
+  }, []);
+  const startCallTracking = (number, numberType) => {
+    if (!editable) return;
+    clearPending();
+    const p = { number, numberType, sawHidden: false };
+    p.timer = setTimeout(openCallPrompt, 6000);
+    pendingCall.current = p;
+  };
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        if (pendingCall.current) pendingCall.current.sawHidden = true;
+      } else if (document.visibilityState === "visible" && pendingCall.current?.sawHidden) {
+        openCallPrompt();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [openCallPrompt]);
+  // Drop any pending tracking when the lead changes or the dialog closes.
+  useEffect(() => { clearPending(); setCallPrompt(null); }, [lead, open]);
 
   useEffect(() => { setLocal(lead); setFuAt(""); setFuNote(""); setFuStatus(""); setFuOverride(false); }, [lead]);
 
@@ -254,12 +293,12 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <InfoRow icon={Phone} href={telHref(local.phone)}>{local.phone}</InfoRow>
+            <InfoRow icon={Phone} href={telHref(local.phone)} onActivate={() => startCallTracking(local.phone, "phone")}>{local.phone}</InfoRow>
             <InfoRow icon={EnvelopeSimple} href={local.email ? `mailto:${local.email}` : null}>{local.email}</InfoRow>
             <InfoRow icon={GraduationCap}>{local.course}</InfoRow>
             <InfoRow icon={MapPin}>{local.place}</InfoRow>
-            {local.parent_number ? <InfoRow icon={Phone} href={telHref(local.parent_number)}>{`Parent: ${local.parent_number}`}</InfoRow> : null}
-            {local.alternate_number ? <InfoRow icon={Phone} href={telHref(local.alternate_number)}>{`Alternate: ${local.alternate_number}`}</InfoRow> : null}
+            {local.parent_number ? <InfoRow icon={Phone} href={telHref(local.parent_number)} onActivate={() => startCallTracking(local.parent_number, "parent")}>{`Parent: ${local.parent_number}`}</InfoRow> : null}
+            {local.alternate_number ? <InfoRow icon={Phone} href={telHref(local.alternate_number)} onActivate={() => startCallTracking(local.alternate_number, "alternate")}>{`Alternate: ${local.alternate_number}`}</InfoRow> : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="px-2 py-0.5 rounded-full bg-muted">{sourceLabel(local.source)}</span>
@@ -522,6 +561,15 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
         targetStatus={stagePrompt?.status}
         busy={busy}
         onConfirm={confirmStageChange}
+      />
+
+      <CallLogDialog
+        open={!!callPrompt}
+        onOpenChange={(v) => { if (!v) setCallPrompt(null); }}
+        leadId={local.id}
+        number={callPrompt?.number}
+        numberType={callPrompt?.numberType}
+        onLogged={(fresh) => refresh(fresh)}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

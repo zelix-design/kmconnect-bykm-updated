@@ -96,6 +96,15 @@ class FollowUpIn(BaseModel):
     status: Optional[str] = None  # optionally move the lead's status
 
 
+class CallLogIn(BaseModel):
+    """Payload for the Quick Call Log prompt shown after tapping a number."""
+    outcome: str  # connected | no_answer | busy | call_back | wrong_number
+    note: Optional[str] = ""
+    number: Optional[str] = ""           # the number that was dialled
+    number_type: Optional[str] = "phone"  # phone | parent | alternate
+    followup_at: Optional[str] = None     # ISO datetime, only for outcome == call_back
+
+
 class FollowUpUpdate(BaseModel):
     """Update payload for an existing follow-up entry.
 
@@ -1722,6 +1731,73 @@ async def add_followup(lead_id: str, payload: FollowUpIn, user: dict = Depends(r
             actor_user_id=user["id"],
             metadata={"lead_id": lead_id},
         )
+    return fresh
+
+
+CALL_OUTCOMES = {"connected", "no_answer", "busy", "call_back", "wrong_number"}
+
+
+@router.post("/{lead_id}/call-log", status_code=201)
+async def add_call_log(lead_id: str, payload: CallLogIn, user: dict = Depends(require_edit("leads"))):
+    """Log the outcome of a phone call placed from the Lead Detail view.
+
+    Each call is appended to ``call_logs`` and surfaced in the Journey timeline.
+    When the outcome is ``call_back`` and a ``followup_at`` is supplied, a
+    follow-up is scheduled in the same write (lead moves to the Follow-up stage).
+    """
+    lead = await db.leads.find_one({**_scope_filter(user), "id": lead_id})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+    if payload.outcome not in CALL_OUTCOMES:
+        raise HTTPException(400, "Invalid call outcome")
+    now = now_iso()
+    note = (payload.note or "").strip()
+    entry = {
+        "id": gen_id(),
+        "at": now,
+        "outcome": payload.outcome,
+        "note": note,
+        "number": (payload.number or "").strip(),
+        "number_type": payload.number_type if payload.number_type in ("phone", "parent", "alternate") else "phone",
+        "by_user_id": user["id"],
+        "by_name": user.get("name"),
+    }
+    push_ops: dict = {"call_logs": entry}
+    set_ops: dict = {"updated_at": now, "last_call_at": now}
+
+    followup_scheduled = False
+    if payload.outcome == "call_back" and payload.followup_at:
+        push_ops["follow_ups"] = {
+            "id": gen_id(),
+            "at": payload.followup_at,
+            "note": note,
+            "created_by_user_id": user["id"],
+            "created_by_name": user.get("name"),
+            "created_at": now,
+        }
+        set_ops["next_follow_up"] = payload.followup_at
+        set_ops["follow_up_reminded_for"] = None
+        set_ops["last_followup_at"] = now
+        if lead.get("status") != "follow_up":
+            push_ops["status_history"] = _status_event(lead.get("status"), "follow_up", user, note="via call log")
+            set_ops["status"] = "follow_up"
+        followup_scheduled = True
+
+    await db.leads.update_one({"id": lead_id}, {"$push": push_ops, "$set": set_ops})
+    fresh = await db.leads.find_one({"id": lead_id}, {"_id": 0})
+
+    if followup_scheduled:
+        assignee_id = fresh.get("assigned_to_user_id")
+        if assignee_id and assignee_id != user["id"]:
+            await notify_users(
+                [assignee_id],
+                type="lead_followup",
+                title="Follow-up scheduled",
+                message=f"{fresh.get('name')} · {(payload.followup_at or '')[:16].replace('T', ' ')}",
+                link=f"/leads?lead={lead_id}",
+                actor_user_id=user["id"],
+                metadata={"lead_id": lead_id},
+            )
     return fresh
 
 
