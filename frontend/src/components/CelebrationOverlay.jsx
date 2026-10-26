@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import { Check, X } from "@phosphor-icons/react";
+import { X } from "@phosphor-icons/react";
 import { subscribe, getSnapshot, setOverlayMounted, dismissCelebration } from "@/lib/celebrate";
 
 const SUCCESS_MS = 1700;
@@ -51,12 +51,34 @@ function Confetti({ seed }) {
   );
 }
 
+/** Simple celebratory burst: green gradient circle with a drawing check, ringed
+ *  by small colorful shapes that pop outward (matches the reference art). */
+function SuccessBurst() {
+  return (
+    <div className="celebrate-burst" aria-hidden="true" data-testid="celebration-burst">
+      <svg className="burst-shape burst-penta" viewBox="0 0 22 22">
+        <polygon points="11,2.5 19,8.5 16,18 6,18 3,8.5" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" />
+      </svg>
+      <span className="burst-shape burst-line burst-line-yellow" />
+      <span className="burst-shape burst-line burst-line-orange" />
+      <span className="burst-shape burst-dot" />
+      <span className="burst-shape burst-square" />
+      <span className="burst-shape burst-line burst-line-indigo" />
+      <div className="celebrate-circle">
+        <svg className="celebrate-check" viewBox="0 0 48 48">
+          <path className="celebrate-check-path" d="M14 24.5 L21 31.5 L34.5 16" fill="none" stroke="#ffffff" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Single, app-wide centered feedback overlay. Success shows a green gradient
- * hero card with a folder + white check; milestone wins (lead converted, fee
- * paid) add a festive confetti burst and tailored wording; errors mirror the
- * card in crimson with a white X. Auto-dismisses, non-blocking, honors reduced
- * motion.
+ * circle with a drawing check and a small colorful burst; milestone wins (lead
+ * converted, fee paid) add a festive confetti burst and tailored wording;
+ * errors mirror the card in crimson with a white X. Auto-dismisses,
+ * non-blocking, honors reduced motion.
  */
 export default function CelebrationOverlay() {
   const state = useSyncExternalStore(subscribe, getSnapshot, () => null);
@@ -99,14 +121,16 @@ export default function CelebrationOverlay() {
         data-testid={isError ? "celebration-error" : "celebration-success"}
       >
         <div className="celebrate-hero">
-          <GlassFolder />
-          <div className="celebrate-check-badge">
-            {isError ? (
-              <X size={30} weight="bold" className="celebrate-icon" />
-            ) : (
-              <Check size={32} weight="bold" className="celebrate-icon" />
-            )}
-          </div>
+          {isError ? (
+            <>
+              <GlassFolder />
+              <div className="celebrate-check-badge">
+                <X size={30} weight="bold" className="celebrate-icon" />
+              </div>
+            </>
+          ) : (
+            <SuccessBurst />
+          )}
         </div>
         <div className="celebrate-body">
           <h3 className="celebrate-title" data-testid="celebration-caption">{title}</h3>
