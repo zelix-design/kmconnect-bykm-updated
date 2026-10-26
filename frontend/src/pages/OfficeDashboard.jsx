@@ -163,7 +163,7 @@ export default function OfficeDashboard({ superView = false }) {
         </div>
       </header>
 
-      <div key={tab} className="view-enter">
+      <div key={tab} className="view-enter space-y-6">
       {tab === "crm" ? (
         <CrmAnalytics office={superView ? office : null} />
       ) : (
