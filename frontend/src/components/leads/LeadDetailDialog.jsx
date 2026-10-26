@@ -20,15 +20,33 @@ import LeadAttachments from "./LeadAttachments";
 import StageChangeDialog from "./StageChangeDialog";
 import UserAvatar from "@/components/UserAvatar";
 
-function InfoRow({ icon: Icon, children }) {
+function InfoRow({ icon: Icon, href, children }) {
   if (!children) return null;
+  const inner = href ? (
+    <a
+      href={href}
+      className="truncate text-primary underline-offset-2 hover:underline active:opacity-70"
+      data-testid="lead-call-link"
+    >
+      {children}
+    </a>
+  ) : (
+    <span className="truncate">{children}</span>
+  );
   return (
     <div className="flex items-center gap-2 text-sm text-foreground">
       <Icon size={15} className="text-muted-foreground shrink-0" />
-      <span className="truncate">{children}</span>
+      {inner}
     </div>
   );
 }
+
+// Keep only digits / leading + for a valid tel: URI.
+const telHref = (num) => {
+  if (!num) return null;
+  const cleaned = String(num).replace(/[^\d+]/g, "");
+  return cleaned ? `tel:${cleaned}` : null;
+};
 
 export default function LeadDetailDialog({ open, onOpenChange, lead, user, onChanged, onEdit, campaigns }) {
   const [local, setLocal] = useState(lead);
@@ -236,12 +254,12 @@ export default function LeadDetailDialog({ open, onOpenChange, lead, user, onCha
 
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <InfoRow icon={Phone}>{local.phone}</InfoRow>
-            <InfoRow icon={EnvelopeSimple}>{local.email}</InfoRow>
+            <InfoRow icon={Phone} href={telHref(local.phone)}>{local.phone}</InfoRow>
+            <InfoRow icon={EnvelopeSimple} href={local.email ? `mailto:${local.email}` : null}>{local.email}</InfoRow>
             <InfoRow icon={GraduationCap}>{local.course}</InfoRow>
             <InfoRow icon={MapPin}>{local.place}</InfoRow>
-            {local.parent_number ? <InfoRow icon={Phone}>{`Parent: ${local.parent_number}`}</InfoRow> : null}
-            {local.alternate_number ? <InfoRow icon={Phone}>{`Alternate: ${local.alternate_number}`}</InfoRow> : null}
+            {local.parent_number ? <InfoRow icon={Phone} href={telHref(local.parent_number)}>{`Parent: ${local.parent_number}`}</InfoRow> : null}
+            {local.alternate_number ? <InfoRow icon={Phone} href={telHref(local.alternate_number)}>{`Alternate: ${local.alternate_number}`}</InfoRow> : null}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="px-2 py-0.5 rounded-full bg-muted">{sourceLabel(local.source)}</span>
