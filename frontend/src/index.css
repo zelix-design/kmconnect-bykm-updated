@@ -259,10 +259,10 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 .celebrate-card {
     pointer-events: none; /* fully click-through — never blocks dialogs/buttons */
-    width: 388px;
-    max-width: 90vw;
-    padding: 14px;
-    border-radius: 26px;
+    width: 272px;
+    max-width: 86vw;
+    padding: 10px;
+    border-radius: 20px;
     background: hsl(var(--card));
     box-shadow: 0 32px 84px -22px rgba(0, 0, 0, 0.45), 0 0 60px -8px rgba(47, 125, 107, 0.35);
     animation: celebCardIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4) both;
@@ -276,8 +276,8 @@ h1, h2, h3, h4, h5, h6, .font-display {
 }
 .celebrate-hero {
     position: relative;
-    height: 176px;
-    border-radius: 16px;
+    height: 124px;
+    border-radius: 14px;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -291,8 +291,8 @@ h1, h2, h3, h4, h5, h6, .font-display {
 /* ---- Simple success burst (green circle + drawing check + pop shapes) ---- */
 .celebrate-burst {
     position: relative;
-    width: 180px;
-    height: 150px;
+    width: 138px;
+    height: 112px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -300,19 +300,19 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .celebrate-circle {
     position: relative;
     z-index: 2;
-    width: 98px;
-    height: 98px;
+    width: 70px;
+    height: 70px;
     border-radius: 9999px;
     background: linear-gradient(150deg, #8ff0a6 0%, #34d05d 46%, #15a942 100%);
-    box-shadow: 0 14px 30px -8px rgba(34, 197, 94, 0.55), inset 0 2px 7px rgba(255, 255, 255, 0.55);
+    box-shadow: 0 10px 22px -6px rgba(34, 197, 94, 0.55), inset 0 2px 6px rgba(255, 255, 255, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
     animation: celebCircleIn 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.5) both;
 }
 .celebrate-check {
-    width: 56px;
-    height: 56px;
+    width: 40px;
+    height: 40px;
 }
 .celebrate-check-path {
     stroke-dasharray: 48;
@@ -339,24 +339,24 @@ h1, h2, h3, h4, h5, h6, .font-display {
     55%  { opacity: 1; }
     100% { opacity: 1; transform: translate(0, 0) scale(1) rotate(var(--rot, 0deg)); }
 }
-.burst-line { width: 22px; height: 4px; border-radius: 3px; }
-.burst-line-yellow  { top: 26px; left: 20px;  --rot: -42deg; --fx: 18px;  --fy: 16px;  background: #facc15; }
-.burst-line-orange  { top: 30px; right: 20px; --rot: 42deg;  --fx: -18px; --fy: 16px;  background: #f97316; }
-.burst-line-indigo  { bottom: 12px; left: 50%; margin-left: -2px; width: 4px; height: 24px; border-radius: 3px; --fx: 0; --fy: -20px; background: #4f46e5; }
+.burst-line { width: 16px; height: 3px; border-radius: 2px; }
+.burst-line-yellow  { top: 18px; left: 16px;  --rot: -42deg; --fx: 14px;  --fy: 12px;  background: #facc15; }
+.burst-line-orange  { top: 22px; right: 16px; --rot: 42deg;  --fx: -14px; --fy: 12px;  background: #f97316; }
+.burst-line-indigo  { bottom: 8px; left: 50%; margin-left: -1.5px; width: 3px; height: 17px; border-radius: 2px; --fx: 0; --fy: -15px; background: #4f46e5; }
 .burst-dot {
-    top: 50%; left: 6px; margin-top: -6px;
-    width: 12px; height: 12px; border-radius: 9999px;
-    background: #2563eb; --fx: 22px; --fy: 0;
+    top: 50%; left: 6px; margin-top: -4.5px;
+    width: 9px; height: 9px; border-radius: 9999px;
+    background: #2563eb; --fx: 16px; --fy: 0;
 }
 .burst-penta {
-    top: 10px; left: 50%; margin-left: -11px;
-    width: 22px; height: 22px; --fx: 0; --fy: 24px;
+    top: 6px; left: 50%; margin-left: -8px;
+    width: 16px; height: 16px; --fx: 0; --fy: 18px;
 }
 .burst-square {
-    bottom: 34px; right: 16px;
-    width: 13px; height: 13px;
-    border: 2px solid #22c55e; border-radius: 2px;
-    --rot: 45deg; --fx: -16px; --fy: -16px;
+    bottom: 24px; right: 14px;
+    width: 10px; height: 10px;
+    border: 1.5px solid #22c55e; border-radius: 2px;
+    --rot: 45deg; --fx: -12px; --fy: -12px;
 }
 .celebrate-folder {
     position: absolute;
@@ -391,23 +391,23 @@ h1, h2, h3, h4, h5, h6, .font-display {
     100% { transform: scale(1); opacity: 1; }
 }
 .celebrate-body {
-    padding: 22px 22px 14px;
+    padding: 14px 18px 10px;
     text-align: center;
 }
 .celebrate-title {
     font-family: 'Outfit', sans-serif;
     font-weight: 700;
-    font-size: 1.4rem;
+    font-size: 1.1rem;
     line-height: 1.2;
     letter-spacing: -0.02em;
     color: hsl(var(--foreground));
 }
 .celebrate-subtitle {
-    margin-top: 7px;
-    font-size: 0.85rem;
-    line-height: 1.35rem;
+    margin-top: 5px;
+    font-size: 0.78rem;
+    line-height: 1.15rem;
     color: hsl(var(--muted-foreground));
-    max-width: 20rem;
+    max-width: 16rem;
     margin-left: auto;
     margin-right: auto;
 }
