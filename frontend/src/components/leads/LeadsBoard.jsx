@@ -1,7 +1,15 @@
 import React, { useState } from "react";
 import { LEAD_STATUSES, LEAD_STATUS_META } from "./constants";
-import { Phone, GraduationCap } from "@phosphor-icons/react";
+import { Phone, GraduationCap, DotsThreeVertical, ArrowRight } from "@phosphor-icons/react";
 import UserAvatar from "@/components/UserAvatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function LeadsBoard({ leads, onCardClick, onStatusChange, editable }) {
   const [dragId, setDragId] = useState(null);
@@ -53,9 +61,42 @@ export default function LeadsBoard({ leads, onCardClick, onStatusChange, editabl
                   onDragEnd={() => { setDragId(null); setOverCol(null); }}
                   onClick={() => onCardClick(l)}
                   data-testid={`board-card-${l.id}`}
-                  className={`rounded-lg border border-border bg-card p-3 cursor-pointer hover:border-orange-500/40 hover:shadow-sm transition-all ${dragId === l.id ? "opacity-40" : ""}`}
+                  className={`relative rounded-lg border border-border bg-card p-3 cursor-pointer hover:border-orange-500/40 hover:shadow-sm transition-all ${dragId === l.id ? "opacity-40" : ""}`}
                 >
-                  <p className="text-sm font-medium text-foreground truncate">{l.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground truncate flex-1 min-w-0">{l.name}</p>
+                    {editable && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            data-testid={`board-card-move-${l.id}`}
+                            aria-label="Move lead"
+                            className="shrink-0 -mr-1 -mt-0.5 w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                          >
+                            <DotsThreeVertical size={18} weight="bold" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-muted-foreground">Move to</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {LEAD_STATUSES.filter((st) => st !== l.status).map((st) => (
+                            <DropdownMenuItem
+                              key={st}
+                              data-testid={`board-move-${l.id}-${st}`}
+                              onSelect={() => onStatusChange(l, st)}
+                              className="gap-2 text-sm"
+                            >
+                              <ArrowRight size={13} className="text-muted-foreground" />
+                              {LEAD_STATUS_META[st]?.label || st}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
                   {l.course && <p className="text-xs text-muted-foreground truncate flex items-center gap-1 mt-0.5"><GraduationCap size={12} /> {l.course}</p>}
                   <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
                     {l.phone && <span className="flex items-center gap-1"><Phone size={11} /> {l.phone}</span>}
