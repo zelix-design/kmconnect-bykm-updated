@@ -69,8 +69,13 @@ async def send_push_to_users(
     body: str,
     url: str = "/",
     tag: str | None = None,
+    counts: dict | None = None,
 ) -> dict:
-    """Push the same payload to every subscription belonging to the given users.
+    """Push a payload to every subscription belonging to the given users.
+
+    ``counts`` optionally maps user_id -> unread count; when present, each
+    recipient's push carries their own ``count`` so the service worker can set
+    an accurate home-screen app-icon badge while the app is closed.
 
     Best-effort: returns ``{sent, failed, pruned}``. Never raises.
     Stale endpoints (404/410) are removed from the DB automatically.
@@ -85,7 +90,7 @@ async def send_push_to_users(
     if not subs:
         return {"sent": 0, "failed": 0, "pruned": 0}
 
-    payload = {
+    base_payload = {
         "title": title,
         "body": body,
         "url": url,
@@ -94,8 +99,14 @@ async def send_push_to_users(
         "badge": "/finflow-icon.png",
     }
 
+    def _payload_for(sub: dict) -> dict:
+        p = dict(base_payload)
+        if counts is not None:
+            p["count"] = int(counts.get(sub.get("user_id"), 0))
+        return p
+
     results = await asyncio.gather(
-        *(asyncio.to_thread(_send_one, s, payload) for s in subs)
+        *(asyncio.to_thread(_send_one, s, _payload_for(s)) for s in subs)
     )
     sent = sum(1 for ok, _ in results if ok)
     stale_endpoints = [

@@ -6,7 +6,7 @@
 //   - Handle Web Push events → show OS-level notifications even when the app
 //     is closed.
 
-const CACHE = "finflow-shell-v5";
+const CACHE = "finflow-shell-v6";
 const SHELL = [
   "/manifest.json",
   "/finflow-icon.png",
@@ -81,7 +81,23 @@ self.addEventListener("push", (event) => {
     renotify: false,
     requireInteraction: false,
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Mirror the recipient's unread count onto the home-screen app icon so the
+  // badge stays accurate even when the app is fully closed.
+  const applyBadge = async () => {
+    try {
+      if (typeof data.count === "number" && self.registration.setAppBadge) {
+        if (data.count > 0) await self.registration.setAppBadge(data.count);
+        else if (self.registration.clearAppBadge) await self.registration.clearAppBadge();
+      } else if (self.registration.setAppBadge) {
+        // No explicit count in the payload — best-effort "there's something new".
+        await self.registration.setAppBadge();
+      }
+    } catch (_) { /* badging unsupported — ignore */ }
+  };
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    applyBadge(),
+  ]));
 });
 
 self.addEventListener("notificationclick", (event) => {

@@ -49,10 +49,17 @@ async def _bulk_persist_and_push(
         for rid in targets
     ]
     await db.notifications.insert_many(docs)
-    # Best-effort Web Push (no-op if VAPID keys aren't configured)
+    # Best-effort Web Push (no-op if VAPID keys aren't configured). Include each
+    # recipient's fresh unread count so the SW can set an accurate app badge.
     try:
+        counts = {}
+        for rid in targets:
+            counts[rid] = await db.notifications.count_documents(
+                {"recipient_user_id": rid, "read": False}
+            )
         await send_push_to_users(
             targets, title=title, body=message, url=link or "/", tag=type,
+            counts=counts,
         )
     except Exception:  # pragma: no cover — best-effort
         pass

@@ -5,6 +5,7 @@ import api from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 import { canView } from "@/lib/perm";
 import { buildApplyUrl } from "@/lib/applyUrl";
+import { setAppBadge } from "@/lib/appBadge";
 import AuthedImage from "@/components/AuthedImage";
 import NotificationsBell from "@/components/NotificationsBell";
 import AcademicYearSelect from "@/components/AcademicYearSelect";
@@ -316,20 +317,25 @@ export default function AppShell() {
     try { localStorage.setItem("sidebarHidden", next ? "1" : "0"); } catch { /* ignore */ }
     return next;
   });
-  const [alerts, setAlerts] = useState({ messages: 0, approvals: 0 });
+  const [alerts, setAlerts] = useState({ messages: 0, approvals: 0, notifications: 0 });
   const { theme, toggle: toggleTheme } = useTheme();
 
   // Attention signals for the sidebar: unread messages (all roles) and pending
   // expense approvals (super admin). Refreshed on navigation + every 60s so the
-  // dots clear once the user has dealt with them.
+  // dots clear once the user has dealt with them. The combined unread total is
+  // also mirrored onto the PWA home-screen icon via the Web Badging API.
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user) { setAppBadge(0); return undefined; }
     let cancelled = false;
     const load = async () => {
-      const next = { messages: 0, approvals: 0 };
+      const next = { messages: 0, approvals: 0, notifications: 0 };
       try {
         const r = await api.get("/messages/unread-count");
         next.messages = r.data?.count || 0;
+      } catch { /* ignore */ }
+      try {
+        const r = await api.get("/notifications/unread-count");
+        next.notifications = r.data?.count || 0;
       } catch { /* ignore */ }
       if (user.role === "super_admin") {
         try {
@@ -337,7 +343,11 @@ export default function AppShell() {
           next.approvals = Array.isArray(r.data) ? r.data.length : 0;
         } catch { /* ignore */ }
       }
-      if (!cancelled) setAlerts(next);
+      if (!cancelled) {
+        setAlerts(next);
+        // Badge = everything still waiting to be read (chat + bell notifications).
+        setAppBadge((next.messages || 0) + (next.notifications || 0));
+      }
     };
     load();
     const id = setInterval(load, 60000);
