@@ -455,6 +455,11 @@ export default function LeadsPipeline({ user, campaignId = null, showActions = t
                     </div>
                     <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
                       <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{sourceLabel(l.source)}</span>
+                      {(l.call_logs?.length || 0) > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1" data-testid={`lead-call-count-${l.id}`} title={`${l.call_logs.length} call${l.call_logs.length > 1 ? "s" : ""} logged`}>
+                          <Phone size={11} weight="fill" /> {l.call_logs.length}
+                        </span>
+                      )}
                       {l.assigned_to_name && (
                         <span className="pl-0.5 pr-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5">
                           <UserAvatar name={l.assigned_to_name} photoUrl={l.assigned_to_photo_url} size="xs" />

@@ -107,6 +107,11 @@ export default function LeadsBoard({ leads, onCardClick, onStatusChange, editabl
                       </span>
                     )}
                     {l.is_missed && <span className="text-rose-500 font-medium">Missed</span>}
+                    {(l.call_logs?.length || 0) > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1" data-testid={`board-call-count-${l.id}`} title={`${l.call_logs.length} call${l.call_logs.length > 1 ? "s" : ""} logged`}>
+                        <Phone size={10} weight="fill" /> {l.call_logs.length}
+                      </span>
+                    )}
                   </div>
                 </div>
                 ))
