@@ -1815,3 +1815,9 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Each call renders in the Journey as a green phone entry (outcome, number dialled, note, time, who).
 - Backend: POST /api/leads/{id}/call-log (CallLogIn) → appends to lead.call_logs; invalid outcome → 400. Frontend: CallLogDialog.jsx, LeadJourney "call" kind, CALL_OUTCOME_META in constants.
 - Verified: backend curl (connected / call_back+followup / 400) and desktop UI flow (trigger, chips, save-gating, call_back datetime, skip). Mobile visibility trigger not automated.
+
+## Duplicate credits bug fix (2026-11-01)
+- Root cause: tests/test_user_ledger.py + test_user_ledger_extra.py ran against the real shared data and left orphaned artifacts on the real 'ZELIX AXIS ACCOUNT' — 61 income/expense transactions ('Credit/Debit/SC pytest', 'Manual credit', 'Prior SC payment') and 29 SC-PYTEST-* invoices, plus 7 pytest_* users and 4 'Pytest * Agent' clients. These surfaced as duplicate/multiple credit entries in Accounts & Transactions.
+- Fix: deleted the 61 artifact transactions (kept the 9 genuine ones; ZELIX balance now reconciles to 18000), deleted the 29 pytest invoices, removed the 7 pytest users + 4 pytest clients. No product code changed — students._auto_log_payment_transaction was already idempotent (delete_many by linked_student_payment_id before insert).
+- Recurrence prevention: both test teardowns now also purge their transactions + invoices (fixed field: invoice_number) and the _wipe fixture cleans up AFTER each test (yield + _cleanup), not only before.
+- Verified: testing_agent iteration_90 + tests/test_iteration90_duplicate_credits_cleanup.py → 8/8 pass; 0 pytest/Manual-credit txns DB-wide, 0 duplicate income groups, 0 pytest invoices/clients.

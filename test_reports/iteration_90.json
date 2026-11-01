@@ -1,0 +1,31 @@
+{
+  "summary": "Backend-only (REST) verification of the duplicate-credits data cleanup. I did not run test_user_ledger*.py. Transactions, accounts, clients and users are clean. ZELIX AXIS ACCOUNT has exactly the 9 genuine transactions and a balance of 18000 (income 240000 - expense 222000), which reconciles. There are no duplicate income rows for any user, and the student-payment auto-log stays idempotent across create, two PATCHes and delete. One gap remains: 29 orphan SC-PYTEST-* invoices were not cleaned up (27 for the legacy admin, 2 for muneer), and the hardened teardown cannot remove them because of a wrong field name.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/invoices", "issue": "29 leftover pytest invoices remain: SC-PYTEST-001/002/MIRROR. 27 belong to the legacy admin 289a7cc9 (26 draft, 1 paid at 3800) and 2 drafts belong to muneer aa42aeb5. All 29 point to clients that have been deleted. They do not change dashboard outstanding (only sent/overdue count), but they clutter the Invoices list and any invoice-based views. They should be deleted."},
+      {"endpoint": "tests/test_user_ledger.py and tests/test_user_ledger_extra.py _cleanup", "issue": "The invoice purge filters on iv.get('number'), but the field is 'invoice_number', so it never matches and never deletes any invoice. That is why the 29 pytest invoices are still there."},
+      {"endpoint": "tests/test_user_ledger*.py _wipe fixture", "issue": "The autouse _wipe only runs cleanup BEFORE each test. There is no yield or teardown, so the last test's data (transactions, invoices, users, clients) stays in the DB after the suite finishes. Change it to `_cleanup(s); yield; _cleanup(s)`."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_iteration90_duplicate_credits_cleanup.py", "/app/test_reports/pytest/pytest_iteration90.xml"],
+  "action_items": [
+    "Delete the 29 orphan invoices whose invoice_number matches /PYTEST/ (both super admins). Also delete any transactions linked to them, if any exist.",
+    "In both test_user_ledger*.py cleanups, change iv.get('number') to iv.get('invoice_number').",
+    "Make the _wipe fixtures yield and clean up again after each test, not only before.",
+    "Optional: move the duplicated _cleanup/_purge_pytest_txns into a shared conftest helper (DRY). Better still, point these suites at an isolated test user's own accounts instead of the real super admin's books."
+  ],
+  "critical_code_review_comments": [
+    "students._auto_log_payment_transaction is idempotent: it runs delete_many by linked_student_payment_id before inserting. Verified live: one payment gives exactly 1 income transaction, two PATCHes still give 1 (amount updated), and deleting the payment cascades and removes it.",
+    "The ZELIX AXIS ACCOUNT is owned by the LEGACY super admin admin@kmfoundation.online (289a7cc9), not muneer. muneer has 0 accounts and 0 transactions, so verifying as muneer gives an empty but trivially passing result.",
+    "GET /api/transactions defaults to limit=200. The test cleanups pass limit=5000, which is fine, but other bulk scans should do the same."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration90_duplicate_credits_cleanup.py"],
+  "success_rate": {"backend": "75% (6/8 passed; both failures are the leftover pytest invoices)", "frontend": "not tested"},
+  "seed_data_creation": "Created TEST_IdemStudent with one payment into ZELIX for the idempotency check. I deleted it afterwards and confirmed in the DB that 0 TEST_Idem students and 0 related transactions remain.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run tests/test_iteration90_duplicate_credits_cleanup.py with REACT_APP_BACKEND_URL exported. It logs in as admin@kmfoundation.online (the ZELIX owner) and also checks invoices as muneer. The only failing test, test_no_pytest_invoices, should pass once the orphan invoices are deleted. Do NOT run test_user_ledger*.py against shared data.",
+  "rca of the issue": "Duplicate credits came from the test_user_ledger suites writing transactions onto the real super admin's ZELIX account, with no post-test teardown. That transaction junk is now fully removed: 0 pytest or 'Manual credit' transactions DB-wide, and 0 duplicate income groups across all users. The cleanup missed the invoices those suites also created: the purge checks a non-existent 'number' field, so 29 SC-PYTEST invoices remain."
+}

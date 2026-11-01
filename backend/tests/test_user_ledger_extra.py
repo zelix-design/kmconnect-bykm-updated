@@ -55,7 +55,7 @@ def _cleanup(session: requests.Session) -> None:
     try:
         invs = session.get(f"{API}/invoices", timeout=20).json()
         for iv in invs if isinstance(invs, list) else []:
-            if "PYTEST" in (iv.get("number") or "").upper():
+            if "PYTEST" in (iv.get("invoice_number") or "").upper():
                 session.delete(f"{API}/invoices/{iv['id']}", timeout=15)
     except Exception:
         pass
@@ -63,6 +63,8 @@ def _cleanup(session: requests.Session) -> None:
 
 @pytest.fixture(autouse=True)
 def _wipe(admin_session: requests.Session) -> None:
+    _cleanup(admin_session)
+    yield
     _cleanup(admin_session)
 
 
