@@ -1,0 +1,26 @@
+{
+  "summary": "Backend-only test of the Paid-to-College auto-debit fix. 4/4 pytest cases passed (historical backfill x2, E2E create/patch/idempotency/amount-change/remove/cascade-delete, College-Acc no-tx). All throwaway data cleaned up (TEST_P2C students deleted, no linked transactions left, account balances restored).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PATCH /api/students/{id}/payments", "issue": "Paid-to-College expense txs are created with category_id=null: no expense category named 'Paid to College' exists for the owner (admin@kmfoundation.online). All 4 P2C expenses (130000, 100000, 25000, 5000) are uncategorized, so they show as uncategorized on Transactions and in category reports. Fix: seed or auto-create the category (upsert) inside _auto_log_payment_transaction."},
+      {"endpoint": "GET /api/transactions, GET /api/accounts", "issue": "The review note says the data is visible in a 'shared super-admin data context', but it isn't. Transactions and accounts are filtered strictly by user_id, so muneer@kmfoundation.co gets 0 transactions and 0 accounts. The historical debits are only visible when logged in as the legacy admin admin@kmfoundation.online. Confirm this is intended."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_paid_to_college_debit.py", "/app/test_reports/pytest/pytest_p2c.xml"],
+  "action_items": [
+    "Create or upsert an expense category 'Paid to College' and set category_id on the auto debits (also backfill the 4 existing null-category rows).",
+    "Confirm whether the primary super admin (muneer) should see the legacy admin's transactions and accounts. Right now they are user-scoped and invisible to him."
+  ],
+  "critical_code_review_comments": [
+    "_auto_log_payment_transaction: a payment received as type 'cash' with no account_id, or with fee_type 'sc_adjusted', falls back to the default account, so a paid_to_college adjustment on it also debits that default account. This is probably fine but it is implicit; confirm it is the intended behaviour.",
+    "students.py is far over 700 lines (update_payment is around line 1680). Consider splitting the payments and transaction-sync logic into its own module."
+  ],
+  "updated_files": ["/app/backend/tests/test_paid_to_college_debit.py"],
+  "success_rate": {"backend": "100%", "frontend": "not tested"},
+  "seed_data_creation": "None persisted. The throwaway students 'TEST_P2C Throwaway' and 'TEST_P2C College' were created and deleted inside the tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use admin@kmfoundation.online / Admin@786 for the historical finance data (transactions are user_id-scoped; muneer has 0 accounts). NAFATHULLA: payment 243b4e33 has income 15000 and expense 5000 on account 3ad2613f (MUNEER JUPITER APP, balance 70000 = 90000 - 20000). ANAMIKA: payment a9c54486 has income 50000, internal credit 25000 and expense 25000 on account 5edd2a2c (MUNEER AXIS BANK, balance 223046). Run: REACT_APP_BACKEND_URL=... pytest /app/backend/tests/test_paid_to_college_debit.py"
+}

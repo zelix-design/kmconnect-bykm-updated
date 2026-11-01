@@ -489,6 +489,16 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
             {"user_id": user_id, "type": "expense", "name": "Paid to College"},
             {"_id": 0, "id": 1},
         )
+        # Auto-create the category the first time so these debits aren't
+        # "Uncategorized" on the Transactions page and in category reports.
+        if not exp_cat and any((a.get("kind") == "paid_to_college") for a in (payment.get("adjustments") or [])):
+            new_cat = {
+                "id": gen_id(), "user_id": user_id, "created_at": now_iso(),
+                "name": "Paid to College", "type": "expense",
+                "color": "#0ea5e9", "icon": "Bank",
+            }
+            await db.categories.insert_one(new_cat)
+            exp_cat = {"id": new_cat["id"]}
         for idx, adj in enumerate(payment.get("adjustments") or []):
             if adj.get("kind") != "paid_to_college":
                 continue

@@ -1821,3 +1821,9 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Fix: deleted the 61 artifact transactions (kept the 9 genuine ones; ZELIX balance now reconciles to 18000), deleted the 29 pytest invoices, removed the 7 pytest users + 4 pytest clients. No product code changed — students._auto_log_payment_transaction was already idempotent (delete_many by linked_student_payment_id before insert).
 - Recurrence prevention: both test teardowns now also purge their transactions + invoices (fixed field: invoice_number) and the _wipe fixture cleans up AFTER each test (yield + _cleanup), not only before.
 - Verified: testing_agent iteration_90 + tests/test_iteration90_duplicate_credits_cleanup.py → 8/8 pass; 0 pytest/Manual-credit txns DB-wide, 0 duplicate income groups, 0 pytest invoices/clients.
+
+## Paid-to-College debit not showing / not debiting (bug fix, 2026-11-01)
+- Reported on Student Detail: a 'Paid to College' adjustment wasn't appearing on Transactions nor debiting the received account.
+- Root cause: historical payments saved BEFORE the paid_to_college auto-debit feature never got their expense transaction (code is correct for new entries). Reproduced: NAFATHULLA (5000) & ANAMIKA (25000) had 0 expense txns while newer ones (MEGHAMOL, SOURAV) were correct.
+- Fix: backfilled by re-running the idempotent _auto_log_payment_transaction for all payments with paid_to_college/internal_credit adjustments → created the 2 missing debits, 0 duplicates, College-Acc (no account) correctly creates none. Also now auto-creates a 'Paid to College' expense category so the debits aren't Uncategorized (backfilled 4 existing rows).
+- Verified: testing_agent iteration_91 → 4/4 (100%): historical debits present & debiting the account, E2E create/patch/idempotency/amount-change/cascade-delete, College-Acc no-tx. Category polish verified via DB (0 null-category P2C expenses).
