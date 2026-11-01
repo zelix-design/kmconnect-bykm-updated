@@ -280,7 +280,10 @@ function SuperAdminPeople({ pageScope }) {
       const { data } = await api.post(`/clients/import?default_type=${defaultType}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      toast.success(`Imported ${data.created} ${isEmployees ? "employee" : "client"}${data.created === 1 ? "" : "s"}`);
+      const parts = [];
+      if (data.created) parts.push(`${data.created} added`);
+      if (data.updated) parts.push(`${data.updated} updated`);
+      toast.success(parts.length ? parts.join(" · ") : "Nothing to import");
       setPreview(null);
       setImportFile(null);
       load();
@@ -618,7 +621,10 @@ function SuperAdminPeople({ pageScope }) {
             <DialogDescription>
               {preview ? (
                 <>
-                  <span className="text-foreground font-medium">{preview.valid}</span> row{preview.valid === 1 ? "" : "s"} ready to import
+                  {preview.will_create > 0 && <><span className="text-foreground font-medium">{preview.will_create}</span> new</>}
+                  {preview.will_create > 0 && preview.will_update > 0 && " · "}
+                  {preview.will_update > 0 && <><span className="text-blue-600 dark:text-blue-400 font-medium">{preview.will_update}</span> to update</>}
+                  {!preview.will_create && !preview.will_update && "No rows ready"}
                   {preview.errors?.length ? <> · <span className="text-rose-600 dark:text-rose-400 font-medium">{preview.errors.length}</span> skipped</> : null}
                   {importFile ? <> · {importFile.name}</> : null}
                 </>
@@ -630,10 +636,16 @@ function SuperAdminPeople({ pageScope }) {
               <div className="rounded-md border border-border divide-y divide-border" data-testid="import-preview-rows">
                 {preview.preview.map((r) => (
                   <div key={r.row} className="flex items-center gap-2 px-3 py-2 text-sm" data-testid={`import-preview-row-${r.row}`}>
-                    <CheckCircle size={15} weight="fill" className="text-emerald-500 shrink-0" />
+                    {r.action === "update" ? (
+                      <ArrowCounterClockwise size={15} weight="bold" className="text-blue-500 shrink-0" />
+                    ) : (
+                      <CheckCircle size={15} weight="fill" className="text-emerald-500 shrink-0" />
+                    )}
                     <span className="font-medium text-foreground truncate flex-1 min-w-0">{r.name}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">{clientTypeLabel(r.client_type)}</span>
-                    <span className="text-xs text-muted-foreground truncate max-w-[42%] text-right">{r.phone || r.email || ""}</span>
+                    <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded-full shrink-0 ${r.action === "update" ? "bg-blue-500/10 text-blue-600 dark:text-blue-300" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"}`}>
+                      {r.action === "update" ? "Update" : "New"}
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[32%] text-right">{r.phone || r.email || ""}</span>
                   </div>
                 ))}
               </div>
@@ -653,7 +665,7 @@ function SuperAdminPeople({ pageScope }) {
           <DialogFooter>
             <Button variant="outline" onClick={cancelImport} disabled={confirming} data-testid="import-cancel-btn">Cancel</Button>
             <Button onClick={confirmImport} disabled={confirming || !preview?.valid} className="btn-amber border-0" data-testid="import-confirm-btn">
-              {confirming ? "Importing…" : `Import ${preview?.valid || 0}`}
+              {confirming ? "Saving…" : `Save ${preview?.valid || 0}`}
             </Button>
           </DialogFooter>
         </DialogContent>

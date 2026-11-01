@@ -1,6 +1,7 @@
 """Client CRUD."""
 import csv
 import io
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -215,8 +216,34 @@ async def import_clients(
     if not norm.get("name"):
         raise HTTPException(400, "CSV must include a 'Name' column")
 
+    # Build match maps (phone / email) over clients the caller can see, so a row
+    # updates an existing client instead of creating a duplicate.
+    def _norm_phone(p: str) -> str:
+        d = re.sub(r"\D", "", p or "")
+        return d[-10:] if len(d) >= 10 else d
+
+    existing_clients = await _visible_clients(user)
+    by_phone: dict[str, str] = {}
+    by_email: dict[str, str] = {}
+    for ec in existing_clients:
+        ph = _norm_phone(ec.get("phone"))
+        if ph:
+            by_phone.setdefault(ph, ec["id"])
+        em = (ec.get("email") or "").strip().lower()
+        if em:
+            by_email.setdefault(em, ec["id"])
+
+    def _match_id(cdata: dict) -> Optional[str]:
+        ph = _norm_phone(cdata.get("phone"))
+        if ph and ph in by_phone:
+            return by_phone[ph]
+        em = (cdata.get("email") or "").strip().lower()
+        if em and em in by_email:
+            return by_email[em]
+        return None
+
     errors: list[dict] = []
-    valid_rows: list[dict] = []   # cdata dicts ready to insert
+    valid_rows: list[tuple] = []  # (cdata, match_id)
     preview: list[dict] = []      # lightweight rows for the UI
     for i, row in enumerate(reader, start=2):  # row 1 = header
         data: dict = {}
@@ -247,26 +274,51 @@ async def import_clients(
         cdata = payload.model_dump()
         if user.get("role") == "office_admin":
             cdata["home_office"] = user.get("office")
-        valid_rows.append(cdata)
+        match_id = _match_id(cdata)
+        valid_rows.append((cdata, match_id))
         preview.append({
             "row": i,
             "name": cdata.get("name"),
             "client_type": cdata.get("client_type"),
             "email": cdata.get("email"),
             "phone": cdata.get("phone"),
+            "action": "update" if match_id else "create",
         })
 
+    will_update = sum(1 for _, m in valid_rows if m)
+    will_create = len(valid_rows) - will_update
+
     if dry_run:
-        return {"created": 0, "valid": len(valid_rows), "errors": errors, "preview": preview}
+        return {
+            "created": 0, "updated": 0, "valid": len(valid_rows),
+            "will_create": will_create, "will_update": will_update,
+            "errors": errors, "preview": preview,
+        }
 
     created = 0
-    for cdata in valid_rows:
+    updated = 0
+    for cdata, match_id in valid_rows:
+        if match_id:
+            # Only overwrite fields the CSV actually provided (non-empty).
+            set_fields = {k: v for k, v in cdata.items() if v not in (None, "")}
+            res = await db.clients.update_one(_client_filter(match_id, user), {"$set": set_fields})
+            if res.matched_count:
+                updated += 1
+            continue
         if cdata.get("client_type") == "staff" and not (cdata.get("employee_id") or "").strip():
             cdata["employee_id"] = await _next_employee_id(cdata.get("office"))
-        await db.clients.insert_one({"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **cdata})
+        new_id = gen_id()
+        await db.clients.insert_one({"id": new_id, "user_id": user["id"], "created_at": now_iso(), **cdata})
         created += 1
+        # Let later rows in the same file match this freshly-created client.
+        ph = _norm_phone(cdata.get("phone"))
+        if ph:
+            by_phone.setdefault(ph, new_id)
+        em = (cdata.get("email") or "").strip().lower()
+        if em:
+            by_email.setdefault(em, new_id)
 
-    return {"created": created, "errors": errors}
+    return {"created": created, "updated": updated, "errors": errors}
 
 
 @router.patch("/{client_id}")
