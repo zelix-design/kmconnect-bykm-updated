@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning, Prohibit, ArrowCounterClockwise, Pause, Play } from "@phosphor-icons/react";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning, Prohibit, ArrowCounterClockwise, Pause, Play, DownloadSimple, UploadSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import OfficeStaff from "@/pages/OfficeStaff";
 
@@ -187,6 +187,55 @@ function SuperAdminPeople({ pageScope }) {
     toast.success("Deleted"); load();
   };
 
+  // ---- Bulk CSV export / import ----
+  const csvInputRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+
+  const exportCsv = async () => {
+    try {
+      const { data } = await api.get(`/clients/export?types=${scopeTypes.join(",")}`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${isEmployees ? "employees" : "clients"}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Export failed");
+    }
+  };
+
+  const importCsv = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file) return;
+    setImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const { data } = await api.post(`/clients/import?default_type=${defaultType}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const errCount = (data.errors || []).length;
+      if (data.created > 0) {
+        toast.success(`Imported ${data.created} ${isEmployees ? "employee" : "client"}${data.created > 1 ? "s" : ""}${errCount ? ` · ${errCount} skipped` : ""}`);
+      } else {
+        toast.error(errCount ? `No rows imported · ${errCount} had errors` : "No rows found to import");
+      }
+      if (errCount) {
+        const first = data.errors.slice(0, 3).map((x) => `Row ${x.row}: ${x.error}`).join(" · ");
+        toast.message("Some rows were skipped", { description: first });
+      }
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   // ---- Employees-only: create / reset login dialogs ----
   const [loginFor, setLoginFor] = useState(null);   // client row we're creating a login for
   const [resetFor, setResetFor] = useState(null);   // client row we're resetting the pwd for
@@ -266,6 +315,17 @@ function SuperAdminPeople({ pageScope }) {
               ))}
             </SelectContent>
           </Select>
+          {allowEdit && (
+            <>
+              <input ref={csvInputRef} type="file" accept=".csv,text/csv" onChange={importCsv} className="hidden" data-testid="clients-csv-input" />
+              <Button type="button" variant="outline" onClick={exportCsv} data-testid="clients-export-btn" className="h-10">
+                <DownloadSimple size={16} className="mr-1.5" /> Download
+              </Button>
+              <Button type="button" variant="outline" disabled={importing} onClick={() => csvInputRef.current?.click()} data-testid="clients-import-btn" className="h-10">
+                <UploadSimple size={16} className="mr-1.5" /> {importing ? "Uploading…" : "Upload"}
+              </Button>
+            </>
+          )}
           <Dialog open={open} onOpenChange={setOpen}>
             {allowEdit && (
             <DialogTrigger asChild>

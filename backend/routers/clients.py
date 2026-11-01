@@ -1,14 +1,36 @@
 """Client CRUD."""
+import csv
+import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
+from pydantic import BaseModel, ValidationError
 
 from db import db
 from auth_lib import get_current_user, gen_id, now_iso, require_edit
 from models import ClientIn
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
+
+# Columns used for both CSV export and import (import maps by lowercased header).
+CLIENT_CSV_FIELDS = [
+    ("name", "Name"),
+    ("client_type", "Type"),
+    ("email", "Email"),
+    ("phone", "Phone"),
+    ("company", "Company"),
+    ("office", "Office"),
+    ("home_office", "Home Office"),
+    ("place", "Place"),
+    ("address", "Address"),
+    ("eligible_incentive", "Eligible Incentive"),
+    ("date_of_birth", "Date of Birth"),
+    ("employee_id", "Employee ID"),
+    ("designation", "Designation"),
+    ("department", "Department"),
+    ("date_of_joining", "Date of Joining"),
+]
 
 
 def _office_visibility_clause(user: dict) -> dict:
@@ -115,6 +137,116 @@ async def create_client(payload: ClientIn, user: dict = Depends(require_edit("cl
     await db.clients.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+
+async def _visible_clients(user: dict) -> list[dict]:
+    """Clients the caller can see (mirrors list_clients scoping)."""
+    if user.get("role") == "super_admin":
+        return await db.clients.find({}, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    return await db.clients.find(
+        _office_visibility_clause(user), {"_id": 0}
+    ).sort("created_at", -1).to_list(5000)
+
+
+@router.get("/export")
+async def export_clients(types: Optional[str] = None, user: dict = Depends(require_edit("clients"))):
+    """Download visible clients as a CSV. ``types`` is an optional comma-separated
+    list of client_type values to restrict the export (e.g. the Clients page sends
+    sub_agent_associate,associate_consultant; Employees page sends the staff set)."""
+    docs = await _visible_clients(user)
+    wanted = {t.strip() for t in (types or "").split(",") if t.strip()}
+    if wanted:
+        docs = [d for d in docs if d.get("client_type") in wanted]
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([label for _, label in CLIENT_CSV_FIELDS])
+    for d in docs:
+        w.writerow([("" if d.get(key) is None else str(d.get(key))) for key, _ in CLIENT_CSV_FIELDS])
+    from datetime import datetime, timezone
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    kind = "clients" if wanted and "staff" not in wanted else "people"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{kind}-{stamp}.csv"'},
+    )
+
+
+@router.post("/import")
+async def import_clients(
+    file: UploadFile = File(...),
+    default_type: Optional[str] = None,
+    user: dict = Depends(require_edit("clients")),
+) -> dict:
+    """Bulk-create clients from a CSV using the same headers as the export.
+
+    ``name`` is required per row; ``client_type`` falls back to ``default_type``
+    when a row omits it. Invalid rows are skipped and reported; valid rows are
+    inserted. Returns ``{created, errors}``."""
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(400, "Only .csv files are supported")
+    try:
+        text = (await file.read()).decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = (await file.read()).decode("latin-1", errors="ignore")
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames is None:
+        raise HTTPException(400, "CSV is empty")
+    norm = {(h or "").strip().lower(): h for h in reader.fieldnames}
+
+    # Header aliases → model field
+    alias = {
+        "name": "name", "type": "client_type", "client_type": "client_type",
+        "email": "email", "phone": "phone", "company": "company",
+        "office": "office", "home office": "home_office", "home_office": "home_office",
+        "place": "place", "address": "address",
+        "eligible incentive": "eligible_incentive", "eligible_incentive": "eligible_incentive",
+        "date of birth": "date_of_birth", "date_of_birth": "date_of_birth",
+        "employee id": "employee_id", "employee_id": "employee_id",
+        "designation": "designation", "department": "department",
+        "date of joining": "date_of_joining", "date_of_joining": "date_of_joining",
+    }
+    if not norm.get("name"):
+        raise HTTPException(400, "CSV must include a 'Name' column")
+
+    created = 0
+    errors: list[dict] = []
+    for i, row in enumerate(reader, start=2):  # row 1 = header
+        data: dict = {}
+        for header, raw in row.items():
+            field = alias.get((header or "").strip().lower())
+            if not field:
+                continue
+            val = (str(raw).strip() if raw is not None else "")
+            if val != "":
+                data[field] = val
+        if not data.get("name"):
+            continue  # silently skip blank rows
+        if not data.get("client_type") and default_type:
+            data["client_type"] = default_type
+        if data.get("eligible_incentive") not in (None, ""):
+            try:
+                data["eligible_incentive"] = float(data["eligible_incentive"])
+            except ValueError:
+                errors.append({"row": i, "error": "Invalid eligible incentive"})
+                continue
+        try:
+            payload = ClientIn(**data)
+        except ValidationError as e:
+            first = e.errors()[0]
+            loc = ".".join(str(x) for x in first.get("loc", []))
+            errors.append({"row": i, "error": f"{loc}: {first.get('msg')}".strip(": ")})
+            continue
+        cdata = payload.model_dump()
+        if user.get("role") == "office_admin":
+            cdata["home_office"] = user.get("office")
+        if cdata.get("client_type") == "staff" and not (cdata.get("employee_id") or "").strip():
+            cdata["employee_id"] = await _next_employee_id(cdata.get("office"))
+        await db.clients.insert_one({"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **cdata})
+        created += 1
+
+    return {"created": created, "errors": errors}
 
 
 @router.patch("/{client_id}")
