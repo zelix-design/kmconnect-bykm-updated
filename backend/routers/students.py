@@ -520,6 +520,48 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
                 "linked_adjustment_idx": idx,
             })
 
+        # SC-to-Client adjustments marked "SC given" create a DEBIT (SC payout)
+        # on the same account the fee was received into. Pending SC creates
+        # nothing. De-dup: if the SC was already paid via the one-click "Pay SC"
+        # button (a standalone is_sc_payout tx not tied to this payment), don't
+        # add a second debit. Our own linked payout is wiped + recreated on every
+        # edit (delete_many above), so editing never duplicates.
+        for idx, adj in enumerate(payment.get("adjustments") or []):
+            if adj.get("kind") != "sc_adjusted" or not adj.get("sc_given"):
+                continue
+            adj_client_id = adj.get("client_id")
+            already_paid = await db.transactions.find_one({
+                "user_id": user_id,
+                "is_sc_payout": True,
+                "student_name": student.get("name"),
+                "client_id": adj_client_id,
+                "linked_student_payment_id": {"$ne": payment["id"]},
+            })
+            if already_paid:
+                continue
+            await db.transactions.insert_one({
+                "id": gen_id(),
+                "user_id": user_id,
+                "created_at": now_iso(),
+                "type": "expense",
+                "amount": round(float(adj.get("amount") or 0), 2),
+                "account_id": account_id,
+                "category_id": None,
+                "date": adj.get("payment_date") or payment.get("date"),
+                "description": " · ".join(filter(None, [
+                    f"SC payout — {student.get('name')}",
+                    f"to {adj.get('sub_agent_name')}" if adj.get("sub_agent_name") else "to sub-agent",
+                    adj.get("remarks") or "",
+                ])),
+                "client_id": adj_client_id,
+                "is_sc_payout": True,
+                "student_name": student.get("name"),
+                "payment_mode": adj.get("payment_mode"),
+                "linked_student_id": student.get("id"),
+                "linked_student_payment_id": payment["id"],
+                "linked_adjustment_idx": idx,
+            })
+
 
 async def _delete_payment_transaction(user_id: str, payment_id: str) -> None:
     await db.transactions.delete_many({
