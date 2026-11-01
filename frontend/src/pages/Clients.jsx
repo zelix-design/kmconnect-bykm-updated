@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import api, { API } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,7 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning, Prohibit, ArrowCounterClockwise, Pause, Play, DownloadSimple, UploadSimple } from "@phosphor-icons/react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, PencilSimple, Trash, EnvelopeSimple, Phone, Buildings, Cake, CurrencyInr, IdentificationBadge, MapPin, Camera, UserCircle, LinkSimple, Key, ShieldWarning, Prohibit, ArrowCounterClockwise, Pause, Play, DownloadSimple, UploadSimple, X, WarningCircle, CheckCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import OfficeStaff from "@/pages/OfficeStaff";
 
@@ -187,9 +190,48 @@ function SuperAdminPeople({ pageScope }) {
     toast.success("Deleted"); load();
   };
 
-  // ---- Bulk CSV export / import ----
+  // ---- Bulk CSV export / import (with confirm-before-save preview) ----
   const csvInputRef = useRef(null);
   const [importing, setImporting] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [preview, setPreview] = useState(null); // dry-run result { valid, errors, preview }
+  const [confirming, setConfirming] = useState(false);
+
+  // ---- Multi-select + bulk actions ----
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const toggleSel = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSel = () => setSelectedIds(new Set());
+  const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(filteredIds));
+  // Drop selections that are no longer visible after a filter change.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const visible = new Set(filteredIds);
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredIds]);
+
+  const bulkDelete = async () => {
+    setBulkBusy(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => api.delete(`/clients/${id}`)));
+      toast.success(`Deleted ${selectedIds.size} ${isEmployees ? "employee" : "client"}${selectedIds.size > 1 ? "s" : ""}`);
+      clearSel();
+      setConfirmBulkDelete(false);
+      load();
+    } catch {
+      toast.error("Some entries could not be deleted");
+      load();
+    } finally { setBulkBusy(false); }
+  };
 
   const exportCsv = async () => {
     try {
@@ -207,34 +249,49 @@ function SuperAdminPeople({ pageScope }) {
     }
   };
 
+  // Step 1: parse the CSV on the server (dry run) and show a preview.
   const importCsv = async (e) => {
     const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file
+    e.target.value = "";
     if (!file) return;
     setImporting(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const { data } = await api.post(`/clients/import?default_type=${defaultType}`, fd, {
+      const { data } = await api.post(`/clients/import?default_type=${defaultType}&dry_run=true`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      const errCount = (data.errors || []).length;
-      if (data.created > 0) {
-        toast.success(`Imported ${data.created} ${isEmployees ? "employee" : "client"}${data.created > 1 ? "s" : ""}${errCount ? ` · ${errCount} skipped` : ""}`);
-      } else {
-        toast.error(errCount ? `No rows imported · ${errCount} had errors` : "No rows found to import");
-      }
-      if (errCount) {
-        const first = data.errors.slice(0, 3).map((x) => `Row ${x.row}: ${x.error}`).join(" · ");
-        toast.message("Some rows were skipped", { description: first });
-      }
-      load();
+      setImportFile(file);
+      setPreview(data);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Import failed");
+      toast.error(err?.response?.data?.detail || "Could not read CSV");
     } finally {
       setImporting(false);
     }
   };
+
+  // Step 2: user confirmed the preview → actually import.
+  const confirmImport = async () => {
+    if (!importFile) return;
+    setConfirming(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", importFile);
+      const { data } = await api.post(`/clients/import?default_type=${defaultType}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      toast.success(`Imported ${data.created} ${isEmployees ? "employee" : "client"}${data.created === 1 ? "" : "s"}`);
+      setPreview(null);
+      setImportFile(null);
+      load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Import failed");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const cancelImport = () => { setPreview(null); setImportFile(null); };
 
   // ---- Employees-only: create / reset login dialogs ----
   const [loginFor, setLoginFor] = useState(null);   // client row we're creating a login for
@@ -488,6 +545,9 @@ function SuperAdminPeople({ pageScope }) {
           onResetLogin={openResetLogin}
           onToggleSuspend={toggleSuspend}
           onToggleHold={toggleHold}
+          selectable={allowEdit}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSel}
         />
       )}
 
@@ -550,11 +610,94 @@ function SuperAdminPeople({ pageScope }) {
           </div>
         </DialogContent>
       </Dialog>
+      {/* CSV import preview — confirm before saving */}
+      <Dialog open={!!preview} onOpenChange={(v) => { if (!v) cancelImport(); }}>
+        <DialogContent className="bg-card max-w-lg" data-testid="import-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display">Review import</DialogTitle>
+            <DialogDescription>
+              {preview ? (
+                <>
+                  <span className="text-foreground font-medium">{preview.valid}</span> row{preview.valid === 1 ? "" : "s"} ready to import
+                  {preview.errors?.length ? <> · <span className="text-rose-600 dark:text-rose-400 font-medium">{preview.errors.length}</span> skipped</> : null}
+                  {importFile ? <> · {importFile.name}</> : null}
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[48vh] overflow-y-auto space-y-3">
+            {preview?.preview?.length ? (
+              <div className="rounded-md border border-border divide-y divide-border" data-testid="import-preview-rows">
+                {preview.preview.map((r) => (
+                  <div key={r.row} className="flex items-center gap-2 px-3 py-2 text-sm" data-testid={`import-preview-row-${r.row}`}>
+                    <CheckCircle size={15} weight="fill" className="text-emerald-500 shrink-0" />
+                    <span className="font-medium text-foreground truncate flex-1 min-w-0">{r.name}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">{clientTypeLabel(r.client_type)}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[42%] text-right">{r.phone || r.email || ""}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground px-1" data-testid="import-preview-empty">No valid rows found to import.</p>
+            )}
+            {preview?.errors?.length ? (
+              <div className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3 space-y-1" data-testid="import-preview-errors">
+                <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5"><WarningCircle size={14} weight="fill" /> Skipped rows</p>
+                {preview.errors.slice(0, 8).map((er) => (
+                  <p key={er.row} className="text-xs text-muted-foreground">Row {er.row}: {er.error}</p>
+                ))}
+                {preview.errors.length > 8 && <p className="text-xs text-muted-foreground">+{preview.errors.length - 8} more…</p>}
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelImport} disabled={confirming} data-testid="import-cancel-btn">Cancel</Button>
+            <Button onClick={confirmImport} disabled={confirming || !preview?.valid} className="btn-amber border-0" data-testid="import-confirm-btn">
+              {confirming ? "Importing…" : `Import ${preview?.valid || 0}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk action bar (portaled to body so `fixed` pins to the viewport) */}
+      {allowEdit && selectedIds.size > 0 && createPortal(
+        <div
+          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 sm:gap-3 flex-wrap justify-center bg-card border border-border shadow-xl rounded-full px-3 sm:px-4 py-2 max-w-[95vw]"
+          data-testid="clients-bulk-bar"
+        >
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap" data-testid="clients-bulk-count">
+            {selectedIds.size} selected
+          </span>
+          <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={toggleSelectAll} data-testid="clients-select-all-btn">
+            {allSelected ? "Clear all" : `Select all (${filteredIds.length})`}
+          </Button>
+          <Button variant="destructive" size="sm" className="h-9 rounded-full" onClick={() => setConfirmBulkDelete(true)} disabled={bulkBusy} data-testid="clients-bulk-delete-btn">
+            <Trash size={15} className="mr-1.5" /> Delete
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={clearSel} disabled={bulkBusy} data-testid="clients-bulk-clear-btn" aria-label="Clear selection">
+            <X size={16} />
+          </Button>
+        </div>,
+        document.body
+      )}
+
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent data-testid="clients-bulk-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} {isEmployees ? "employee" : "client"}{selectedIds.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={bulkDelete} disabled={bulkBusy} className="bg-rose-600 hover:bg-rose-700" data-testid="clients-bulk-delete-confirm-btn">
+              {bulkBusy ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
-// ---- Helpers ----
 
 const OFFICE_OPTIONS = [
   { value: "KM_BLR", label: "KM BLR" },
@@ -563,7 +706,7 @@ const OFFICE_OPTIONS = [
   { value: "_none", label: "No office set" },
 ];
 
-function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
+function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold, selectable, selected, onToggleSelect }) {
   const nav = useNavigate();
   const goDetail = () => nav(`/clients/${c.id}`);
   const onKey = (e) => {
@@ -579,11 +722,20 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
       tabIndex={0}
       onClick={goDetail}
       onKeyDown={onKey}
-      className="p-6 border border-border bg-card rounded-lg shadow-none cursor-pointer hover:border-orange-300 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-400/40"
+      className={`p-6 border bg-card rounded-lg shadow-none cursor-pointer hover:border-orange-300 hover:shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-400/40 ${selected ? "ring-2 ring-primary border-primary/50" : "border-border"}`}
       data-testid={`client-card-${c.id}`}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
+          {selectable && (
+            <span
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleSelect?.(c.id); }}
+              data-testid={`client-select-${c.id}`}
+              className="shrink-0"
+            >
+              <Checkbox checked={!!selected} className="pointer-events-none" />
+            </span>
+          )}
           <div className="w-11 h-11 rounded-md bg-muted text-foreground flex items-center justify-center font-medium overflow-hidden shrink-0">
             {c.photo_url ? <AuthedImage url={c.photo_url} alt={c.name} className="w-full h-full object-cover" fallback={c.name.slice(0, 2).toUpperCase()} /> : c.name.slice(0, 2).toUpperCase()}
           </div>
@@ -729,7 +881,7 @@ function ClientCard({ c, allowEdit, openEdit, remove, isEmployees, onCreateLogin
   );
 }
 
-function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
+function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold, selectable, selectedIds, onToggleSelect }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {clients.map((c) => (
@@ -741,6 +893,9 @@ function ClientGrid({ clients, allowEdit, openEdit, remove, isEmployees, onCreat
           onResetLogin={onResetLogin}
           onToggleSuspend={onToggleSuspend}
           onToggleHold={onToggleHold}
+          selectable={selectable}
+          selected={selectedIds?.has(c.id)}
+          onToggleSelect={onToggleSelect}
         />
       ))}
     </div>
@@ -757,7 +912,7 @@ function CategoryHeader({ label, count }) {
   );
 }
 
-function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold }) {
+function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remove, isEmployees, onCreateLogin, onResetLogin, onToggleSuspend, onToggleHold, selectable, selectedIds, onToggleSelect }) {
   // When a specific type filter is selected, just show that category (with Staff sub-grouping)
   const groups = CLIENT_TYPES
     .filter((t) => scopeTypes.includes(t.value))
@@ -792,6 +947,9 @@ function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remo
                       onResetLogin={onResetLogin}
                       onToggleSuspend={onToggleSuspend}
                       onToggleHold={onToggleHold}
+                      selectable={selectable}
+                      selectedIds={selectedIds}
+                      onToggleSelect={onToggleSelect}
                     />
                   </div>
                 );
@@ -806,6 +964,9 @@ function GroupedClients({ filter, scopeTypes, clients, allowEdit, openEdit, remo
               onResetLogin={onResetLogin}
               onToggleSuspend={onToggleSuspend}
               onToggleHold={onToggleHold}
+              selectable={selectable}
+              selectedIds={selectedIds}
+              onToggleSelect={onToggleSelect}
             />
           )}
         </section>

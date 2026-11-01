@@ -177,13 +177,18 @@ async def export_clients(types: Optional[str] = None, user: dict = Depends(requi
 async def import_clients(
     file: UploadFile = File(...),
     default_type: Optional[str] = None,
+    dry_run: bool = False,
     user: dict = Depends(require_edit("clients")),
 ) -> dict:
     """Bulk-create clients from a CSV using the same headers as the export.
 
     ``name`` is required per row; ``client_type`` falls back to ``default_type``
-    when a row omits it. Invalid rows are skipped and reported; valid rows are
-    inserted. Returns ``{created, errors}``."""
+    when a row omits it. Invalid rows are skipped and reported.
+
+    When ``dry_run`` is true, nothing is written — the response returns a
+    ``preview`` of the rows that *would* be created (plus any ``errors``) so the
+    UI can show a confirm-before-save step. Otherwise the valid rows are
+    inserted and ``created`` is returned."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Only .csv files are supported")
     try:
@@ -210,8 +215,9 @@ async def import_clients(
     if not norm.get("name"):
         raise HTTPException(400, "CSV must include a 'Name' column")
 
-    created = 0
     errors: list[dict] = []
+    valid_rows: list[dict] = []   # cdata dicts ready to insert
+    preview: list[dict] = []      # lightweight rows for the UI
     for i, row in enumerate(reader, start=2):  # row 1 = header
         data: dict = {}
         for header, raw in row.items():
@@ -241,6 +247,20 @@ async def import_clients(
         cdata = payload.model_dump()
         if user.get("role") == "office_admin":
             cdata["home_office"] = user.get("office")
+        valid_rows.append(cdata)
+        preview.append({
+            "row": i,
+            "name": cdata.get("name"),
+            "client_type": cdata.get("client_type"),
+            "email": cdata.get("email"),
+            "phone": cdata.get("phone"),
+        })
+
+    if dry_run:
+        return {"created": 0, "valid": len(valid_rows), "errors": errors, "preview": preview}
+
+    created = 0
+    for cdata in valid_rows:
         if cdata.get("client_type") == "staff" and not (cdata.get("employee_id") or "").strip():
             cdata["employee_id"] = await _next_employee_id(cdata.get("office"))
         await db.clients.insert_one({"id": gen_id(), "user_id": user["id"], "created_at": now_iso(), **cdata})
