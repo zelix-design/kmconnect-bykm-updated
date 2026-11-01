@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import {
-  Plus, Buildings, MagnifyingGlass, UploadSimple, Warning,
+  Plus, Buildings, MagnifyingGlass, UploadSimple, Warning, Trash, X, DownloadSimple,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { COLLEGE_PLACES, placeForSelect } from "@/lib/places";
@@ -69,6 +71,54 @@ export default function Colleges() {
     }
   };
 
+  // ---- Multi-select + bulk actions ----
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const toggleSel = (id) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const clearSel = () => setSelectedIds(new Set());
+
+  const bulkDelete = async () => {
+    setBulkBusy(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => api.delete(`/colleges/${id}`)));
+      toast.success(`Deleted ${selectedIds.size} college${selectedIds.size > 1 ? "s" : ""}`);
+      clearSel();
+      setConfirmBulkDelete(false);
+      load();
+    } catch {
+      toast.error("Some colleges could not be deleted");
+      load();
+    } finally { setBulkBusy(false); }
+  };
+
+  // Download selected colleges as an Excel (.xls) workbook.
+  const downloadExcel = (rows) => {
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const header = ["Name", "Place", "Deal With", "Courses", "SC Rates"];
+    const trs = rows.map((c) => {
+      const courses = (c.courses || []).join(", ");
+      const sc = c.sc_rates && typeof c.sc_rates === "object"
+        ? Object.entries(c.sc_rates).map(([k, v]) => `${k}: ${v}`).join("; ")
+        : "";
+      return `<tr><td>${esc(c.name)}</td><td>${esc(c.place)}</td><td>${esc(c.deal_with)}</td><td>${esc(courses)}</td><td>${esc(sc)}</td></tr>`;
+    }).join("");
+    const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body><table border="1"><tr>${header.map((h) => `<th>${h}</th>`).join("")}</tr>${trs}</table></body></html>`;
+    const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `colleges-${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
   const filtered = useMemo(() => {
     let pool = list;
     if (placeFilter) {
@@ -89,6 +139,18 @@ export default function Colleges() {
       || (c.courses || []).some((co) => co.toLowerCase().includes(term))
     );
   }, [list, q, placeFilter]);
+
+  const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(filteredIds));
+  // Drop selections no longer visible after a filter/search change.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const visible = new Set(filteredIds);
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredIds]);
 
   // Per-place counts for the filter chips (rendered next to each city label).
   const placeCounts = useMemo(() => {
@@ -222,7 +284,12 @@ export default function Colleges() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start" data-testid="colleges-grid">
             {filtered.map((c) => (
-              <CollegeCard key={c.id} c={c} onEdit={openEdit} onDelete={remove} />
+              <CollegeCard
+                key={c.id} c={c} onEdit={openEdit} onDelete={remove}
+                selectable={isSuper}
+                selected={selectedIds.has(c.id)}
+                onToggleSelect={toggleSel}
+              />
             ))}
           </div>
         </>
@@ -240,6 +307,46 @@ export default function Colleges() {
         onOpenChange={setBulkOpen}
         onUploaded={load}
       />
+
+      {/* Bulk action bar (portaled so `fixed` pins to the viewport) */}
+      {isSuper && selectedIds.size > 0 && createPortal(
+        <div
+          className="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 sm:gap-3 flex-wrap justify-center bg-card border border-border shadow-xl rounded-full px-3 sm:px-4 py-2 max-w-[95vw]"
+          data-testid="colleges-bulk-bar"
+        >
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap" data-testid="colleges-bulk-count">
+            {selectedIds.size} selected
+          </span>
+          <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={toggleSelectAll} data-testid="colleges-select-all-btn">
+            {allSelected ? "Clear all" : `Select all (${filteredIds.length})`}
+          </Button>
+          <Button variant="outline" size="sm" className="h-9 rounded-full" onClick={() => downloadExcel(filtered.filter((c) => selectedIds.has(c.id)))} data-testid="colleges-bulk-export-btn">
+            <DownloadSimple size={15} className="mr-1.5" /> Excel
+          </Button>
+          <Button variant="destructive" size="sm" className="h-9 rounded-full" onClick={() => setConfirmBulkDelete(true)} disabled={bulkBusy} data-testid="colleges-bulk-delete-btn">
+            <Trash size={15} className="mr-1.5" /> Delete
+          </Button>
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={clearSel} disabled={bulkBusy} data-testid="colleges-bulk-clear-btn" aria-label="Clear selection">
+            <X size={16} />
+          </Button>
+        </div>,
+        document.body
+      )}
+
+      <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <AlertDialogContent data-testid="colleges-bulk-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} college{selectedIds.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkBusy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={bulkDelete} disabled={bulkBusy} className="bg-rose-600 hover:bg-rose-700" data-testid="colleges-bulk-delete-confirm-btn">
+              {bulkBusy ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

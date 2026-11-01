@@ -1,5 +1,6 @@
 import React from "react";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PencilSimple, Trash, Buildings, User, Lock, CurrencyInr } from "@phosphor-icons/react";
 import { useAuth } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
@@ -9,7 +10,7 @@ const COLLAPSED_COUNT = 6;
 /** Single college row in the catalogue grid. Renders name/place/deal-with header
  * + capped course chips (collapses past 6 with a "+ N more" toggle).
  */
-export default function CollegeCard({ c, onEdit, onDelete }) {
+export default function CollegeCard({ c, onEdit, onDelete, selectable, selected, onToggleSelect }) {
   const { user } = useAuth();
   const currency = user?.currency || "INR";
   const isSuper = user?.role === "super_admin";
@@ -23,11 +24,20 @@ export default function CollegeCard({ c, onEdit, onDelete }) {
 
   return (
     <Card
-      className="p-5 border border-border bg-card rounded-lg shadow-none hover:border-orange-500/40 transition-colors flex flex-col"
+      className={`p-5 border bg-card rounded-lg shadow-none hover:border-orange-500/40 transition-colors flex flex-col ${selected ? "ring-2 ring-primary border-primary/50" : "border-border"}`}
       data-testid={`col-card-${c.id}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0 flex-1">
+          {selectable && (
+            <span
+              onClick={(e) => { e.stopPropagation(); onToggleSelect?.(c.id); }}
+              data-testid={`col-select-${c.id}`}
+              className="pt-0.5 shrink-0 cursor-pointer"
+            >
+              <Checkbox checked={!!selected} className="pointer-events-none" />
+            </span>
+          )}
           <div className="w-10 h-10 rounded-lg bg-amber-gradient-soft border border-amber-500/30 flex items-center justify-center shrink-0">
             <Buildings size={18} className="text-amber-700 dark:text-amber-400" />
           </div>
