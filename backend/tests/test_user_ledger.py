@@ -37,6 +37,27 @@ def _cleanup(session: requests.Session) -> None:
     for c in clients:
         if (c.get("name") or "").startswith("Pytest Ledger Agent"):
             session.delete(f"{API}/clients/{c['id']}", timeout=15)
+    # Remove transactions/invoices this suite creates so they don't accumulate
+    # on real accounts across runs (see duplicate-credits bug fix).
+    _purge_pytest_txns(session)
+
+
+def _purge_pytest_txns(session: requests.Session) -> None:
+    try:
+        txns = session.get(f"{API}/transactions", params={"limit": 5000}, timeout=20).json()
+        for t in txns if isinstance(txns, list) else []:
+            d = (t.get("description") or "")
+            if "pytest" in d.lower() or d == "Manual credit":
+                session.delete(f"{API}/transactions/{t['id']}", timeout=15)
+    except Exception:
+        pass
+    try:
+        invs = session.get(f"{API}/invoices", timeout=20).json()
+        for iv in invs if isinstance(invs, list) else []:
+            if "PYTEST" in (iv.get("number") or "").upper():
+                session.delete(f"{API}/invoices/{iv['id']}", timeout=15)
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)
