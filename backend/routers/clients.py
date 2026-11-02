@@ -580,6 +580,7 @@ async def pay_sc_now(
         "is_sc_payout": True,
         "payment_mode": payload.payment_mode,
         "student_name": student.get("name"),
+        "linked_student_id": student.get("id"),
     }
     await db.transactions.insert_one(doc)
     doc.pop("_id", None)

@@ -530,12 +530,18 @@ async def _auto_log_payment_transaction(user_id: str, student: dict, payment: di
             if adj.get("kind") != "sc_adjusted" or not adj.get("sc_given"):
                 continue
             adj_client_id = adj.get("client_id")
+            # Only a STANDALONE one-click "Pay SC" debit (no linked payment)
+            # counts as already-paid. Per-payment linked debits must NOT block
+            # another installment's debit, and our own linked debit is wiped +
+            # recreated on every edit (delete_many above), so no duplication.
             already_paid = await db.transactions.find_one({
-                "user_id": user_id,
                 "is_sc_payout": True,
-                "student_name": student.get("name"),
                 "client_id": adj_client_id,
-                "linked_student_payment_id": {"$ne": payment["id"]},
+                "linked_student_payment_id": None,
+                "$or": [
+                    {"linked_student_id": student.get("id")},
+                    {"student_name": student.get("name")},
+                ],
             })
             if already_paid:
                 continue

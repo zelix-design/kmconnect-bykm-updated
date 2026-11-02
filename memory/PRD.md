@@ -1827,3 +1827,9 @@ Applied an interaction/motion layer across all four dashboards (main Super Admin
 - Root cause: historical payments saved BEFORE the paid_to_college auto-debit feature never got their expense transaction (code is correct for new entries). Reproduced: NAFATHULLA (5000) & ANAMIKA (25000) had 0 expense txns while newer ones (MEGHAMOL, SOURAV) were correct.
 - Fix: backfilled by re-running the idempotent _auto_log_payment_transaction for all payments with paid_to_college/internal_credit adjustments → created the 2 missing debits, 0 duplicates, College-Acc (no account) correctly creates none. Also now auto-creates a 'Paid to College' expense category so the debits aren't Uncategorized (backfilled 4 existing rows).
 - Verified: testing_agent iteration_91 → 4/4 (100%): historical debits present & debiting the account, E2E create/patch/idempotency/amount-change/cascade-delete, College-Acc no-tx. Category polish verified via DB (0 null-category P2C expenses).
+
+## SC-to-Client "SC given" → account debit (2026-11-01)
+- When an sc_adjusted adjustment is marked sc_given, _auto_log_payment_transaction now creates an is_sc_payout EXPENSE on the received account ("SC payout — <student> · to <sub-agent>"), reducing balance. SC pending creates nothing. Editing is idempotent (delete_many by linked_student_payment_id then recreate).
+- De-dup: only a STANDALONE one-click Pay SC debit (no linked_student_payment_id) blocks an auto debit; matched by linked_student_id/student_name + client_id. Fixes the bug where a 2nd installment to the same client was skipped. Pay SC (clients.sc-payout) now also stores linked_student_id.
+- One-time backfill added the missing debit for earlier sc_given adjustments (idempotent, 0 duplicates).
+- Verified: tests/test_sc_given_payout_debit.py (incl. two-payments-same-client) + regression (paid_to_college, duplicate_credits) → 16/16 pass. Frontend StudentDetail shows "· debited from <account>" when SC given.
