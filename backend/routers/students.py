@@ -1659,6 +1659,81 @@ async def unmark_incentive_paid(student_id: str, user: dict = Depends(require_ed
     return {"ok": True, "student_id": student_id, "incentive_paid": False}
 
 
+# ---------- SC Settled (SC received from college) ----------
+class ScSettleIn(BaseModel):
+    amount: float
+    account_id: str
+    date: Optional[str] = None
+    payment_mode: PaymentMode = "bank_transfer"
+
+
+async def _sync_sc_settlement_transaction(user_id: str, student: dict, settlement: dict) -> str:
+    """Create/replace the single income transaction for a student's SC received
+    from the college. Idempotent: wipes any prior settlement tx for the student
+    first, so editing re-points the one linked credit instead of duplicating."""
+    await db.transactions.delete_many({
+        "is_sc_settlement": True,
+        "linked_student_id": student["id"],
+    })
+    tx_id = gen_id()
+    await db.transactions.insert_one({
+        "id": tx_id,
+        "user_id": user_id,
+        "created_at": now_iso(),
+        "type": "income",
+        "amount": round(float(settlement["amount"]), 2),
+        "account_id": settlement["account_id"],
+        "category_id": None,
+        "date": settlement["date"],
+        "description": f"SC received from college — {student.get('name')}",
+        "linked_student_id": student["id"],
+        "is_sc_settlement": True,
+        "payment_mode": settlement.get("payment_mode"),
+    })
+    return tx_id
+
+
+@router.post("/{student_id}/sc-settle")
+async def sc_settle(student_id: str, payload: ScSettleIn, user: dict = Depends(require_edit("students"))):
+    """Mark a student's service charge as settled/received from the college.
+    Creates a single income credit into the chosen account (on the operator's
+    books, matching the account picker). Re-running edits the one linked tx."""
+    student = await _load_student_or_404(student_id, user)
+    if payload.amount <= 0:
+        raise HTTPException(400, "Amount must be greater than zero")
+    settlement = {
+        "amount": round(float(payload.amount), 2),
+        "account_id": payload.account_id,
+        "date": payload.date or now_iso()[:10],
+        "payment_mode": payload.payment_mode,
+    }
+    settlement["tx_id"] = await _sync_sc_settlement_transaction(user["id"], student, settlement)
+    await db.students.update_one(
+        _student_filter(student_id, user),
+        {"$set": {"sc_settled": True, "sc_settled_at": now_iso(), "sc_settlement": settlement}},
+    )
+    s = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return _summarize(s, user)
+
+
+@router.post("/{student_id}/sc-unsettle")
+async def sc_unsettle(student_id: str, user: dict = Depends(require_edit("students"))):
+    """Undo SC Settled: remove the linked credit transaction and revert the
+    account balance, leaving no duplicates."""
+    await _load_student_or_404(student_id, user)
+    await db.transactions.delete_many({
+        "is_sc_settlement": True,
+        "linked_student_id": student_id,
+    })
+    await db.students.update_one(
+        _student_filter(student_id, user),
+        {"$set": {"sc_settled": False},
+         "$unset": {"sc_settled_at": "", "sc_settlement": ""}},
+    )
+    s = await db.students.find_one({"id": student_id}, {"_id": 0})
+    return _summarize(s, user)
+
+
 # ---------- Schedules ----------
 async def _load_student_or_404(student_id: str, user: dict) -> dict:
     """Load a student honouring the super_admin cross-user bypass.

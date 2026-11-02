@@ -1,54 +1,48 @@
-# Deploying FinFlow to a Webuzo VPS
+# Mark "SC Settled / Credited from College"
 
-A repeatable setup to run the existing FinFlow app (React frontend, FastAPI backend, MongoDB) on a single VPS managed by the Webuzo control panel, served over one domain with HTTPS.
-The work produces a written step-by-step guide plus ready-to-use configuration files added to the project; the actual install runs on the user's own server.
+Lets you record that a student's service charge has been received from the college as an income credit into one of your accounts.
+Covers the common case where a student pays their fees straight to the college and the SC is paid back to you a day or more later.
 
 ## Who it's for
-The FinFlow owner/admin who wants to self-host on their own VPS instead of the managed preview — keeping full control of the data and the server.
+Super admins and office admins who track each student's service charge and the money actually collected from colleges in FinFlow.
 
 ## Core features and experience
-- MongoDB running on the same VPS via Webuzo's built-in MongoDB, with a dedicated database and user, authentication on, and the database reachable only from the server itself.
-- The FastAPI backend running as an always-on service that restarts automatically after a crash or a server reboot.
-- The React frontend built into static files and served by the web server.
-- A reverse proxy that serves the frontend, forwards `/api` requests to the backend, and handles HTTPS.
-- One domain, with the API living under `/api` on that same domain.
-- A free Let's Encrypt HTTPS certificate.
-- Production environment templates (with no real secrets committed) and a single build command to produce the frontend and prepare the backend.
+- A **"Mark SC Settled"** action on the student detail page, shown for any student that still has service charge pending to collect from the college.
+- When clicked, a small form opens pre-filled with:
+  - the **SC amount** already recorded for that student (editable),
+  - the **account** that received the money (you choose from your accounts),
+  - the **date** (defaults to today),
+  - the **payment mode** (Cash, Bank Transfer, UPI, Cheque, Card, Other).
+- On save:
+  - A **credit (income) transaction** is created in the chosen account, e.g. `SC received from college — <student name>`.
+  - The account balance goes up by the SC amount.
+  - The transaction appears on the **Transactions page** as a credit.
+  - The student is marked **SC Settled**, with a clear ₹/settled indicator on the student card and detail page (matching the existing "SC cleared/collected" styling).
+- **Reversible:** the student shows an **"Unmark / Undo SC Settled"** option. Undoing removes the linked credit transaction and reverts the balance, with no duplicates left behind.
+- **Editing stays in sync:** changing the amount, account, date or mode re-points the single linked credit transaction instead of creating a second one.
+- This credit is independent of the existing "SC to Client" payout (which is a debit to a sub-agent); a student can have both without them interfering.
 
-## User flow (operator steps, high level)
-1. Point the domain at the VPS, install Webuzo, then install MongoDB, Node, and Python from Webuzo.
-2. Create the MongoDB database and user; fill in the backend settings (database connection, database name, and any integration keys).
-3. Build the frontend against the production domain and place the static files in the web root.
-4. Start the backend service and enable the reverse proxy; issue the HTTPS certificate.
-5. Open the domain, create the first admin account, and verify the main flows (login, dashboard, students, leads, transactions).
+## User flow
+1. Open a student whose SC is still pending from the college.
+2. Tap **Mark SC Settled**.
+3. Review the pre-filled SC amount, pick the receiving account, confirm the date and mode.
+4. Save → the student shows **SC Settled**, and a matching credit appears on the Transactions page and in that account.
+5. If something was wrong, tap **Undo SC Settled** to remove the credit and mark it pending again.
 
 ## UI/UX feel
-No change to how the app looks or behaves — this is an operations/hosting setup. The deliverables (guide and config files) are plain, copy‑paste friendly, and ordered so each step can be checked off.
+Consistent with the current FinFlow crimson / near-black system: the same compact dialog pattern already used for payments and SC payouts, the same ₹ status chip used for SC-cleared students, and a green "credit" treatment on the resulting transaction to distinguish it from debits.
 
 ## Implementation phases
+**Phase 1 (built now — MVP):** Mark SC Settled action + dialog (pre-filled editable amount, account picker, date, mode), creation of the linked credit transaction, account balance update, SC Settled status + indicator on student card/detail, Transactions visibility, and reversible unmark that removes the credit. Edits re-sync the single linked transaction (no duplicates).
 
-### Phase 1 — MVP (built now)
-Deliverables added to the project:
-- A step-by-step Webuzo deployment guide (install, MongoDB, env, build, service, reverse proxy, SSL, firewall, first-admin, verification, and update/redeploy steps).
-- A reverse-proxy configuration for serving the frontend and forwarding `/api` to the backend.
-- An always-on backend service definition (auto-start, auto-restart).
-- Production environment templates for the frontend and backend (placeholders only — no secrets).
-- A one-command build script for the frontend/backend.
-- Notes for running MongoDB on the VPS, enabling HTTPS, basic firewall rules, and creating the first admin.
+**Phase 2 (later):** Bulk settle — select several college-paid students the college settled together and credit them to one account in a single action; show settled SC totals on the SC Report.
 
-Note: installation and commands run on the user's VPS; this agent cannot access that server, so the user follows the guide. Deployment to the existing managed Emergent environment is a separate option and is not part of this plan.
-
-### Phase 2 — Later
-Hardening and convenience: scheduled MongoDB backups with a restore procedure, log rotation, a scheduled-tasks runner for any recurring jobs, a smoother redeploy script, and basic uptime/health monitoring.
-
-### Phase 3 — Later
-Optional container packaging (Docker/Compose) of the whole stack for one-command bring-up, and an optional automated build/ship step on code push.
+**Phase 3 (later):** Reconciliation view that lists all students with SC still pending from each college, with aging (how many days outstanding) and a per-college expected-vs-received summary.
 
 ## Assumptions
-- Database runs on the same VPS via Webuzo's MongoDB, with authentication enabled and bound to localhost.
-- The backend is kept alive by an always-on service behind a reverse proxy (not the Webuzo Passenger/Application Manager path).
-- The app is served on one domain with the API under `/api`, using a free Let's Encrypt certificate, assuming a domain is pointed at the VPS. If no domain is ready, the same setup works over the server IP and HTTPS is added later.
-- Delivery includes the written guide plus ready-to-use config files and a build script committed to the project.
-- Existing third-party integrations (WhatsApp, Resend, Web Push, Google) continue to work through backend settings; their keys are the user's to supply and are never committed.
-- No application feature changes are part of this hosting work.
-- The two recently requested Students screen edits (sorting/filtering by enrolled college and course, and a reference dropdown) are unrelated to hosting and are tracked separately, to be applied after this plan is approved.
+- "SC pending to collect from the college" means the student's recorded SC-from-college amount has not yet been marked settled; the action is hidden once settled (replaced by the undo option).
+- The pre-filled amount comes from the student's recorded service charge (the super-admin SC-from-college value when present, otherwise the student's standard SC figure). It remains editable at settlement time.
+- One SC settlement per student (a single credit), not partial/split settlements — partial collection can be handled later if needed.
+- The credit is recorded as income in the selected account with a recognisable description tying it to the student; it does not create or touch any sub-agent ledger.
+- Marking/unmarking and edits keep exactly one linked credit transaction per student, mirroring how existing payment-linked transactions behave.
+- Existing SC-to-Client payout (debit) behaviour is unchanged.

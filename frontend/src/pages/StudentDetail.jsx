@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth";
 import { formatMoney, formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Plus, PencilSimple, Trash, CaretDown, CaretUp } from "@phosphor-icons/react";
+import { ArrowLeft, Plus, PencilSimple, Trash, CaretDown, CaretUp, CurrencyInr } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { downloadStudentPdf } from "@/lib/studentExports";
 import { downloadApplicationPdf } from "@/lib/applicationPdf";
@@ -16,6 +16,7 @@ import EditApplicationDialog from "@/components/student-detail/EditApplicationDi
 import SummaryTiles from "@/components/student-detail/SummaryTiles";
 import PaymentDialog from "@/components/student-detail/PaymentDialog";
 import ScheduleDialog from "@/components/student-detail/ScheduleDialog";
+import ScSettleDialog from "@/components/student-detail/ScSettleDialog";
 import {
   RECEIVED_IN, FEE_TYPE_LABELS, PAYMENT_MODES, SUB_AGENT_TYPES,
   nextScheduleLabel, emptyPayment,
@@ -35,6 +36,7 @@ export default function StudentDetail() {
   const [payDlg, setPayDlg] = useState({ open: false, editing: null, form: emptyPayment() });
   const [convertOpen, setConvertOpen] = useState(false);
   const [editAppOpen, setEditAppOpen] = useState(false);
+  const [scSettleOpen, setScSettleOpen] = useState(false);
   const [expanded, setExpanded] = useState({});
 
   const load = useCallback(async () => {
@@ -253,6 +255,16 @@ export default function StudentDetail() {
     const { data } = await api.delete(`/students/${id}/payments/${pid}`); setS(data);
   };
 
+  const undoScSettled = async () => {
+    if (!confirm("Undo SC Settled? This removes the linked credit and reverts the balance.")) return;
+    try {
+      const { data } = await api.post(`/students/${id}/sc-unsettle`);
+      setS(data); toast.success("SC settlement removed");
+    } catch (err) {
+      toast.error(formatApiError(err.response?.data?.detail) || "Failed");
+    }
+  };
+
   // ----- "Add Payment" header button — now opens the PaymentDialog directly -----
   // (replaces the legacy combined Add-Entry flow which also created schedule rows).
 
@@ -301,6 +313,37 @@ export default function StudentDetail() {
       />
 
       <SummaryTiles s={s} currency={currency} />
+
+      {(s.sc_earned_effective || 0) > 0 && (
+        <Card className="border border-border bg-card rounded-lg shadow-none px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" data-testid="sc-settle-card">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className={`mt-0.5 inline-flex items-center justify-center w-9 h-9 rounded-md shrink-0 ${s.sc_settled ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
+              <CurrencyInr size={18} weight="bold" />
+            </span>
+            <div className="min-w-0">
+              <p className="label-eyebrow">Service charge from college</p>
+              {s.sc_settled ? (
+                <p className="text-sm mt-0.5" data-testid="sc-settle-status">
+                  <span className="text-emerald-700 dark:text-emerald-400 font-medium">SC Settled</span>
+                  <span className="text-muted-foreground"> · {formatMoney(s.sc_settlement?.amount, currency)} into {accounts.find((a) => a.id === s.sc_settlement?.account_id)?.name || "an account"}{s.sc_settlement?.date ? ` on ${formatDate(s.sc_settlement.date)}` : ""}</span>
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mt-0.5" data-testid="sc-settle-status">Pending to collect from the college</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {s.sc_settled ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => setScSettleOpen(true)} data-testid="sc-settle-edit"><PencilSimple size={14} className="mr-1.5" /> Edit</Button>
+                <Button size="sm" variant="outline" onClick={undoScSettled} className="text-rose-700 dark:text-rose-400 hover:text-rose-800" data-testid="sc-unsettle-btn">Undo SC Settled</Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={() => setScSettleOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" data-testid="sc-settle-btn"><CurrencyInr size={14} weight="bold" className="mr-1.5" /> Mark SC Settled</Button>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Schedules */}
       <Card className="border border-border bg-card rounded-lg shadow-none overflow-hidden">
@@ -510,6 +553,15 @@ export default function StudentDetail() {
           // Also re-fetch in case schedules/payments need to refresh.
           load();
         }}
+      />
+
+      <ScSettleDialog
+        open={scSettleOpen}
+        onOpenChange={setScSettleOpen}
+        student={s}
+        accounts={accounts}
+        currency={currency}
+        onSaved={() => { load(); }}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard, CurrencyInr } from "@phosphor-icons/react";
+import { ArrowRight, GraduationCap, Buildings, UserCircle, IdentificationCard, CurrencyInr, CheckCircle } from "@phosphor-icons/react";
 import { formatMoney } from "@/lib/format";
 
 const STATUS_STYLES = {
@@ -57,6 +57,15 @@ export default function StudentCard({ s, currency, isSuper, selectable, selected
             </div>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            {s.sc_settled && (
+              <span
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white shadow-sm shadow-emerald-500/30"
+                data-testid={`st-card-sc-settled-${s.id}`}
+                title="SC settled / received from college"
+              >
+                <CheckCircle size={14} weight="fill" />
+              </span>
+            )}
             {scCleared && (
               <span
                 className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white shadow-sm shadow-emerald-500/30"
