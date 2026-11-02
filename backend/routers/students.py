@@ -1701,6 +1701,11 @@ async def sc_settle(student_id: str, payload: ScSettleIn, user: dict = Depends(r
     student = await _load_student_or_404(student_id, user)
     if payload.amount <= 0:
         raise HTTPException(400, "Amount must be greater than zero")
+    acc = await db.accounts.find_one(
+        {"id": payload.account_id, "user_id": user["id"]}, {"_id": 0, "id": 1}
+    )
+    if not acc:
+        raise HTTPException(404, "Account not found")
     settlement = {
         "amount": round(float(payload.amount), 2),
         "account_id": payload.account_id,

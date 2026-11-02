@@ -1,0 +1,37 @@
+{
+  "summary": "E2E test of the 'Mark SC Settled / Credited from College' feature. Backend: 11 new pytest tests (settle, 400 on amount<=0, persistence, idempotent re-settle, edit re-points the single tx across accounts, list exposes sc_settled, unsettle reverts balance, double-unsettle is safe, 404 on unknown student, SC payout debits untouched). 10/11 passed. The only failure: the endpoint accepts an account_id that does not exist. The regression suites test_sc_given_payout_debit.py and test_paid_to_college_debit.py still pass (8/8). Office admin flow (blr1, own ZZ_TMP account) checked via API: settle +500, unsettle back to 0. UI checked as super admin on SOURAV C M with ZZ_TMP_UI_A/B accounts: card shows Pending and the Mark button; the dialog pre-fills 120000 (college override) and today's date, with Bank Transfer as the default mode; save gives 'SC Settled · ₹2,500.00 into ZZ_TMP_UI_A on Nov 02, 2026' with Edit and Undo buttons. Edit pre-fills 2500/ZZ_TMP_UI_A and shows the 'Update settlement' label; updating to 3100 into ZZ_TMP_UI_B leaves exactly 1 tx in the DB, with A=0 and B=3100. The Students list shows the green chip, and Transactions shows one '+₹3,100.00 SC received from college — SOURAV C M' row. Undo brings back Pending and the Mark button. Cleanup verified: 0 is_sc_settlement txs, 0 students with sc_settled, 0 ZZ_TMP accounts, super admin back to [] accounts.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/students/{id}/sc-settle", "issue": "account_id is not validated. Any string, including a nonexistent id, returns 200 and creates an orphan income tx that is not counted in any account balance. Fix: check db.accounts.find_one({id: account_id, user_id: user['id']}) and return 400/404 if missing."},
+      {"endpoint": "POST /api/students/{id}/sc-settle (super admin on an office admin's student)", "issue": "sc_settlement.amount and account_id are returned to the office admin. If the super admin settled using the confidential sc_from_college_override amount (the default pre-fill), the office admin can read it from sc_settlement.amount, which gets around the override masking. The UI also shows 'into an account' because the account belongs to the super admin. Consider masking sc_settlement.amount for non-super-admins when the settler is not the viewer."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Deleting the SC settlement tx from the Transactions page", "issue": "Code review, not run: transactions.py has no hook on is_sc_settlement. Deleting or editing the linked tx there leaves the student marked sc_settled=true with a stale sc_settlement (the card still says Settled but the balance doesn't match). Either block edit/delete of is_sc_settlement txs there or clear the student flag.", "affected_selectors": ["sc-settle-status"]}
+    ],
+    "design_issues": [
+      {"screen": "ScSettleDialog", "issues": ["Date field uses the browser's native <input type=date> instead of the shadcn Calendar/Popover picker used elsewhere."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_sc_settlement_credit.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Validate account_id ownership in sc_settle (400/404 for an unknown or foreign account)",
+    "Optionally mask sc_settlement.amount for office admins when the super admin settled with the confidential override",
+    "Guard or sync the student sc_settled flag when an is_sc_settlement tx is deleted or edited from the Transactions page",
+    "Optional: use the shadcn date picker in ScSettleDialog"
+  ],
+  "critical_code_review_comments": [
+    "students.py is ~1845 lines; it should be split into modules (settlement, payouts, schedules)",
+    "sc_settle takes account_id on trust (no ownership/existence check)",
+    "The SC settlement tx is posted on the operator's books. If the super admin settles and the office admin later edits, the office admin's call deletes the super admin's tx (delete_many by linked_student_id has no user_id filter). This seems intended but is worth documenting."
+  ],
+  "updated_files": ["/app/backend/tests/test_sc_settlement_credit.py"],
+  "success_rate": {"backend": "95% (18/19 incl. regression suites; only failure is the account_id validation gap)", "frontend": "100%"},
+  "seed_data_creation": "None kept. Temporary ZZ_TMP_SC_A/B, ZZ_TMP_UI_A/B, ZZ_TMP_OA_SC and ZZ_TMP_SA_SC accounts were created and deleted. Settlements on SOURAV C M and ANJELA JOXY (blr1 student) were undone. Verified 0 leftover settlement txs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_sc_settlement_credit.py creates its own ZZ_TMP accounts for the super admin, cleans up in its fixture teardown, and uses student 6cb768ec-... (SOURAV C M, owned by the legacy super admin 289a...). test_bogus_account_id fails by design until account_id validation is added. In the UI, the CRA dev overlay (ResizeObserver error) can block clicks; remove #webpack-dev-server-client-overlay before clicking. Select options match by has_text because the option text is '<name> (type)'."
+}

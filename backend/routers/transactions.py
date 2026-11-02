@@ -164,7 +164,16 @@ async def update_transaction(tx_id: str, payload: TransactionIn, user: dict = De
 
 @router.delete("/{tx_id}")
 async def delete_transaction(tx_id: str, user: dict = Depends(require_edit("transactions"))):
+    doc = await db.transactions.find_one({"id": tx_id, "user_id": user["id"]}, {"_id": 0})
     res = await db.transactions.delete_one({"id": tx_id, "user_id": user["id"]})
     if res.deleted_count == 0:
         raise HTTPException(404, "Transaction not found")
+    # Deleting the linked SC-settlement credit from the Transactions page must
+    # also revert the student's "SC Settled" flag so the detail/card don't go stale.
+    if doc and doc.get("is_sc_settlement") and doc.get("linked_student_id"):
+        await db.students.update_one(
+            {"id": doc["linked_student_id"]},
+            {"$set": {"sc_settled": False},
+             "$unset": {"sc_settled_at": "", "sc_settlement": ""}},
+        )
     return {"ok": True}
