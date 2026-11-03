@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CaretUp, CaretDown, ArrowsDownUp, ArrowSquareOut } from "@phosphor-icons/react";
+import { CaretUp, CaretDown, ArrowsDownUp, ArrowSquareOut, CaretLeft, CaretRight } from "@phosphor-icons/react";
+
+const PAGE_SIZE = 10;
 import { formatMoney } from "@/lib/format";
 import { COLLEGE_PLACES } from "@/lib/places";
 
@@ -118,6 +121,15 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
   const allVisibleSelected = selectable && visibleIds.length > 0 && visibleIds.every((id) => selectedIds?.has(id));
   const emptyColSpan = COLUMNS.length + (selectable ? 1 : 0);
 
+  // Pagination — 10 students per page.
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  // Clamp page when the filtered result set shrinks/changes.
+  useEffect(() => { setPage(1); }, [colFilters, sort]);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const startIdx = (page - 1) * PAGE_SIZE;
+  const paged = visible.slice(startIdx, startIdx + PAGE_SIZE);
+
   return (
     <div
       className="rounded-xl border border-border bg-card overflow-hidden"
@@ -198,7 +210,7 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
                 </td>
               </tr>
             ) : (
-              visible.map((s, i) => {
+              paged.map((s, i) => {
                 const date = (s.enrollment_date || s.created_at || "").slice(0, 10);
                 const tone = STATUS_TONE[s.status] || STATUS_TONE.cancelled;
                 const collected = Number(s.collected_total || 0);
@@ -216,7 +228,7 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
                         </span>
                       </td>
                     )}
-                    <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{startIdx + i + 1}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{date || "—"}</td>
                     <td className="px-3 py-2 font-medium text-foreground">{s.name}</td>
                     <td className="px-3 py-2 text-muted-foreground">{s.course || "—"}</td>
@@ -263,8 +275,35 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
           </tbody>
         </table>
       </div>
-      <div className="px-3 py-2 bg-muted/30 border-t border-border text-[11px] text-muted-foreground text-right" data-testid="students-table-count">
-        {visible.length} of {students.length} students
+      <div className="px-3 py-2.5 bg-muted/30 border-t border-border flex items-center justify-between gap-3 flex-wrap" data-testid="students-table-footer">
+        <span className="text-[11px] text-muted-foreground" data-testid="students-table-count">
+          {visible.length === 0
+            ? `0 of ${students.length} students`
+            : `${startIdx + 1}–${Math.min(startIdx + PAGE_SIZE, visible.length)} of ${visible.length} students`}
+        </span>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1" data-testid="students-pagination">
+            <Button
+              variant="outline" size="sm" className="h-7 px-2"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              data-testid="students-page-prev"
+            >
+              <CaretLeft size={13} weight="bold" />
+            </Button>
+            <span className="text-[11px] text-muted-foreground px-2 tabular-nums" data-testid="students-page-indicator">
+              Page {page} of {totalPages}
+            </span>
+            <Button
+              variant="outline" size="sm" className="h-7 px-2"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              data-testid="students-page-next"
+            >
+              <CaretRight size={13} weight="bold" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
