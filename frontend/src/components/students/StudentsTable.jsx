@@ -23,15 +23,15 @@ const STATUS_RANK = { enrolled: 0, inquiry: 1, cancelled: 2 };
 const COLUMNS = [
   { key: "sl",         label: "#",          sortable: false, filter: null,    align: "left",  width: "w-12"  },
   { key: "date",       label: "Date",       sortable: true,  filter: "text",  align: "left",  width: "w-28"  },
-  { key: "name",       label: "Name",       sortable: true,  filter: "text",  align: "left",  width: "min-w-[10rem]" },
-  { key: "course",     label: "Course",     sortable: true,  filter: "text",  align: "left",  width: "min-w-[9rem]" },
-  { key: "college",    label: "College",    sortable: true,  filter: "text",  align: "left",  width: "min-w-[12rem]" },
-  { key: "city",       label: "City",       sortable: true,  filter: "city",  align: "left",  width: "w-32"  },
-  { key: "hometown",   label: "Hometown",   sortable: true,  filter: "text",  align: "left",  width: "w-32"  },
-  { key: "reference",  label: "Reference",  sortable: true,  filter: "text",  align: "left",  width: "min-w-[10rem]" },
-  { key: "status",     label: "Status",     sortable: true,  filter: "status",align: "left",  width: "w-28"  },
-  { key: "collected",  label: "Collected",  sortable: true,  filter: null,    align: "right", width: "w-28"  },
-  { key: "balance",    label: "Balance",    sortable: true,  filter: null,    align: "right", width: "w-28"  },
+  { key: "name",       label: "Name",       sortable: true,  filter: "text",  align: "left",  width: "w-auto" },
+  { key: "course",     label: "Course",     sortable: true,  filter: "text",  align: "left",  width: "w-auto" },
+  { key: "college",    label: "College",    sortable: true,  filter: "text",  align: "left",  width: "w-auto" },
+  { key: "city",       label: "City",       sortable: true,  filter: "city",  align: "left",  width: "w-auto" },
+  { key: "hometown",   label: "Hometown",   sortable: true,  filter: "text",  align: "left",  width: "w-auto" },
+  { key: "reference",  label: "Reference",  sortable: true,  filter: "text",  align: "left",  width: "w-auto" },
+  { key: "status",     label: "Status",     sortable: true,  filter: "status",align: "left",  width: "w-auto" },
+  { key: "collected",  label: "Collected",  sortable: true,  filter: null,    align: "right", width: "w-auto" },
+  { key: "balance",    label: "Balance",    sortable: true,  filter: null,    align: "right", width: "w-auto" },
   { key: "actions",    label: "",           sortable: false, filter: null,    align: "right", width: "w-12"  },
 ];
 
@@ -230,12 +230,12 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
                     )}
                     <td className="px-3 py-2 text-muted-foreground">{startIdx + i + 1}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{date || "—"}</td>
-                    <td className="px-3 py-2 font-medium text-foreground">{s.name}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{s.course || "—"}</td>
-                    <td className="px-3 py-2">{s.college || "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{cityOfStudent(s) || "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">{hometownOf(s) || "—"}</td>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td className="px-3 py-2 whitespace-nowrap font-medium text-foreground">{s.name}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{s.course || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{s.college || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{cityOfStudent(s) || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{hometownOf(s) || "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                       <div>{s.reference || "—"}</div>
                       {s.referrer_name && (
                         <div
