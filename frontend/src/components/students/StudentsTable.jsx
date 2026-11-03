@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -120,6 +120,7 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
   const visibleIds = visible.map((s) => s.id);
   const allVisibleSelected = selectable && visibleIds.length > 0 && visibleIds.every((id) => selectedIds?.has(id));
   const emptyColSpan = COLUMNS.length + (selectable ? 1 : 0);
+  const navigate = useNavigate();
 
   // Pagination — 10 students per page.
   const [page, setPage] = useState(1);
@@ -219,7 +220,8 @@ export default function StudentsTable({ students, currency, cityOfStudent, homet
                   <tr
                     key={s.id}
                     data-testid={`student-row-${s.id}`}
-                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${selectable && selectedIds?.has(s.id) ? "bg-primary/5" : ""}`}
+                    onClick={() => navigate(`/students/${s.id}`)}
+                    className={`border-b border-border last:border-0 hover:bg-muted/40 transition-colors cursor-pointer ${selectable && selectedIds?.has(s.id) ? "bg-primary/5" : ""}`}
                   >
                     {selectable && (
                       <td className="px-3 py-2">
